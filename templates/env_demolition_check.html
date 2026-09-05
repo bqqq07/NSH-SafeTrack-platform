@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}الهدم والأسبستوس — البيئة{% endblock %}
+{% block content %}
+<div style="max-width:750px;margin:auto;">
+  <p style="opacity:.6;font-size:.85rem;margin-bottom:.25rem;">البيئة — GI 150.001 · CSM II-14</p>
+  <h2 style="margin-top:0;">🏗️ الهدم والأسبستوس — الفحص البيئي</h2>
+  <p style="font-size:.85rem;opacity:.6;">{{ today }}</p>
+  <div style="padding:.7rem 1rem;background:#fee2e2;border:1px solid #fca5a5;border-radius:.5rem;margin-bottom:1rem;font-weight:700;color:#991b1b;">
+    🚫 الأسبستوس (Asbestos) مادة خطرة جداً — يُحظر التعامل معه دون تراخيص SA-EPD خاصة — GI 150.001
+  </div>
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">أ — بيانات العملية</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div>
+          <label><strong>الحزمة *</strong></label>
+          <select name="package" required style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+            <option value="">اختر</option>
+            {% for pkg in ['PKG-01','PKG-02','PKG-03','PKG-04','PKG-05','PKG-06','PSF'] %}<option>{{ pkg }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label><strong>الموقع / المبنى المستهدف</strong></label>
+          <input type="text" name="location"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+        </div>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ب — فحص الأسبستوس قبل الهدم GI 150.001</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="asbestos_survey_done"> تم إجراء مسح أسبستوس مسبق من جهة معتمدة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="no_asbestos_found"> نتيجة المسح: لا يوجد أسبستوس في المبنى/الموقع المستهدف
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;" id="asbestosPermitRow">
+          <input type="checkbox" name="asbestos_permit_ok"> في حالة وجود أسبستوس: تصاريح SA-EPD سارية + شركة إزالة معتمدة معيّنة
+        </label>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ج — إدارة مخلفات الهدم CSM II-14</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="debris_sorted"> مخلفات الهدم مصنّفة (خرسانة / معادن / خطرة) في منطقة مخصصة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="no_burning_debris"> لا يوجد حرق مكشوف لأي مخلفات هدم
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="transport_manifest_ok"> بيانات نقل مخلفات الهدم إلى مكبّ معتمد مكتملة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="dust_suppression"> رش الماء على منطقة الهدم للحد من الغبار
+        </label>
+      </div>
+    </div>
+    <div style="margin-bottom:1.25rem;">
+      <label><strong>ملاحظات / إجراءات</strong></label>
+      <textarea name="notes" rows="2" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary">حفظ</button>
+      <a href="{{ url_for('env_dashboard') }}" class="btn btn-secondary">إلغاء</a>
+    </div>
+  </form>
+  {% if history %}
+  <h3 style="margin-top:2rem;">السجل السابق</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+    <thead><tr style="border-bottom:2px solid #e5e7eb;">
+      <th style="padding:.5rem;text-align:right;">التاريخ</th><th style="padding:.5rem;">الحزمة</th>
+      <th style="padding:.5rem;">مسح أسبستوس</th><th style="padding:.5rem;">لا أسبستوس</th><th style="padding:.5rem;">بيان نقل</th>
+    </tr></thead>
+    <tbody>{% for h in history %}<tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:.5rem;">{{ h.date }}</td><td style="padding:.5rem;">{{ h.package or '—' }}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.asbestos_survey_done %}✓{% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.no_asbestos_found %}✓{% else %}<span style="color:#f59e0b;">⚠</span>{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.transport_manifest_ok %}✓{% else %}✗{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

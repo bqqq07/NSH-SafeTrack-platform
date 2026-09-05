@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}لوحة البيئة — أميرال{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:.25rem;">
+  <h2 style="margin:0;">🌿 لوحة التحكم البيئي</h2>
+  <span style="font-size:.85rem;opacity:.6;">{{ today }}</span>
+</div>
+
+{% set done = [checks.waste, checks.soil, checks.dust, checks.hazcom, checks.cylinders, checks.spills, checks.norm]|select|list|length %}
+{% set total = 7 %}
+<div style="margin-bottom:1.25rem;padding:.75rem 1rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:.75rem;display:flex;align-items:center;gap:1rem;">
+  <div style="flex:1;height:8px;background:#e5e7eb;border-radius:4px;overflow:hidden;">
+    <div style="height:8px;width:{{ (done/total*100)|int }}%;background:#16a34a;border-radius:4px;"></div>
+  </div>
+  <span style="font-weight:700;font-size:.9rem;white-space:nowrap;">{{ done }}/{{ total }} فحص اليوم</span>
+</div>
+
+{# ── الفحوصات اليومية الأساسية ── #}
+<h3 style="margin-bottom:.75rem;font-size:.9rem;text-transform:uppercase;letter-spacing:.04em;opacity:.5;">فحوصات يومية — أميرال (CSM 2026)</h3>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:.75rem;margin-bottom:1.5rem;">
+
+  {% macro check_card(url, done, icon, title, ref) %}
+  <a href="{{ url }}"
+     style="display:block;padding:1rem 1.1rem;border-radius:.75rem;
+            border:2px solid {{ '#16a34a' if done else '#e5e7eb' }};
+            background:{{ '#f0fdf4' if done else '#fff' }};text-decoration:none;color:inherit;">
+    <div style="font-size:1.4rem;margin-bottom:.2rem;">{{ '✅' if done else '⬜' }}</div>
+    <div style="font-weight:700;font-size:.92rem;">{{ icon }} {{ title }}</div>
+    <div style="font-size:.76rem;opacity:.55;margin-top:.15rem;">{{ ref }}</div>
+    <div style="font-size:.78rem;margin-top:.3rem;{{ 'color:#16a34a;font-weight:600' if done else 'opacity:.5' }}">
+      {{ 'مكتمل اليوم ✓' if done else 'لم يُنجز بعد' }}
+    </div>
+  </a>
+  {% endmacro %}
+
+  {{ check_card(url_for('env_waste'), checks.waste,    '♻️', 'إدارة النفايات',            'CSAR §10.20 · GI 430.001') }}
+  {{ check_card(url_for('env_soil'),  checks.soil,     '🌱', 'حماية التربة والمياه',       'CSM §10.9 · §11.8') }}
+  {{ check_card(url_for('env_dust'),  checks.dust,     '💨', 'مكافحة الغبار',              'CSM §10.18') }}
+  {{ check_card(url_for('env_hazcom'),checks.hazcom,   '⚗️', 'المواد الخطرة (HAZCOM)',     'CSM I-10 · §5.3.R') }}
+  {{ check_card(url_for('env_cylinders'), checks.cylinders, '⚡', 'أسطوانات الغاز المضغوط', 'CSM I-9') }}
+  {{ check_card(url_for('env_spills_check'), checks.spills, '🚨', 'سجل الانسكابات / الاحتواء', 'CSM I-2 · GI 2.401') }}
+  {{ check_card(url_for('env_norm'),  checks.norm,     '☢️', 'NORM والإشعاع البيئي',       'SAEP-358 · GI 150.003') }}
+
+</div>
+
+{# ── فحوصات مشروطة (حسب النشاط النشط) ── #}
+<h3 style="margin-bottom:.75rem;font-size:.9rem;text-transform:uppercase;letter-spacing:.04em;opacity:.5;">فحوصات حسب النشاط النشط بالموقع</h3>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:.75rem;margin-bottom:1.5rem;">
+  <a href="{{ url_for('env_welding') }}"
+     style="display:block;padding:1rem 1.1rem;border-radius:.75rem;border:2px solid #e5e7eb;background:#fff;text-decoration:none;color:inherit;">
+    <div style="font-size:1.4rem;margin-bottom:.2rem;">🔥</div>
+    <div style="font-weight:700;font-size:.92rem;">اللحام والطلاء — البيئة</div>
+    <div style="font-size:.76rem;opacity:.55;margin-top:.15rem;">CSM II-9 · II-10</div>
+  </a>
+  <a href="{{ url_for('env_blasting') }}"
+     style="display:block;padding:1rem 1.1rem;border-radius:.75rem;border:2px solid #e5e7eb;background:#fff;text-decoration:none;color:inherit;">
+    <div style="font-size:1.4rem;margin-bottom:.2rem;">💣</div>
+    <div style="font-weight:700;font-size:.92rem;">التفجير الكاشط — البيئة</div>
+    <div style="font-size:.76rem;opacity:.55;margin-top:.15rem;">CSM II-8 · GI 6.021</div>
+  </a>
+  <a href="{{ url_for('env_roads') }}"
+     style="display:block;padding:1rem 1.1rem;border-radius:.75rem;border:2px solid #e5e7eb;background:#fff;text-decoration:none;color:inherit;">
+    <div style="font-size:1.4rem;margin-bottom:.2rem;">🚧</div>
+    <div style="font-weight:700;font-size:.92rem;">أعمال الطرق — البيئة</div>
+    <div style="font-size:.76rem;opacity:.55;margin-top:.15rem;">CSM II-11 §11.3.7</div>
+  </a>
+  <a href="{{ url_for('env_pressure') }}"
+     style="display:block;padding:1rem 1.1rem;border-radius:.75rem;border:2px solid #e5e7eb;background:#fff;text-decoration:none;color:inherit;">
+    <div style="font-size:1.4rem;margin-bottom:.2rem;">🔩</div>
+    <div style="font-weight:700;font-size:.92rem;">اختبار الضغط — التخلص من المياه</div>
+    <div style="font-size:.76rem;opacity:.55;margin-top:.15rem;">SAEP-327 §4.5.9</div>
+  </a>
+  <a href="{{ url_for('env_jetting') }}"
+     style="display:block;padding:1rem 1.1rem;border-radius:.75rem;border:2px solid #e5e7eb;background:#fff;text-decoration:none;color:inherit;">
+    <div style="font-size:1.4rem;margin-bottom:.2rem;">💦</div>
+    <div style="font-weight:700;font-size:.92rem;">الضخ عالي الضغط</div>
+    <div style="font-size:.76rem;opacity:.55;margin-top:.15rem;">CSM III-9 §9.3.3</div>
+  </a>
+  <a href="{{ url_for('env_demolition') }}"
+     style="display:block;padding:1rem 1.1rem;border-radius:.75rem;border:2px solid #fef3c7;background:#fffbeb;text-decoration:none;color:inherit;">
+    <div style="font-size:1.4rem;margin-bottom:.2rem;">🏗️</div>
+    <div style="font-weight:700;font-size:.92rem;">الهدم والأسبستوس</div>
+    <div style="font-size:.76rem;opacity:.55;margin-top:.15rem;">GI 150.001 · CSM II-14</div>
+  </a>
+  <a href="{{ url_for('env_monitoring') }}"
+     style="display:block;padding:1rem 1.1rem;border-radius:.75rem;border:2px solid #e5e7eb;background:#fff;text-decoration:none;color:inherit;">
+    <div style="font-size:1.4rem;margin-bottom:.2rem;">📊</div>
+    <div style="font-weight:700;font-size:.92rem;">الرصد البيئي (هواء / ضجيج)</div>
+    <div style="font-size:.76rem;opacity:.55;margin-top:.15rem;">CSM §4.9 · SA-EPD</div>
+  </a>
+</div>
+
+{# ── الحوادث المفتوحة ── #}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.6rem;">
+  <h3 style="margin:0;font-size:.9rem;text-transform:uppercase;letter-spacing:.04em;opacity:.5;">الحوادث البيئية المفتوحة</h3>
+  <a href="{{ url_for('env_incident_new') }}"
+     style="padding:.45rem 1rem;background:#dc2626;color:#fff;border-radius:.5rem;text-decoration:none;font-weight:700;font-size:.82rem;">
+    + تسجيل حادثة
+  </a>
+</div>
+{% if incidents %}
+{% for inc in incidents %}
+<div style="padding:.75rem 1rem;border-radius:.5rem;border:1px solid #fca5a5;
+            border-right:4px solid #dc2626;background:#fff5f5;margin-bottom:.5rem;">
+  <strong>{{ inc.incident_type }}</strong>
+  <span style="margin-right:.75rem;font-size:.85rem;opacity:.6;">{{ inc.date }}</span>
+  {% if inc.location %}<span style="font-size:.85rem;opacity:.6;">| {{ inc.location }}</span>{% endif %}
+  <p style="margin:.25rem 0 0;font-size:.85rem;opacity:.75;">{{ inc.description[:120] }}{% if inc.description|length > 120 %}…{% endif %}</p>
+</div>
+{% endfor %}
+<a href="{{ url_for('env_incident_list') }}" style="font-size:.9rem;opacity:.7;">عرض كل الحوادث →</a>
+{% else %}
+<p style="font-size:.85rem;opacity:.5;">لا توجد حوادث بيئية مفتوحة.</p>
+{% endif %}
+{% endblock %}

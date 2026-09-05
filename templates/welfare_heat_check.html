@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}إجهاد الحرارة — الرفاهية{% endblock %}
+{% block content %}
+<div style="max-width:750px;margin:auto;">
+  <p style="opacity:.6;font-size:.85rem;margin-bottom:.25rem;">الرفاهية — WSSM I-13</p>
+  <h2 style="margin-top:0;">🌡️ فحص إجهاد الحرارة اليومي</h2>
+  <p style="font-size:.85rem;opacity:.6;">{{ today }}</p>
+
+  {% set summer_ban = today_month in [6,7,8,9] %}
+  {% if summer_ban %}
+  <div style="padding:.7rem 1rem;background:#fee2e2;border:1px solid #fca5a5;border-radius:.5rem;margin-bottom:1rem;font-weight:700;color:#991b1b;">
+    🚫 موسم منع العمل في الهواء الطلق: 15 يونيو – 15 سبتمبر — 12:00–15:00 ممنوع العمل تحت الشمس المباشرة (WSSM I-13)
+  </div>
+  {% endif %}
+
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">أ — الحزمة والقراءات</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;">
+        <div>
+          <label><strong>الحزمة *</strong></label>
+          <select name="package" required style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+            <option value="">اختر</option>
+            {% for pkg in ['PKG-01','PKG-02','PKG-03','PKG-04','PKG-05','PKG-06','PSF'] %}<option>{{ pkg }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label><strong>WBGT قراءة الصباح (°C)</strong></label>
+          <input type="number" name="wbgt_morning" step="0.1" placeholder="مثال: 28.5"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+        </div>
+        <div>
+          <label><strong>WBGT قراءة الظهر (°C)</strong></label>
+          <input type="number" name="wbgt_noon" step="0.1" placeholder="مثال: 33.2"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+        </div>
+      </div>
+      <div style="margin-top:.75rem;">
+        <label><strong>درجة الحرارة الجوية العظمى اليوم (°C)</strong></label>
+        <input type="number" name="max_temp_c" step="0.5"
+               style="display:block;width:120px;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ب — توفر الماء والظل</h3>
+      <div style="padding:.6rem;background:#fef3c7;border:1px solid #fbbf24;border-radius:.5rem;margin-bottom:.75rem;font-size:.85rem;">
+        ⚠️ <strong>WSSM I-13:</strong> ماء بارد 0.5 لتر/ساعة/عامل — ظل على بُعد ≤ 100م — استراحة ≥10 دق./ساعة
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="water_available"> ماء بارد متوفر بمعدل 0.5 لتر/ساعة/عامل على الأقل
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="shade_within_100m"> مناطق ظل ضمن 100م من جميع مناطق العمل
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="rest_breaks_enforced"> فترات الراحة (≥10 دق/ساعة) مطبّقة فعلياً
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="midday_ban_enforced"> حظر العمل 12:00–15:00 مطبّق (الفترة الصيفية: يونيو–سبتمبر)
+        </label>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ج — الرصد والاستجابة</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="buddy_system_ok"> نظام الرفيق (Buddy System) مطبّق — العمال يراقبون بعضهم
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="medic_on_site"> ممرض / مسعف متواجد في الموقع
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="acclimatization_new"> العمال الجدد يخضعون لبرنامج التأقلم (14 يوم)
+        </label>
+      </div>
+      <div style="margin-top:.75rem;">
+        <label><strong>حالات إجهاد حراري مُبلَّغة اليوم (عدد)</strong></label>
+        <input type="number" name="heat_cases_count" min="0" value="0"
+               style="display:block;width:80px;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+      </div>
+    </div>
+    <div style="margin-bottom:1.25rem;">
+      <label><strong>ملاحظات / إجراءات</strong></label>
+      <textarea name="notes" rows="2" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary">حفظ الفحص</button>
+      <a href="{{ url_for('welfare_home') }}" class="btn btn-secondary">إلغاء</a>
+    </div>
+  </form>
+
+  {% if history %}
+  <h3 style="margin-top:2rem;">السجل السابق</h3>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+      <thead><tr style="border-bottom:2px solid #e5e7eb;">
+        <th style="padding:.5rem;text-align:right;">التاريخ</th><th style="padding:.5rem;">الحزمة</th>
+        <th style="padding:.5rem;">WBGT صباح</th><th style="padding:.5rem;">WBGT ظهر</th>
+        <th style="padding:.5rem;">ماء</th><th style="padding:.5rem;">ظل</th><th style="padding:.5rem;">حالات</th>
+      </tr></thead>
+      <tbody>{% for h in history %}<tr style="border-bottom:1px solid #f3f4f6;">
+        <td style="padding:.5rem;">{{ h.date }}</td><td style="padding:.5rem;">{{ h.package or '—' }}</td>
+        <td style="padding:.5rem;text-align:center;">{{ h.wbgt_morning or '—' }}</td>
+        <td style="padding:.5rem;text-align:center;">{{ h.wbgt_noon or '—' }}</td>
+        <td style="padding:.5rem;text-align:center;">{% if h.water_available %}✓{% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+        <td style="padding:.5rem;text-align:center;">{% if h.shade_within_100m %}✓{% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+        <td style="padding:.5rem;text-align:center;">{% if h.heat_cases_count %}
+          <span style="color:#dc2626;font-weight:700;">{{ h.heat_cases_count }}</span>{% else %}0{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

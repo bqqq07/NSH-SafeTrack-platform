@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block title %}فحص NORM والإشعاع البيئي{% endblock %}
+{% block content %}
+<div style="max-width:750px;margin:auto;">
+  <p style="opacity:.6;font-size:.85rem;margin-bottom:.25rem;">البيئة — SAEP-358 · GI 150.003</p>
+  <h2 style="margin-top:0;">☢️ NORM والإشعاع البيئي — فحص يومي</h2>
+  <p style="font-size:.85rem;opacity:.6;">{{ today }}</p>
+
+  {% if existing %}
+  <div style="padding:.75rem 1rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:.5rem;margin-bottom:1rem;">
+    ✅ تم إكمال هذا الفحص اليوم. <a href="{{ url_for('env_dashboard') }}">العودة للوحة</a>
+  </div>
+  {% endif %}
+
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">أ — الحزمة والمنطقة</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div>
+          <label><strong>الحزمة *</strong></label>
+          <select name="package" required style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+            <option value="">اختر الحزمة</option>
+            {% for pkg in ['PKG-01','PKG-02','PKG-03','PKG-04','PKG-05','PKG-06','PSF'] %}
+            <option value="{{ pkg }}">{{ pkg }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label><strong>المنطقة / الموقع</strong></label>
+          <input type="text" name="location" placeholder="مثال: Pipe Rack A"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ب — ضابط حماية الإشعاع (RPO)</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="rpo_designated"> RPO معيّن رسمياً وحاضر / متاح للموقع
+        </label>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:.3rem;">
+          <div>
+            <label style="font-size:.85rem;">اسم RPO</label>
+            <input type="text" name="rpo_name"
+                   style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+          </div>
+          <div>
+            <label style="font-size:.85rem;">رقم تواصل RPO</label>
+            <input type="text" name="rpo_contact"
+                   style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ج — الأذونات والسجلات</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="epd_permit_ok"> أذونات SA-EPD للمواد المشعة / NORM سارية المفعول
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="norm_records_ok"> سجلات NORM محدّثة وفق SAEP-358
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="ndt_permit_ok"> مزودو NDT حاملون لـ SA-EPD Radiation Protection Permit (§6.5.1.E)
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="dose_logs_ok"> سجلات الجرعة اليومية لعمال الإشعاع محدّثة
+        </label>
+      </div>
+    </div>
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">د — المعدات والحالة الميدانية</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="norm_equip_handled"> المعدات الملوثة بـ NORM معالجة وموسومة بشكل صحيح
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="no_exposed_sources"> لا توجد مصادر إشعاعية مكشوفة في الموقع
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="radiation_levels_ok"> قياسات الإشعاع الدورية ضمن الحدود المسموح بها
+        </label>
+      </div>
+    </div>
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">هـ — نشاط NDT</h3>
+      <label style="display:flex;align-items:center;gap:.75rem;cursor:pointer;font-size:1rem;">
+        <input type="checkbox" name="ndt_active" id="ndtChk" onchange="toggleNdt(this)">
+        <strong>يوجد نشاط NDT إشعاعي جارٍ اليوم</strong>
+      </label>
+      <div id="ndtSection" style="display:none;margin-top:1rem;padding:1rem;background:#fef3c7;border:1px solid #fbbf24;border-radius:.5rem;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div>
+            <label>رقم تصريح EPD</label>
+            <input type="text" name="ndt_permit_no"
+                   style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+          </div>
+          <div>
+            <label>نوع المصدر</label>
+            <input type="text" name="ndt_source_type" placeholder="مثال: Ir-192, Se-75"
+                   style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+          </div>
+        </div>
+        <div style="margin-top:.75rem;">
+          <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+            <input type="checkbox" name="exclusion_zone_ok"> منطقة الاستبعاد محددة ومؤمّنة بشكل صحيح
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-bottom:1.25rem;">
+      <label><strong>ملاحظات / إجراءات</strong></label>
+      <textarea name="notes" rows="2" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary" {% if existing %}disabled{% endif %}>حفظ الفحص</button>
+      <a href="{{ url_for('env_dashboard') }}" class="btn btn-secondary">إلغاء</a>
+    </div>
+  </form>
+
+  {% if history %}
+  <h3 style="margin-top:2rem;">السجل السابق</h3>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+      <thead><tr style="border-bottom:2px solid #e5e7eb;">
+        <th style="padding:.5rem;text-align:right;">التاريخ</th>
+        <th style="padding:.5rem;">الحزمة</th>
+        <th style="padding:.5rem;">RPO</th>
+        <th style="padding:.5rem;">أذون EPD</th>
+        <th style="padding:.5rem;">مصادر مكشوفة</th>
+      </tr></thead>
+      <tbody>{% for h in history %}<tr style="border-bottom:1px solid #f3f4f6;">
+        <td style="padding:.5rem;">{{ h.date }}</td>
+        <td style="padding:.5rem;">{{ h.package or '—' }}</td>
+        <td style="padding:.5rem;text-align:center;">{% if h.rpo_designated %}✓{% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+        <td style="padding:.5rem;text-align:center;">{% if h.epd_permit_ok %}✓{% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+        <td style="padding:.5rem;text-align:center;">{% if h.no_exposed_sources %}✓{% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+<script>
+function toggleNdt(chk){ document.getElementById('ndtSection').style.display = chk.checked ? 'block' : 'none'; }
+</script>
+{% endblock %}

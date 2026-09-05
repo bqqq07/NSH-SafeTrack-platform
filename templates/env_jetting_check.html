@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}الضخ عالي الضغط — البيئة{% endblock %}
+{% block content %}
+<div style="max-width:750px;margin:auto;">
+  <p style="opacity:.6;font-size:.85rem;margin-bottom:.25rem;">البيئة — CSM III-9 §9.3.3</p>
+  <h2 style="margin-top:0;">💦 HP Water Jetting — الفحص البيئي</h2>
+  <p style="font-size:.85rem;opacity:.6;">{{ today }}</p>
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">أ — بيانات العملية</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div>
+          <label><strong>الحزمة *</strong></label>
+          <select name="package" required style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+            <option value="">اختر</option>
+            {% for pkg in ['PKG-01','PKG-02','PKG-03','PKG-04','PKG-05','PKG-06','PSF'] %}<option>{{ pkg }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label><strong>الموقع / وصف العملية</strong></label>
+          <input type="text" name="location" placeholder="مثال: تنظيف خط 14 قسم B"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+        </div>
+      </div>
+      <div style="margin-top:.75rem;display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div>
+          <label style="font-size:.85rem;">الضغط التشغيلي (bar)</label>
+          <input type="number" name="pressure_bar" min="0" step="1"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+        </div>
+        <div>
+          <label style="font-size:.85rem;">حجم المياه المستخدمة المتوقع (م³)</label>
+          <input type="number" name="water_volume_m3" min="0" step="0.1"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+        </div>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ب — التحكم بمياه الصرف §9.3.3</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="containment_ok"> مياه الصرف محتواة ولا تصل إلى التربة أو المصارف العامة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="vacuum_truck_on_site"> شاحنة صهريج سحب (Vacuum Truck) جاهزة في الموقع
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="berm_around_area"> حاجز ترابي/جاهز محيط بمنطقة العمل
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="waste_disposed"> مياه الصرف تُتخلص منها في نقاط التصريف المعتمدة فقط
+        </label>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ج — النفايات الناتجة</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="sludge_collected"> الطمي والحمأة تُجمع في حاويات مغلقة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="hazardous_checked"> فحص محتوى النفايات: هل هي خطرة؟ (تحتاج تصريف خاص)
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="manifest_completed"> بيان نقل النفايات (Manifest) مكتمل وموقّع
+        </label>
+      </div>
+    </div>
+    <div style="margin-bottom:1.25rem;">
+      <label><strong>ملاحظات</strong></label>
+      <textarea name="notes" rows="2" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary">حفظ</button>
+      <a href="{{ url_for('env_dashboard') }}" class="btn btn-secondary">إلغاء</a>
+    </div>
+  </form>
+  {% if history %}
+  <h3 style="margin-top:2rem;">السجل السابق</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+    <thead><tr style="border-bottom:2px solid #e5e7eb;">
+      <th style="padding:.5rem;text-align:right;">التاريخ</th><th style="padding:.5rem;">الحزمة</th>
+      <th style="padding:.5rem;">احتواء</th><th style="padding:.5rem;">صهريج</th><th style="padding:.5rem;">بيان نقل</th>
+    </tr></thead>
+    <tbody>{% for h in history %}<tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:.5rem;">{{ h.date }}</td><td style="padding:.5rem;">{{ h.package or '—' }}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.containment_ok %}✓{% else %}✗{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.vacuum_truck_on_site %}✓{% else %}✗{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.manifest_completed %}✓{% else %}✗{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

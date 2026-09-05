@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}فحص أسطوانات الغاز{% endblock %}
+{% block content %}
+<div style="max-width:750px;margin:auto;">
+  <p style="opacity:.6;font-size:.85rem;margin-bottom:.25rem;">البيئة — CSM I-9</p>
+  <h2 style="margin-top:0;">⚡ أسطوانات الغاز المضغوط — فحص يومي</h2>
+  <p style="font-size:.85rem;opacity:.6;">{{ today }}</p>
+
+  {% if existing %}
+  <div style="padding:.75rem 1rem;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:.5rem;margin-bottom:1rem;">
+    ✅ تم إكمال هذا الفحص اليوم. <a href="{{ url_for('env_dashboard') }}">العودة للوحة</a>
+  </div>
+  {% endif %}
+
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">أ — الحزمة / المنطقة</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div>
+          <label><strong>الحزمة *</strong></label>
+          <select name="package" required style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+            <option value="">اختر الحزمة</option>
+            {% for pkg in ['PKG-01','PKG-02','PKG-03','PKG-04','PKG-05','PKG-06','PSF'] %}
+            <option value="{{ pkg }}">{{ pkg }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label><strong>الموقع بالموقع</strong></label>
+          <input type="text" name="location" placeholder="وصف الموقع"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ب — التخزين والفصل</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="vertical_secured"> الأسطوانات مخزّنة عمودياً ومربوطة بسلاسل أو أحزمة أمان
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="empty_separated"> الأسطوانات الفارغة مفصولة عن الممتلئة وموسومة بوضوح
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="caps_on"> صمامات الأسطوانات مغطاة بأغطيتها عند عدم الاستخدام
+        </label>
+      </div>
+    </div>
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ج — المسافة الفاصلة بين الأكسجين والمواد القابلة للاشتعال</h3>
+      <div style="padding:.6rem;background:#fef3c7;border:1px solid #fbbf24;border-radius:.5rem;margin-bottom:.75rem;font-size:.85rem;">
+        ⚠️ <strong>CSM I-9:</strong> المسافة الفاصلة بين أسطوانات الأكسجين والمواد القابلة للاشتعال ≥ <strong>6.1 م</strong>
+      </div>
+      <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;margin-bottom:.5rem;">
+        <input type="checkbox" name="o2_separation_ok"> المسافة ≥ 6.1 م مطبّقة أو يوجد حاجز ناري معتمد
+      </label>
+      <input type="number" name="measured_distance_m" placeholder="المسافة المقاسة بالمتر" step="0.1" min="0"
+             style="width:120px;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;">
+    </div>
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">د — درجة الحرارة ومنطقة التخزين</h3>
+      <div style="padding:.6rem;background:#fef3c7;border:1px solid #fbbf24;border-radius:.5rem;margin-bottom:.75rem;font-size:.85rem;">
+        ⚠️ <strong>CSM I-9:</strong> درجة حرارة منطقة التخزين يجب أن تكون &lt; <strong>54°C</strong>
+      </div>
+      <div style="display:flex;gap:1.5rem;flex-wrap:wrap;align-items:center;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="temp_ok"> درجة الحرارة ضمن الحدود المقبولة (&lt; 54°C)
+        </label>
+        <div>
+          <label style="font-size:.85rem;">قراءة الحرارة (°C)</label>
+          <input type="number" name="temp_reading" placeholder="°C" step="0.5"
+                 style="display:block;width:90px;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">هـ — السلامة العامة</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="no_leaks"> لا يوجد تسرب أو رائحة من الأسطوانات أو الصمامات
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="area_ventilated"> منطقة التخزين جيدة التهوية
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="no_smoking_sign"> لافتة "ممنوع التدخين" معلّقة في المنطقة
+        </label>
+      </div>
+    </div>
+
+    <div style="margin-bottom:1.25rem;">
+      <label><strong>ملاحظات / إجراءات</strong></label>
+      <textarea name="notes" rows="2" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary" {% if existing %}disabled{% endif %}>حفظ الفحص</button>
+      <a href="{{ url_for('env_dashboard') }}" class="btn btn-secondary">إلغاء</a>
+    </div>
+  </form>
+
+  {% if history %}
+  <h3 style="margin-top:2rem;">السجل السابق</h3>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+      <thead><tr style="border-bottom:2px solid #e5e7eb;">
+        <th style="padding:.5rem;text-align:right;">التاريخ</th>
+        <th style="padding:.5rem;">الحزمة</th>
+        <th style="padding:.5rem;">رباط ≥6.1م</th>
+        <th style="padding:.5rem;">&lt;54°C</th>
+        <th style="padding:.5rem;">لا تسرب</th>
+      </tr></thead>
+      <tbody>{% for h in history %}<tr style="border-bottom:1px solid #f3f4f6;">
+        <td style="padding:.5rem;">{{ h.date }}</td>
+        <td style="padding:.5rem;">{{ h.package or '—' }}</td>
+        <td style="padding:.5rem;text-align:center;">{% if h.o2_separation_ok %}✓{% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+        <td style="padding:.5rem;text-align:center;">{% if h.temp_ok %}✓{% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+        <td style="padding:.5rem;text-align:center;">{% if h.no_leaks %}✓{% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

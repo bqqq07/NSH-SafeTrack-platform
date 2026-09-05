@@ -9,13 +9,14 @@ import os, logging, urllib.parse, threading
 from datetime import datetime, date, timedelta
 from typing import Tuple
 from functools import wraps
-from collections import defaultdict
+from collections import defaultdict, Counter
 from flask import (
-    Flask, render_template, request, redirect, url_for,
+    Flask, render_template, render_template_string, request, redirect, url_for,
     session, flash, abort, g, Response, current_app, send_file, jsonify
 )
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import UniqueConstraint, or_, func, text
+from sqlalchemy.exc import OperationalError
 from typing import Optional
 from datetime import timezone
 from zoneinfo import ZoneInfo  # بايثون 3.9+ موجودة افتراضيًا
@@ -31,7 +32,7 @@ if not _secret:
     _secret = _secrets.token_hex(32)
     import logging as _logging
     _logging.getLogger(__name__).warning(
-        "SECRET_KEY not set in environment — using a random key. "
+        "SECRET_KEY not set in environment -- using a random key. "
         "Sessions will not survive restarts. Set SECRET_KEY in your .env file."
     )
 app.config["SECRET_KEY"] = _secret
@@ -71,7 +72,18 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_pre_ping": True,
-    "pool_recycle": 280,
+    # أقل من wait_timeout للسيرفر بهامش — الاستضافة المشتركة تقطع الاتصالات الخاملة
+    "pool_recycle": 180,
+    # عدة Passenger workers × pool كبير = تجاوز حد الاتصالات. نبقي البصمة صغيرة.
+    "pool_size": 3,
+    "max_overflow": 4,
+    "pool_timeout": 20,
+    "pool_use_lifo": True,     # يعيد استخدام الاتصالات الساخنة ويترك الباقي يموت طبيعياً
+    "connect_args": {
+        "connect_timeout": 10,
+        "read_timeout": 30,
+        "write_timeout": 30,
+    },
 }
 
 db = SQLAlchemy(app)
@@ -98,6 +110,13 @@ try:
 
 except ImportError:
     pass  # Flask-WTF not installed yet — run: pip install Flask-WTF
+
+# Ensure csrf_token is always available in templates even if Flask-WTF failed
+if 'csrf_token' not in app.jinja_env.globals:
+    app.jinja_env.globals['csrf_token'] = lambda: ''
+
+# فلتر enumerate لـ Jinja2
+app.jinja_env.filters['enumerate'] = enumerate
 
 # ── Rate Limiter ─────────────────────────────────────────────────────
 try:
@@ -235,10 +254,56 @@ class WarningSignature(db.Model):
     id           = db.Column(db.Integer, primary_key=True)
     request_id   = db.Column(db.Integer, db.ForeignKey("requests.id"), nullable=False, unique=True)
     employee_name= db.Column(db.String(255), nullable=True)
+    job_title    = db.Column(db.String(255), nullable=True)  # المسمى الوظيفي — يُكتب يدوياً وقت التوقيع
     signed_at    = db.Column(db.DateTime, default=datetime.utcnow)
     signature    = db.Column(db.Text, nullable=False)  # base64 PNG
 
-    request = db.relationship("Request", foreign_keys=[request_id])
+    request = db.relationship("Request", foreign_keys=[request_id],
+                              backref=db.backref("warning_sig", uselist=False))
+
+
+class WarningFieldReport(db.Model):
+    """تقرير مخالفة ميداني يعبّئه المشرف (Supervisor) مباشرة بنفس شكل
+    النموذج الورقي (اليوم/التاريخ/الموظف/المشرف/سبب الإنذار/توقيع المشرف).
+    هذا سجل توثيقي داخلي فقط — لا يظهر بالـ PDF الرسمي للإنذار الذي يبقى
+    بنفس تصميمه الحالي (توقيع الموظف + اعتماد HR)."""
+    __tablename__ = "warning_field_report"
+    id                        = db.Column(db.Integer, primary_key=True)
+    request_id                = db.Column(db.Integer, db.ForeignKey("requests.id"), nullable=False, unique=True)
+    day_name                  = db.Column(db.String(20), nullable=True)
+    report_date               = db.Column(db.Date, nullable=True)
+    employee_name_snapshot    = db.Column(db.String(255), nullable=True)
+    employee_no_snapshot      = db.Column(db.String(50), nullable=True)
+    supervisor_name_snapshot  = db.Column(db.String(255), nullable=True)
+    supervisor_code_snapshot  = db.Column(db.String(50), nullable=True)
+    reason_text                = db.Column(db.Text, nullable=True)
+    signature                 = db.Column(db.Text, nullable=True)  # base64 PNG — توقيع المشرف وقت الإنشاء
+    created_at                = db.Column(db.DateTime, default=datetime.utcnow)
+
+    request = db.relationship("Request", foreign_keys=[request_id],
+                              backref=db.backref("warning_field_report", uselist=False))
+
+class LeaveSignature(db.Model):
+    """توقيع الموظف على نموذج الإجازة"""
+    __tablename__ = "leave_signature"
+    id           = db.Column(db.Integer, primary_key=True)
+    request_id   = db.Column(db.Integer, db.ForeignKey("requests.id"), nullable=False, unique=True)
+    employee_name= db.Column(db.String(255), nullable=True)
+    signed_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    signature    = db.Column(db.Text, nullable=False)  # base64 PNG
+    request      = db.relationship("Request", foreign_keys=[request_id],
+                                   backref=db.backref("leave_sig", uselist=False))
+
+class PermissionSignature(db.Model):
+    """توقيع الموظف على نموذج الاستئذان"""
+    __tablename__ = "permission_signature"
+    id           = db.Column(db.Integer, primary_key=True)
+    request_id   = db.Column(db.Integer, db.ForeignKey("requests.id"), nullable=False, unique=True)
+    employee_name= db.Column(db.String(255), nullable=True)
+    signed_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    signature    = db.Column(db.Text, nullable=False)  # base64 PNG
+    request      = db.relationship("Request", foreign_keys=[request_id],
+                                   backref=db.backref("permission_sig", uselist=False))
 
 # ===================== Models =====================
 # ========== Model: Request ==========
@@ -248,11 +313,15 @@ class Request(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
-    supervisor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)      # كان users.id
+    supervisor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     supervisor = db.relationship("User", foreign_keys=[supervisor_id])
 
-    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=False)    # كان employees.id
+    employee_id = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=True)
     employee = db.relationship("Employee", foreign_keys=[employee_id])
+
+    # safety_supervisor requests: target is an officer User, not an Employee record
+    officer_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    officer_user = db.relationship("User", foreign_keys=[officer_user_id])
 
     type = db.Column(db.String(32), nullable=False, default="leave")
     start_date = db.Column(db.Date, nullable=True)
@@ -282,6 +351,7 @@ class HRTask(db.Model):
     applied_by      = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
     official_reason = db.Column(db.Text, nullable=True)
     warning_pdf     = db.Column(db.String(255), nullable=True)
+    warning_company = db.Column(db.String(10), nullable=True, default="NSH")  # NSH أو GA — شركة خطاب الإنذار
 
     request  = db.relationship("Request",  foreign_keys=[request_id])
     employee = db.relationship("Employee", foreign_keys=[employee_id])
@@ -355,7 +425,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     supervisor_code = db.Column(db.String(50), unique=True, nullable=False)
     name = db.Column(db.String(120), default="")
-    role = db.Column(db.String(20), default="supervisor")  # supervisor | admin | site_supervisor | safety_officer | super_admin
+    role = db.Column(db.String(20), default="supervisor")  # supervisor | admin | site_supervisor | safety_officer | safety_supervisor | super_admin | welfare_officer | environment_officer
     is_active = db.Column(db.Boolean, default=True)
     is_hidden = db.Column(db.Boolean, default=False)
     # SaaS additions
@@ -363,6 +433,8 @@ class User(db.Model):
     email         = db.Column(db.String(255), nullable=True)
     password_hash = db.Column(db.String(255), nullable=True)
     company       = db.relationship("Company", foreign_keys=[company_id])
+
+    ptw_training_active = db.Column(db.Boolean, default=False)
 
     def set_password(self, pw):
         self.password_hash = generate_password_hash(pw)
@@ -374,7 +446,7 @@ class User(db.Model):
 
     @property
     def is_supervisor(self):
-        return self.role in ("supervisor", "site_supervisor")
+        return self.role in ("supervisor", "site_supervisor", "safety_supervisor")
 
 class Employee(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -387,7 +459,9 @@ class Employee(db.Model):
     status = db.Column(db.String(20), nullable=False, default="active")   # active | resigned | unassigned
     resigned_at = db.Column(db.Date, nullable=True)
     company_id = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
-    
+    id_expiry_date = db.Column(db.Date, nullable=True)   # تاريخ انتهاء بطاقة الهوية/الإقامة
+    gender = db.Column(db.Enum("male", "female"), nullable=True)   # backend-only, never shown in reports
+
 
 class Evaluation(db.Model):
     __table_args__ = (UniqueConstraint("employee_id", "week_start", "week_end", name="uq_emp_week"),)
@@ -431,6 +505,28 @@ class SiteSupervisorMap(db.Model):
     site_sup_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     supervisor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
     company_id = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+
+class EmployeeAssignmentLog(db.Model):
+    """سجل حركة الموظف بين المشرفين — لا يوجد حذف نهائي، كل حركة تُسجَّل هنا."""
+    __tablename__ = "employee_assignment_log"
+    id           = db.Column(db.Integer, primary_key=True)
+    employee_id  = db.Column(db.Integer, db.ForeignKey("employee.id"), nullable=False, index=True)
+    from_user_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    to_user_id   = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    # transfer | unassign | resign | assign | reactivate
+    action       = db.Column(db.String(20), nullable=False, default="transfer")
+    actor_id     = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    note         = db.Column(db.String(255), default="")
+    created_at   = db.Column(db.DateTime, default=lambda: datetime.now(RIYADH_TZ))
+    company_id   = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+
+
+class SafetySupervisorMap(db.Model):
+    __table_args__ = (UniqueConstraint("safety_sup_id", "officer_id", name="uq_safety_sup_pair"),)
+    id = db.Column(db.Integer, primary_key=True)
+    safety_sup_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    officer_id    = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id    = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
 
 class SupervisorEvaluation(db.Model):
     __table_args__ = (UniqueConstraint("supervisor_id", "week_start", "week_end", name="uq_sup_week"),)
@@ -515,6 +611,28 @@ def _apply_leave_attendance_for_request(req: Request):
             db.session.add(rec)
         cur += timedelta(days=1)
 
+def _apply_sick_attendance_for_request(req: Request):
+    """يسجّل غياب (absent) للسكليف تلقائياً لكل يوم بين start_date و end_date."""
+    if not (req and req.employee_id and req.start_date and req.end_date):
+        return
+    marker = f"auto_sick_req_{req.id}"
+    cur = req.start_date
+    while cur <= req.end_date:
+        rec = Attendance.query.filter_by(employee_id=req.employee_id, date=cur).first()
+        if rec:
+            rec.status  = "absent"
+            if marker not in (rec.remarks or ""):
+                rec.remarks = (rec.remarks + " " + marker).strip() if rec.remarks else marker
+        else:
+            db.session.add(Attendance(
+                employee_id=req.employee_id,
+                supervisor_id=req.supervisor_id,
+                date=cur,
+                status="absent",
+                remarks=marker,
+            ))
+        cur += timedelta(days=1)
+
 def get_employee_summary(emp_id: int):
     from calendar import monthrange
     today = datetime.now(RIYADH_TZ).date()
@@ -542,6 +660,31 @@ def get_employee_summary(emp_id: int):
              .all())
     avg_score = round(sum((e.total_score or 0) for e in evals) / len(evals), 1) if evals else None
 
+    # ── التقييمات: كل الأسابيع (بلا حد زمني) ──
+    evals_all = (Evaluation.query
+                 .filter(Evaluation.employee_id == emp_id)
+                 .order_by(Evaluation.week_start.asc())
+                 .all())
+    avg_score_all = round(sum((e.total_score or 0) for e in evals_all) / len(evals_all), 1) if evals_all else None
+
+    # ── الاتجاه: متوسط النصف الثاني مقابل النصف الأول من كل التقييمات ──
+    trend = None
+    if len(evals_all) >= 2:
+        mid = len(evals_all) // 2
+        first_half  = evals_all[:mid]
+        second_half = evals_all[mid:]
+        avg_first  = sum((e.total_score or 0) for e in first_half) / len(first_half)
+        avg_second = sum((e.total_score or 0) for e in second_half) / len(second_half)
+        if avg_second > avg_first:
+            trend = "up"
+        elif avg_second < avg_first:
+            trend = "down"
+        else:
+            trend = "flat"
+
+    # ── الغياب: كل الفترة (بلا حد زمني) ──
+    absent_all = Attendance.query.filter_by(employee_id=emp_id, status="absent").count()
+
     # ── آخر تقييم أسبوعي ──
     last_eval = evals[0] if evals else None
     last_eval_data = None
@@ -554,12 +697,6 @@ def get_employee_summary(emp_id: int):
             "targets":     last_eval.targets_score,
             "perf":        last_eval.perf_score,
         }
-
-    # ── آخر تقييم يومي ──
-    last_daily = (DailyEvaluation.query
-                  .filter(DailyEvaluation.employee_id == emp_id)
-                  .order_by(DailyEvaluation.eval_date.desc())
-                  .first())
 
     return {
         # حضور الشهر الحالي
@@ -574,56 +711,12 @@ def get_employee_summary(emp_id: int):
         "avg_score_8w":  avg_score,
         "eval_count_8w": len(evals),
         "last_eval":     last_eval_data,
-        # آخر تقييم يومي
-        "last_daily_date":  str(last_daily.eval_date) if last_daily else None,
-        "last_daily_total": last_daily.total_score if last_daily else None,
-        "last_daily_band":  last_daily.overall_band if last_daily else None,
+        # تقييمات كل الفترة + الاتجاه + الغياب الكلي
+        "avg_score_all":  avg_score_all,
+        "eval_count_all": len(evals_all),
+        "trend":          trend,
+        "absent_all":     absent_all,
     }
-    
-# ✅ استبدل الدالة بالكامل بهذا الإصدار
-def aggregate_week_from_dailies(emp_id: int, ws: date, we: date) -> Optional[Evaluation]:
-    # اجلب الأيام (أحد..خميس)
-    dailies = (DailyEvaluation.query
-               .filter(DailyEvaluation.employee_id == emp_id,
-                       DailyEvaluation.eval_date >= ws,
-                       DailyEvaluation.eval_date <= we)
-               .all())
-    if not dailies:
-        return None
-
-    n = len(dailies)
-    # متوسط الأرقام من الحقول الصحيحة
-    avg_targets = sum((d.targets_score or 0) for d in dailies) / n
-    avg_perf    = sum((d.performance_score or 0) for d in dailies) / n
-    # نجمع المتوسطين بدل متوسط total اليومي
-    avg_total   = round(avg_targets + avg_perf, 2)
-
-    # حدد Band
-    if   avg_total >= WEIGHTS["bands"]["excellent"]:
-        band = "Excellent"
-    elif avg_total >= WEIGHTS["bands"]["good"]:
-        band = "Good"
-    elif avg_total >= WEIGHTS["bands"]["satisfactory"]:
-        band = "Satisfactory"
-    else:
-        band = "Needs Improvement"
-
-    # أنشئ/حدّث Evaluation الأسبوعي
-    ev = Evaluation.query.filter_by(employee_id=emp_id, week_start=ws, week_end=we).first()
-    if not ev:
-        # نأخذ آخر مُقيّم يومي كـ evaluator (أو مدير الموظف إذا تحب)
-        last_evaluator = max(dailies, key=lambda d: d.created_at).evaluator_id
-        ev = Evaluation(employee_id=emp_id, evaluator_id=last_evaluator,
-                        week_start=ws, week_end=we)
-        db.session.add(ev)
-
-    ev.targets_score = round(avg_targets, 2)
-    ev.perf_score    = round(avg_perf, 2)
-    ev.total_score   = avg_total
-    ev.overall_band  = band
-
-    db.session.commit()
-    return ev
 
 
 def previous_week_range(ws: date) -> Tuple[date, date]:
@@ -672,12 +765,65 @@ def ensure_db_and_admin() -> None:
     """Create DB tables and bootstrap admin if ADMIN_ID is set."""
     with app.app_context():
         db.create_all()
+
+        # db.create_all() ينشئ الجداول الجديدة فقط، ولا يضيف أعمدة جديدة لجداول
+        # موجودة مسبقاً — لذلك أي عمود أُضيف لموديل قائم (مثل hr_task.warning_company)
+        # يجب إضافته يدوياً هنا وإلا كل استعلام على الجدول ينهار بـ
+        # "Unknown column ... in 'SELECT'"
+        try:
+            from sqlalchemy import text as _text, inspect as _inspect
+            _insp = _inspect(db.engine)
+            _existing_cols = {c["name"] for c in _insp.get_columns("hr_task")}
+            if "warning_company" not in _existing_cols:
+                with db.engine.begin() as _conn:
+                    _conn.execute(_text(
+                        "ALTER TABLE hr_task ADD COLUMN warning_company VARCHAR(10) NULL"))
+                app.logger.info("DB migration: added hr_task.warning_company")
+
+            _existing_wsig_cols = {c["name"] for c in _insp.get_columns("warning_signature")}
+            if "job_title" not in _existing_wsig_cols:
+                with db.engine.begin() as _conn:
+                    _conn.execute(_text(
+                        "ALTER TABLE warning_signature ADD COLUMN job_title VARCHAR(255) NULL"))
+                app.logger.info("DB migration: added warning_signature.job_title")
+
+            _existing_emp_cols = {c["name"] for c in _insp.get_columns("employee")}
+            if "id_expiry_date" not in _existing_emp_cols:
+                with db.engine.begin() as _conn:
+                    _conn.execute(_text(
+                        "ALTER TABLE employee ADD COLUMN id_expiry_date DATE NULL"))
+                app.logger.info("DB migration: added employee.id_expiry_date")
+
+            if "gender" not in _existing_emp_cols:
+                with db.engine.begin() as _conn:
+                    _conn.execute(_text(
+                        "ALTER TABLE employee ADD COLUMN gender ENUM('male','female') NULL"))
+                app.logger.info("DB migration: added employee.gender")
+
+            _existing_user_cols = {c["name"] for c in _insp.get_columns("user")}
+            if "ptw_training_active" not in _existing_user_cols:
+                with db.engine.begin() as _conn:
+                    _conn.execute(_text(
+                        "ALTER TABLE user ADD COLUMN ptw_training_active BOOLEAN NOT NULL DEFAULT FALSE"))
+                app.logger.info("DB migration: added user.ptw_training_active")
+
+        except Exception as _mig_err:
+            app.logger.error("DB self-migration check failed: %s", _mig_err)
+
         admin_id = os.environ.get("ADMIN_ID")
         if admin_id:
             existing = User.query.filter_by(supervisor_code=admin_id).first()
+            # Pick the single company in the DB (single-tenant setup)
+            company = Company.query.first()
+            company_id = company.id if company else None
             if not existing:
-                admin = User(supervisor_code=admin_id, name="Admin", role="admin", is_active=True)
+                admin = User(supervisor_code=admin_id, name="Admin", role="admin",
+                             is_active=True, company_id=company_id)
                 db.session.add(admin)
+                db.session.commit()
+            elif existing.company_id is None and company_id:
+                # Fix existing bootstrap admin that has no company_id
+                existing.company_id = company_id
                 db.session.commit()
                 
 # parse_date و validate_week_sun_to_thu: النسخ الصحيحة موجودة أسفل في قسم Auth & Helpers
@@ -850,75 +996,6 @@ def validate_week_sun_to_thu(ws: date, we: date):
     if ws.weekday() != WEEK_START_WEEKDAY or we.weekday() != WEEK_END_WEEKDAY:
         return False, "Start must be Sunday and end must be Thursday."
     return True, ""
-# --- Safe scoring function for daily evaluation ---
-
-# --- Safe scoring function for daily evaluation ---
-def compute_daily_scores(de):
-    """
-    حساب الديلي بناءً على البنود المدخلة فقط.
-    """
-    # ===== Daily Targets (40) =====
-    filled_percents = []
-    for i in range(1, 5):
-        txt = getattr(de, f"t{i}_text", "") or ""
-        pct = getattr(de, f"t{i}_percent", 0) or 0
-        try:
-            pct = float(pct)
-        except Exception:
-            pct = 0.0
-
-        # احسبه لو فيه نص أو نسبة
-        if txt.strip() or pct > 0:
-            pct = max(0.0, min(100.0, pct))
-            filled_percents.append(pct)
-
-    if filled_percents:
-        n_targets = len(filled_percents)
-        per_target_points = 40.0 / n_targets
-        de.targets_score = round(
-            sum((p / 100.0) * per_target_points for p in filled_percents),
-            2
-        )
-    else:
-        de.targets_score = 0.0
-
-    # ===== Performance (60) =====
-    rating_fields = [
-        "p_punctuality",
-        "p_quality",
-        "p_productivity",
-        "p_communication",
-        "p_problemsolving",
-        "p_compliance",
-    ]
-    rating_values = []
-    for f in rating_fields:
-        r = getattr(de, f, 0) or 0
-        try:
-            r = int(r)
-        except Exception:
-            r = 0
-        r = max(0, min(5, r))
-        rating_values.append(r)
-
-    if rating_values:
-        n_ratings = len(rating_values)
-        per_item_points = 60.0 / n_ratings
-        de.perf_score = round(
-            sum((r / 5.0) * per_item_points for r in rating_values),
-            2
-        )
-    else:
-        de.perf_score = 0.0
-
-    # ===== Total & Band =====
-    de.total_score = round(de.targets_score + de.perf_score, 2)
-    de.overall_band = (
-        "Excellent" if de.total_score >= 90 else
-        "Good" if de.total_score >= 80 else
-        "Satisfactory" if de.total_score >= 70 else
-        "Needs Improvement"
-    )
 
 
 @app.get("/logo")
@@ -926,113 +1003,26 @@ def logo():
     return app.send_static_file("img/logo.png")
     
 
-@app.route("/daily2/evaluate/<int:emp_id>/new", methods=["GET", "POST"])
-@login_required
-def daily2_evaluate_new(emp_id):
-    u = cur_user()
-    emp = (Employee.query.get_or_404(emp_id) if u.role=="admin"
-           else Employee.query.filter_by(id=emp_id, user_id=u.id).first_or_404())
-
-    if request.method == "POST":
-        # تاريخ اليوم أو اللي اختاره
-        d_raw = request.form.get("eval_date") or date.today().isoformat()
-        y, m, d = map(int, d_raw.split("-"))
-        eval_date = date(y, m, d)
-
-        # منع تكرار نفس اليوم
-        exists = DailyEvaluation.query.filter_by(employee_id=emp.id, eval_date=eval_date).first()
-        if exists:
-            flash("Daily evaluation for this date already exists.", "warning")
-            return redirect(url_for("daily_report_employee", emp_id=emp.id, d=eval_date.isoformat()))
-
-        de = DailyEvaluation(
-            employee_id=emp.id,
-            evaluator_id=u.id,
-            eval_date=eval_date,
-
-            # Daily targets
-            t1_text=request.form.get("t1_text",""),
-            t1_percent=request.form.get("t1_percent") or 0,
-            t1_remarks=request.form.get("t1_remarks",""),
-            t2_text=request.form.get("t2_text",""),
-            t2_percent=request.form.get("t2_percent") or 0,
-            t2_remarks=request.form.get("t2_remarks",""),
-            t3_text=request.form.get("t3_text",""),
-            t3_percent=request.form.get("t3_percent") or 0,
-            t3_remarks=request.form.get("t3_remarks",""),
-            t4_text=request.form.get("t4_text",""),
-            t4_percent=request.form.get("t4_percent") or 0,
-            t4_remarks=request.form.get("t4_remarks",""),
-
-            # Performance
-            p_punctuality=request.form.get("p_punctuality", type=int),
-            c_punctuality=request.form.get("c_punctuality",""),
-            p_quality=request.form.get("p_quality", type=int),
-            c_quality=request.form.get("c_quality",""),
-            p_productivity=request.form.get("p_productivity", type=int),
-            c_productivity=request.form.get("c_productivity",""),
-            p_communication=request.form.get("p_communication", type=int),
-            c_communication=request.form.get("c_communication",""),
-            p_problemsolving=request.form.get("p_problemsolving", type=int),
-            c_problemsolving=request.form.get("c_problemsolving",""),
-            p_compliance=request.form.get("p_compliance", type=int),
-            c_compliance=request.form.get("c_compliance",""),
-
-            strengths=request.form.get("strengths",""),
-            improvements=request.form.get("improvements",""),
-            training_needed=request.form.get("training_needed",""),
-            company_id=cid(),
-        )
-
-        compute_daily_scores(de)
-        db.session.add(de)
-        db.session.commit()
-
-        flash("Daily evaluation saved.", "success")
-        return redirect(url_for("daily_report_employee", emp_id=emp.id, d=eval_date.isoformat()))
-
-    # GET
-    today = date.today()
-    return render_template("daily_eval_form_v2.html", employee=emp, d=today, weights=WEIGHTS)
-    
-@app.route("/daily2/reports/employee/<int:emp_id>")
-@login_required
-def daily2_report_employee(emp_id):
-    u = cur_user()
-    emp = (Employee.query.get_or_404(emp_id) if u.role == "admin"
-           else Employee.query.filter_by(id=emp_id, user_id=u.id).first_or_404())
-
-    d_str = request.args.get("d")
-    if not d_str:
-        flash("Missing date.", "warning")
-        return redirect(url_for("employees"))
-
-    d_val = date.fromisoformat(d_str)
-    de = DailyEvaluation.query.filter_by(employee_id=emp.id, eval_date=d_val).first_or_404()
-
-    evaluator = db.session.get(User, de.evaluator_id)
-    return render_template(
-        "daily_report_employee_v2.html",
-        employee=emp,
-        de=de,
-        evaluator_code=evaluator.supervisor_code if evaluator else "",
-        evaluator_name=(evaluator.name if (evaluator and evaluator.name) else "")
-    )
-
-
 # ===================== Routes =====================
 @app.route("/requests/new", methods=["GET", "POST"])
 @login_required
 def request_new():
     u = cur_user()
-    if not (u and getattr(u, "role", None) in ("supervisor", "site_supervisor", "admin")):
+    if not (u and getattr(u, "role", None) in ("supervisor", "site_supervisor",
+                                               "safety_supervisor", "safety_manager", "admin")):
         abort(403)
 
-    # فلترة موظفي المشرف فقط (حسب ما طبّقناه سابقًا بالـ join على User أو user_id=u.id)
-    employees = (Employee.query
-                 .filter_by(user_id=u.id, is_active=True)
-                 .order_by(Employee.name.asc())
-                 .all())
+    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
+        officer_ids = [o.id for o in _get_safety_officers(u)]
+        employees = (Employee.query
+                     .filter(Employee.user_id.in_(officer_ids), Employee.is_active == True)
+                     .order_by(Employee.name.asc()).all())
+        valid_sup_ids = set(officer_ids)
+    else:
+        employees = (Employee.query
+                     .filter_by(user_id=u.id, is_active=True)
+                     .order_by(Employee.name.asc()).all())
+        valid_sup_ids = {u.id}
 
     def _parse_date(s):
         s = (s or "").strip()
@@ -1052,11 +1042,17 @@ def request_new():
         to_time    = (request.form.get("to_time") or "").strip()
         priority   = (request.form.get("priority") or "").strip().lower()
 
+        # ── إنذار من حساب مشرف: تحويل مباشر لصفحة "تقرير سبب الإنذار" المخصصة
+        # بدل إنشاء طلب عام بخانة سبب بسيطة. التحويل بالكامل من السيرفر
+        # (بدون أي جافاسكربت/قوالب إضافية) لتفادي أي تلف بالملف عند الرفع.
+        if rtype == "warning" and u.role == "supervisor":
+            return redirect(url_for("warning_report_new", employee_id=emp_id or ""))
+
         # تحقق أساسي
         try: emp_id = int(emp_id or 0)
         except: emp_id = 0
         emp = db.session.get(Employee, emp_id) if emp_id else None
-        if not emp or emp.user_id != u.id:
+        if not emp or emp.user_id not in valid_sup_ids:
             flash("Please choose a valid employee.", "danger")
             return render_template("requests_new.html", employees=employees,
                                    pre_emp_id=emp_id, pre_type=rtype,
@@ -1090,14 +1086,30 @@ def request_new():
         r = Request(
             supervisor_id=u.id,
             employee_id=emp.id,
-            type=rtype if rtype in {"leave","permission","warning","late","other"} else "other",
+            type=rtype if rtype in {"leave","sick","permission","warning","late","other"} else "other",
             start_date=start_date,
             end_date=end_date,
             reason=reason,
             status="pending",
             company_id=cid(),
         )
-        db.session.add(r); db.session.commit()
+        db.session.add(r)
+        db.session.flush()  # نحتاج r.id قبل حفظ المرفق
+
+        # ─── رفع مرفق (سكليف) إن وُجد ───
+        uploaded_file = request.files.get("pdf_file")
+        if uploaded_file and uploaded_file.filename and allowed_file(uploaded_file.filename):
+            original_name = secure_filename(uploaded_file.filename)
+            ext           = original_name.rsplit(".", 1)[-1].lower() if "." in original_name else "pdf"
+            saved_name    = f"req_{r.id}_{uuid.uuid4().hex[:8]}.{ext}"
+            uploaded_file.save(os.path.join(UPLOAD_FOLDER, saved_name))
+            db.session.add(RequestAttachment(
+                request_id=r.id,
+                filename=saved_name,
+                original_name=original_name,
+            ))
+
+        db.session.commit()
         flash("Request submitted.", "success")
         return redirect(url_for("requests_mine"))
 
@@ -1106,48 +1118,107 @@ def request_new():
                            pre_emp_id=None, pre_type="leave")
 
 
+_AR_DAY_NAMES = ["الإثنين", "الثلاثاء", "الأربعاء", "الخميس", "الجمعة", "السبت", "الأحد"]
+
+
+@app.route("/requests/new-warning-report", methods=["GET", "POST"])
+@login_required
+def warning_report_new():
+    """تقرير مخالفة/سبب إنذار يعبّئه المشرف مباشرة — بنفس شكل النموذج الورقي.
+    يُنشئ طلب إنذار عادي (نفس مسار HR الحالي) + يحفظ نسخة توثيقية بالتقرير
+    الميداني (تاريخ/يوم/توقيع المشرف وقت التعبئة) دون التأثير على تصميم
+    الـ PDF الرسمي الحالي."""
+    u = cur_user()
+    if u.role != "supervisor":
+        abort(403)
+
+    employees = (Employee.query.filter_by(user_id=u.id, is_active=True)
+                 .order_by(Employee.name.asc()).all())
+
+    from zoneinfo import ZoneInfo
+    today = datetime.now(ZoneInfo("Asia/Riyadh")).date()
+
+    if request.method == "POST":
+        emp_id = request.form.get("employee_id")
+        try:
+            emp_id = int(emp_id or 0)
+        except Exception:
+            emp_id = 0
+        emp = db.session.get(Employee, emp_id) if emp_id else None
+        if not emp or emp.user_id != u.id:
+            flash("Please select a valid employee from your list.", "danger")
+            return redirect(url_for("warning_report_new"))
+
+        emp_name_manual = (request.form.get("employee_name_manual") or "").strip()
+        reason_text = (request.form.get("reason_text") or "").strip()
+        signature   = (request.form.get("signature") or "").strip()
+        report_date_str = (request.form.get("report_date") or "").strip()
+
+        if not emp_name_manual:
+            flash("Employee name is required.", "danger")
+            return redirect(url_for("warning_report_new"))
+        if not reason_text:
+            flash("Warning reason is required.", "danger")
+            return redirect(url_for("warning_report_new"))
+        if not signature:
+            flash("Supervisor signature is required to complete the report.", "danger")
+            return redirect(url_for("warning_report_new"))
+
+        try:
+            report_date = datetime.strptime(report_date_str, "%Y-%m-%d").date() if report_date_str else today
+        except Exception:
+            report_date = today
+        day_name = _AR_DAY_NAMES[report_date.weekday()]
+
+        r = Request(
+            supervisor_id=u.id,
+            employee_id=emp.id,
+            type="warning",
+            reason=reason_text,
+            status="pending",
+            company_id=cid(),
+        )
+        db.session.add(r)
+        db.session.flush()  # نحتاج r.id
+
+        wfr = WarningFieldReport(
+            request_id=r.id,
+            day_name=day_name,
+            report_date=report_date,
+            employee_name_snapshot=emp_name_manual,   # يكتبه المشرف يدوياً
+            employee_no_snapshot=emp.emp_number,      # يُختار بالـ ID من قائمة موظفيه
+            supervisor_name_snapshot=u.name,
+            supervisor_code_snapshot=u.supervisor_code,
+            reason_text=reason_text,
+            signature=signature,
+            created_at=datetime.now(ZoneInfo("Asia/Riyadh")),
+        )
+        db.session.add(wfr)
+        db.session.commit()
+
+        flash("Warning report submitted successfully.", "success")
+        return redirect(url_for("requests_mine"))
+
+    pre_emp_id = request.args.get("employee_id", "")
+    return render_template("warning_report_new.html", employees=employees,
+                           sup=u, today=today.isoformat(),
+                           today_day_name=_AR_DAY_NAMES[today.weekday()],
+                           pre_emp_id=pre_emp_id)
+
 
 @app.route("/requests/mine")
 @login_required
 def requests_mine():
     u = cur_user()
-    # الطلبات التي قدّمها هذا المستخدم (سوبرفايزر)
     reqs = Request.query.filter(Request.supervisor_id == u.id) \
                         .order_by(Request.created_at.desc()).all()
-    return render_template("requests_mine.html", rows=reqs)
-
-
-@app.post("/daily/aggregate/week")
-@login_required
-def daily_aggregate_week():
-    # احصل على أسبوع مستهدف
-    ws = parse_date(request.form.get("week_start"))
-    we = parse_date(request.form.get("week_end"))
-    ok, msg = validate_week_sun_to_thu(ws, we)
-    if not ok:
-        flash(msg, "danger")
-        return redirect(request.referrer or url_for("admin_report_picker"))
-
-    u = cur_user()
-    # من يشمل؟
-    if u.role == "admin":
-        emp_ids = [e.id for e in Employee.query.filter_by(is_active=True).all()]
-    else:
-        emp_ids = [e.id for e in Employee.query.filter_by(user_id=u.id, is_active=True).all()]
-
-    done = 0
-    for emp_id in emp_ids:
-        if aggregate_week_from_dailies(emp_id, ws, we):
-            done += 1
-
-    flash(f"Aggregated weekly evaluations for {done} employees.", "success")
-    # رجّع للأدمن إلى /admin/reports/all أو للمشرف لصفحته
-    if u.role == "admin":
-        return redirect(url_for("admin_reports_all",
-                                week_start=ws.isoformat(), week_end=we.isoformat()))
-    return redirect(url_for("report_supervisor",
-                            week_start=ws.isoformat(), week_end=we.isoformat()))
-
+    # نجلب HRTask لكل طلب لمعرفة official_reason وحالة التطبيق
+    req_ids = [r.id for r in reqs]
+    tasks_map = {}
+    if req_ids:
+        for t in HRTask.query.filter(HRTask.request_id.in_(req_ids)).all():
+            tasks_map[t.request_id] = t
+    return render_template("requests_mine.html", rows=reqs, tasks_map=tasks_map)
 
 
 @app.route("/admin/employee/<int:emp_id>/summary", methods=["GET"])
@@ -1157,272 +1228,6 @@ def employee_summary(emp_id):
     emp = Employee.query.get_or_404(emp_id)
     summary = get_employee_summary(emp_id)
     return render_template("employee_summary.html", emp=emp, summary=summary)
-
-
-@app.route("/daily/evaluate/<int:emp_id>/new", methods=["GET", "POST"])
-@login_required
-def daily_evaluate_new(emp_id):
-    u = cur_user()
-    # المشرف يشوف موظفينه فقط، الأدمن يشوف الكل
-    emp = (Employee.query.get_or_404(emp_id) if u.role=="admin"
-           else Employee.query.filter_by(id=emp_id, user_id=u.id).first_or_404())
-
-    if request.method == "POST":
-        try:
-            # 1) التاريخ
-            eval_date_raw = request.form.get("eval_date")
-            if not eval_date_raw:
-                flash("Date is required.", "danger")
-                return redirect(url_for("daily_evaluate_new", emp_id=emp.id))
-            eval_date = parse_date(eval_date_raw)  # تأكد إنها موجودة: strptime("%Y-%m-%d")
-
-            # 2) منع التكرار
-            exists = DailyEvaluation.query.filter_by(
-                employee_id=emp.id, eval_date=eval_date
-            ).first()
-            if exists:
-                flash("A daily evaluation for this date already exists.", "warning")
-                return redirect(url_for("daily_report_employee", emp_id=emp.id, d=eval_date.isoformat()))
-
-            # 3) قراءة آمنة للقيم + قصّ المدى
-            gi = lambda n, lo=0, hi=5: max(lo, min(hi, int(request.form.get(n) or 0)))
-            gf = lambda n, lo=0, hi=100: max(lo, min(hi, float(request.form.get(n) or 0)))
-
-            de = DailyEvaluation(
-                employee_id=emp.id,
-                evaluator_id=u.id,
-                eval_date=eval_date,
-
-                t1_text=request.form.get("t1_text",""),
-                t1_percent=gf("t1_percent"), t1_remarks=request.form.get("t1_remarks",""),
-                t2_text=request.form.get("t2_text",""),
-                t2_percent=gf("t2_percent"), t2_remarks=request.form.get("t2_remarks",""),
-                t3_text=request.form.get("t3_text",""),
-                t3_percent=gf("t3_percent"), t3_remarks=request.form.get("t3_remarks",""),
-                t4_text=request.form.get("t4_text",""),
-                t4_percent=gf("t4_percent"), t4_remarks=request.form.get("t4_remarks",""),
-
-                p_punctuality=gi("p_punctuality"), c_punctuality=request.form.get("c_punctuality",""),
-                p_quality=gi("p_quality"),         c_quality=request.form.get("c_quality",""),
-                p_productivity=gi("p_productivity"), c_productivity=request.form.get("c_productivity",""),
-                p_communication=gi("p_communication"), c_communication=request.form.get("c_communication",""),
-                p_problemsolving=gi("p_problemsolving"), c_problemsolving=request.form.get("c_problemsolving",""),
-                p_compliance=gi("p_compliance"),     c_compliance=request.form.get("c_compliance",""),
-
-                strengths=request.form.get("strengths",""),
-                improvements=request.form.get("improvements",""),
-                training_needed=request.form.get("training_needed",""),
-                company_id=cid(),
-            )
-
-            compute_daily_scores(de)
-            db.session.add(de)
-            db.session.commit()
-
-            flash("Daily evaluation saved.", "success")
-            return redirect(url_for("daily_report_employee", emp_id=emp.id, d=eval_date.isoformat()))
-
-        except Exception as e:
-            # مهم: رجوع المعاملة + تسجيل الخطأ
-            db.session.rollback()
-            import traceback
-            app.logger.error("Error saving daily evaluation:\n%s", traceback.format_exc())
-            flash("Error while saving the daily evaluation.", "danger")
-            return redirect(url_for("daily_evaluate_new", emp_id=emp.id))
-
-    # GET — نفس تمبليتك الحالية
-    d = date.today()
-    return render_template("daily_eval_form.html", employee=emp, d=d, weights=WEIGHTS)
-
-
-@app.route("/daily/reports/employee/<int:emp_id>")
-@login_required
-def daily_report_employee(emp_id):
-    u = cur_user()
-
-    # 1) get employee
-    emp = Employee.query.get_or_404(emp_id)
-
-    # 2) permission check
-    allowed = False
-
-    # admin can see all
-    if u.role == "admin":
-        allowed = True
-
-    # supervisor of this employee
-    elif emp.user_id == u.id:
-        allowed = True
-
-    # site supervisor: check mapping
-    elif u.role == "site_supervisor":
-        link = (db.session.query(SiteSupervisorMap)
-                .filter_by(site_sup_id=u.id, supervisor_id=emp.user_id)
-                .first())
-        if link:
-            allowed = True
-
-    if not allowed:
-        abort(403)
-
-    # 3) date
-    d_str = request.args.get("d")
-    if not d_str:
-        flash("Missing date.", "warning")
-        return redirect(url_for("employees"))
-    d_val = parse_date(d_str)
-
-    # 4) daily evaluation
-    de = (DailyEvaluation.query
-          .filter_by(employee_id=emp.id, eval_date=d_val)
-          .first_or_404())
-
-    # important: recompute
-    compute_daily_scores(de)
-
-    evaluator = db.session.get(User, de.evaluator_id)
-    return render_template(
-        "daily_report_employee_v2.html",
-        employee=emp,
-        de=de,
-        evaluator_code=(evaluator.supervisor_code if evaluator else ""),
-        evaluator_name=(evaluator.name if (evaluator and evaluator.name) else "")
-    )
-
-
-
-
-
-@app.route("/daily/reports")
-@login_required
-def daily_reports():
-    u = cur_user()
-
-    d_str = request.args.get("d")
-    if d_str:
-        d_val = parse_date(d_str)
-    else:
-        # لو ما وصل تاريخ، استخدم تاريخ اليوم
-        d_val = date.today()
-
-    q = (db.session.query(DailyEvaluation, Employee)
-         .join(Employee, DailyEvaluation.employee_id == Employee.id))
-
-    _cid = cid()
-    if _cid is not None:
-        q = q.filter(DailyEvaluation.company_id == _cid)
-
-    if u.role != "admin":
-        q = q.filter(Employee.user_id == u.id)
-
-    rows = (q.filter(DailyEvaluation.eval_date == d_val)
-              .order_by(Employee.name.asc()).all())
-
-    return render_template("daily_reports.html", rows=rows, d=d_val)
-
-
-from datetime import date  # تأكد أنه موجود فوق
-
-@app.route("/admin/reports/daily/all")
-@admin_required
-def admin_reports_daily_all():
-    # 1) التاريخ
-    d_s = request.args.get("eval_date")
-    if d_s:
-        d = parse_date(d_s)
-    else:
-        d = date.today()
-
-    # 2) الفلتر اللي يكتبه الأدمن
-    q = (request.args.get("q") or "").strip()
-    focus_sup = find_supervisor_from_query(q)
-
-    # 3) الجدول الرئيسي (نفس اللي كان عندك)
-    query = (db.session.query(DailyEvaluation, Employee, User)
-             .join(Employee, DailyEvaluation.employee_id == Employee.id)
-             .join(User, Employee.user_id == User.id)
-             .filter(DailyEvaluation.eval_date == d))
-    if cid():
-        query = query.filter(Employee.company_id == cid())
-
-    if focus_sup:
-        query = query.filter(Employee.user_id == focus_sup.id)
-
-    if q and not focus_sup:
-        like = f"%{q}%"
-        query = query.filter(or_(
-            Employee.name.ilike(like),
-            Employee.emp_number.ilike(like),
-            Employee.department.ilike(like),
-            Employee.site.ilike(like),
-            User.supervisor_code.ilike(like),
-            DailyEvaluation.overall_band.ilike(like),
-        ))
-
-    rows = query.order_by(User.supervisor_code.asc(), Employee.name.asc()).all()
-
-    # 4) كل المشرفين (علشان نطلع تحت "من اللي ما قيّم")
-    supervisors = (
-        apply_company_filter(User.query.filter_by(role="supervisor", is_active=True), User)
-        .order_by(User.name.asc(), User.supervisor_code.asc())
-        .all()
-    )
-
-    all_sup_stats = []  # هنا بنحط كل مشرف مع تغطيته
-    for s in supervisors:
-        # موظفين هذا المشرف
-        emps = (Employee.query
-                .filter_by(user_id=s.id, is_active=True)
-                .order_by(Employee.name.asc())
-                .all())
-        total_emp = len(emps)
-        emp_ids = [e.id for e in emps]
-
-        if emp_ids:
-            done_rows = (db.session.query(DailyEvaluation.employee_id)
-                         .filter(DailyEvaluation.eval_date == d,
-                                 DailyEvaluation.employee_id.in_(emp_ids))
-                         .all())
-            done_ids = {r[0] for r in done_rows}
-        else:
-            done_ids = set()
-
-        done_emp_count = len(done_ids)
-        coverage = (done_emp_count / total_emp * 100.0) if total_emp else 0.0
-        missing_emps = [e for e in emps if e.id not in done_ids]
-
-        all_sup_stats.append({
-            "sup": s,
-            "total_emp": total_emp,
-            "done_emp_count": done_emp_count,
-            "coverage": coverage,
-            "missing_emps": missing_emps,
-        })
-
-    # 5) اقتراحات البحث اللي كانت عندك
-    sup_suggestions, seen = [], set()
-    for s in supervisors:
-        val = (s.supervisor_code or "").strip()
-        if val and val.lower() not in seen:
-            sup_suggestions.append((val, f"{s.name or '—'} — ID: {s.supervisor_code}"))
-            seen.add(val.lower())
-    for s in supervisors:
-        nm = (s.name or "").strip()
-        if nm and nm.lower() not in seen:
-            sup_suggestions.append((nm, f"{nm} — ID: {s.supervisor_code}"))
-            seen.add(nm.lower())
-
-    return render_template(
-        "report_admin_daily_all.html",
-        eval_date=d,
-        rows=rows,
-        q=q,
-        focus_sup=focus_sup,
-        supervisors=supervisors,
-        sup_suggestions=sup_suggestions,
-        all_sup_stats=all_sup_stats,   # <= الجديد
-    )
-
 
 
 # ---------- Admin: Requests ----------
@@ -1654,6 +1459,14 @@ def requests_inbox():
 
     rows = q.order_by(Request.created_at.desc()).all()
 
+    # مرفقات السكليف (لو وُجدت) لكل طلب
+    req_ids = [r.id for r in rows]
+    attachment_url_map = {}
+    if req_ids:
+        atts = RequestAttachment.query.filter(RequestAttachment.request_id.in_(req_ids)).all()
+        for att in atts:
+            attachment_url_map[att.request_id] = url_for("admin_request_attachment", req_id=att.request_id)
+
     # 1) رابط "New" لو الراوت موجود
     request_new_url = None
     if "request_new" in current_app.view_functions:
@@ -1681,7 +1494,22 @@ def requests_inbox():
         q=qterm,
         request_new_url=request_new_url,
         employee_summary_url_map=employee_summary_url_map,
+        attachment_url_map=attachment_url_map,
     )
+
+
+@app.route("/admin/requests/<int:req_id>/attachment")
+@login_required
+@admin_required
+def admin_request_attachment(req_id):
+    from flask import send_from_directory
+    req = Request.query.get_or_404(req_id)
+    att = RequestAttachment.query.filter_by(request_id=req.id).order_by(RequestAttachment.uploaded_at.desc()).first()
+    if not att:
+        abort(404)
+    return send_from_directory(UPLOAD_FOLDER, att.filename, as_attachment=False,
+                               download_name=att.original_name or att.filename)
+
 
 @app.route("/admin/requests/<int:req_id>/decide", methods=["POST"])
 @login_required
@@ -1701,32 +1529,253 @@ def request_decide(req_id):
     req.decided_at = datetime.now(timezone.utc)
     req.admin_comment = comment
 
-    # لو Approved و نوعه Leave: طبّقها على الحضور مباشرة (سلوكك الحالي)
-    if decision == "approve" and (req.type or "leave") == "leave":
-        _apply_leave_attendance_for_request(req)
-
-    # --- الإضافة الجديدة: إنشاء مهمة HR عند الموافقة ---
     if decision == "approve":
-        # تضمن وجود سجل واحد فقط لكل طلب
+        # إجازة → تسجيل حضور + توليد PDF
+        if req.type == "leave":
+            _apply_leave_attendance_for_request(req)
+            existing_form = LeaveForm.query.filter_by(request_id=req.id).first()
+            if not existing_form:
+                try:
+                    pdf_name = generate_leave_pdf(req)
+                    if pdf_name:
+                        db.session.add(LeaveForm(request_id=req.id, filename=pdf_name))
+                except Exception as e:
+                    app.logger.error("leave PDF error: %s", e)
+
+        # سكليف → تسجيل غياب تلقائي
+        if req.type == "sick":
+            _apply_sick_attendance_for_request(req)
+
+        # إنشاء مهمة HR لجميع الأنواع
         existing = HRTask.query.filter_by(request_id=req.id).first()
         if not existing:
             try:
                 db.session.add(HRTask(
                     request_id=req.id,
                     employee_id=req.employee_id,
-                    type=req.type or "leave",     # نفس نوع الطلب
-                    status="pending"              # بانتظار تنفيذ HR
+                    type=req.type or "leave",
+                    status="pending",
+                    company_id=req.company_id,
                 ))
-                # لا حاجة لعمل commit منفصل؛ سيُحفظ مع الـ commit النهائي
             except IntegrityError:
-                db.session.rollback()  # في حال unique constraint
-                # إعادة محاولة قراءة الموجود (تحسبًا لتنافُس)
-                pass
-    # --- نهاية الإضافة ---
+                db.session.rollback()
 
     db.session.commit()
     flash("Request updated.", "success")
     return redirect(url_for("requests_inbox"))
+
+
+@app.route("/requests/<int:req_id>/leave-sign", methods=["GET", "POST"])
+@login_required
+def web_leave_sign(req_id):
+    req = Request.query.get_or_404(req_id)
+    lf  = LeaveForm.query.filter_by(request_id=req_id).first()
+    sig = LeaveSignature.query.filter_by(request_id=req_id).first()
+
+    # ── ترميم ذاتي: إذا فشل توليد النموذج وقت الموافقة (مثلاً بسبب خطأ سابق
+    #    في مكتبة PDF)، نحاول توليده الآن بدل تعليق الشاشة على "جاري الإعداد" للأبد
+    if not lf and req.type == "leave":
+        try:
+            pdf_name = generate_leave_pdf(req, sig)
+            if pdf_name:
+                lf = LeaveForm(request_id=req_id, filename=pdf_name)
+                db.session.add(lf)
+                db.session.commit()
+        except Exception as e:
+            app.logger.error("leave-sign auto-generate PDF: %s", e)
+            db.session.rollback()
+
+    if request.method == "POST":
+        signature  = (request.form.get("signature") or "").strip()
+        emp_name   = (request.form.get("employee_name") or (req.employee.name if req.employee else "")).strip()
+        if not signature:
+            flash("Signature is required.", "danger")
+            return redirect(url_for("web_leave_sign", req_id=req_id))
+
+        from zoneinfo import ZoneInfo
+        now = datetime.now(ZoneInfo("Asia/Riyadh"))
+        if sig:
+            sig.signature = signature; sig.employee_name = emp_name; sig.signed_at = now
+        else:
+            sig = LeaveSignature(request_id=req_id, signature=signature,
+                                 employee_name=emp_name, signed_at=now)
+            db.session.add(sig)
+        db.session.flush()
+
+        # إذا ما زال النموذج غير موجود (فشل التوليد أعلاه)، ننشئه الآن بعد التوقيع
+        if not lf:
+            try:
+                pdf_name = generate_leave_pdf(req, sig)
+                if pdf_name:
+                    lf = LeaveForm(request_id=req_id, filename=pdf_name)
+                    db.session.add(lf)
+            except Exception as e:
+                app.logger.error("leave sign PDF: %s", e)
+
+        if lf:
+            lf.signed = True; lf.signed_at = now
+            try:
+                pdf_name = generate_leave_pdf(req, sig)
+                if pdf_name:
+                    lf.filename = pdf_name
+            except Exception as e:
+                app.logger.error("leave sign PDF: %s", e)
+
+        db.session.commit()
+        if lf and lf.signed:
+            flash("Signed successfully.", "success")
+        else:
+            flash("Signature saved, but the PDF could not be generated — please contact support.", "warning")
+        return redirect(url_for("web_leave_sign", req_id=req_id))
+
+    return render_template("leave_sign.html", req=req, lf=lf, sig=sig)
+
+
+@app.route("/requests/<int:req_id>/permission-sign", methods=["GET", "POST"])
+@login_required
+def web_permission_sign(req_id):
+    req  = Request.query.get_or_404(req_id)
+    sig  = PermissionSignature.query.filter_by(request_id=req_id).first()
+    task = HRTask.query.filter_by(request_id=req_id).first()
+
+    if request.method == "POST":
+        signature = (request.form.get("signature") or "").strip()
+        emp_name  = (request.form.get("employee_name") or (req.employee.name if req.employee else "")).strip()
+        if not signature:
+            flash("Signature is required.", "danger")
+            return redirect(url_for("web_permission_sign", req_id=req_id))
+
+        from zoneinfo import ZoneInfo
+        now = datetime.now(ZoneInfo("Asia/Riyadh"))
+        if sig:
+            sig.signature = signature; sig.employee_name = emp_name; sig.signed_at = now
+        else:
+            sig = PermissionSignature(request_id=req_id, signature=signature,
+                                      employee_name=emp_name, signed_at=now)
+            db.session.add(sig)
+        db.session.flush()
+
+        try:
+            pdf_name = generate_permission_pdf(req, sig)
+            if pdf_name and task:
+                task.warning_pdf = pdf_name
+        except Exception as e:
+            app.logger.error("permission sign PDF: %s", e)
+        db.session.commit()
+        flash("Signed successfully.", "success")
+        return redirect(url_for("web_permission_sign", req_id=req_id))
+
+    return render_template("permission_sign.html", req=req, sig=sig, task=task)
+
+
+@app.get("/requests/<int:req_id>/leave-pdf")
+@login_required
+def web_leave_pdf(req_id):
+    lf = LeaveForm.query.filter_by(request_id=req_id).first_or_404()
+    return send_file(os.path.join(UPLOAD_FOLDER, lf.filename),
+                     mimetype="application/pdf", as_attachment=False,
+                     download_name=f"leave_form_{req_id}.pdf")
+
+
+@app.route("/requests/<int:req_id>/warning-sign", methods=["GET", "POST"])
+@login_required
+def web_warning_sign(req_id):
+    req  = Request.query.get_or_404(req_id)
+    task = HRTask.query.filter_by(request_id=req_id).first()
+    sig  = WarningSignature.query.filter_by(request_id=req_id).first()
+
+    from zoneinfo import ZoneInfo
+    today = datetime.now(ZoneInfo("Asia/Riyadh")).date()
+    greg_str = f"{today.day:02d} / {today.month:02d} / {today.year}"
+    reason_for_text = (task.official_reason if task and task.official_reason else (req.reason or "—"))
+    emp_no_for_text = req.employee.emp_number if req.employee else "—"
+
+    # ── ترميم ذاتي: إذا الموظف موقّع فعلاً لكن ملف الـ PDF ما انولّد
+    #    (بسبب خطأ سابق)، نحاول نولّده الآن بدل ما تبقى الشاشة بدون رابط تحميل للأبد
+    if sig and task and not task.warning_pdf:
+        try:
+            pdf_name = generate_warning_pdf(req, sig)
+            if pdf_name:
+                task.warning_pdf = pdf_name
+                db.session.commit()
+        except Exception as e:
+            app.logger.error("warning-sign auto-generate PDF: %s", e)
+            db.session.rollback()
+
+    if request.method == "POST":
+        signature = (request.form.get("signature") or "").strip()
+        emp_name  = (request.form.get("employee_name") or (req.employee.name if req.employee else "")).strip()
+        job_title = (request.form.get("job_title") or (req.employee.department if req.employee else "")).strip()
+        if not signature:
+            flash("Signature is required.", "danger")
+            return redirect(url_for("web_warning_sign", req_id=req_id))
+
+        now = datetime.now(ZoneInfo("Asia/Riyadh"))
+        if sig:
+            sig.signature = signature; sig.employee_name = emp_name; sig.job_title = job_title; sig.signed_at = now
+        else:
+            sig = WarningSignature(request_id=req_id, signature=signature,
+                                   employee_name=emp_name, job_title=job_title, signed_at=now)
+            db.session.add(sig)
+        db.session.flush()
+        # توليد PDF الإنذار
+        pdf_ok = False
+        try:
+            pdf_name = generate_warning_pdf(req, sig)
+            if pdf_name and task:
+                task.warning_pdf = pdf_name
+                pdf_ok = True
+        except Exception as e:
+            app.logger.error("warning sign PDF: %s", e)
+        db.session.commit()
+        if pdf_ok:
+            flash("Signed successfully.", "success")
+        else:
+            flash("Signature saved, but the PDF could not be generated — refresh the page, and contact support if it persists.", "warning")
+        return redirect(url_for("web_warning_sign", req_id=req_id))
+
+    return render_template("warning_sign.html", req=req, task=task, sig=sig,
+                           greg_str=greg_str, reason_for_text=reason_for_text,
+                           emp_no_for_text=emp_no_for_text)
+
+
+@app.get("/requests/<int:req_id>/warning-pdf")
+@login_required
+def web_warning_pdf(req_id):
+    task = HRTask.query.filter_by(request_id=req_id).first_or_404()
+    if not task.warning_pdf:
+        abort(404)
+    return send_file(os.path.join(UPLOAD_FOLDER, task.warning_pdf),
+                     mimetype="application/pdf", as_attachment=False,
+                     download_name=f"warning_{req_id}.pdf")
+
+
+@app.get("/requests/<int:req_id>/warning-report")
+@login_required
+def web_warning_report_view(req_id):
+    """عرض تقرير سبب الإنذار الأصلي اللي عبّاه المشرف (صفحة منفصلة عن
+    صفحة الإنذار الرسمي/PDF الخاصة بـ HR)"""
+    req = Request.query.get_or_404(req_id)
+    wfr = WarningFieldReport.query.filter_by(request_id=req_id).first_or_404()
+
+    u = cur_user()
+    is_owner = (req.supervisor_id == u.id)
+    is_staff = (u.role in ("admin", "hr", "site_supervisor"))
+    if not (is_owner or is_staff):
+        abort(403)
+
+    return render_template("warning_report_view.html", req=req, wfr=wfr)
+
+
+@app.get("/requests/attachment/<int:att_id>")
+@login_required
+def request_attachment_download(att_id):
+    att = RequestAttachment.query.get_or_404(att_id)
+    ext = att.filename.rsplit(".", 1)[-1].lower() if "." in att.filename else "pdf"
+    mime = "application/pdf" if ext == "pdf" else f"image/{ext}"
+    return send_file(os.path.join(UPLOAD_FOLDER, att.filename),
+                     mimetype=mime, as_attachment=False,
+                     download_name=att.original_name or att.filename)
 
 
 @app.route("/attendance/report", methods=["GET"])
@@ -1747,15 +1796,26 @@ def attendance_report():
                  .order_by(User.supervisor_code.asc(), Employee.name.asc())
                  .all())
 
+    emp_ids = [emp.id for emp, sup in employees]
+    counts_by_emp = defaultdict(Counter)
+    if emp_ids:
+        att_rows = (db.session.query(Attendance.employee_id, Attendance.status,
+                                      func.count(Attendance.id))
+                    .filter(Attendance.employee_id.in_(emp_ids),
+                            Attendance.date >= d_from,
+                            Attendance.date <= d_to)
+                    .group_by(Attendance.employee_id, Attendance.status)
+                    .all())
+        for emp_id, status, cnt in att_rows:
+            counts_by_emp[emp_id][status] = cnt
+
     rows = []
     for emp, sup in employees:
-        q = Attendance.query.filter(Attendance.employee_id==emp.id,
-                                    Attendance.date>=d_from,
-                                    Attendance.date<=d_to)
-        total = q.count()
-        present = q.filter_by(status="present").count()
-        leave   = q.filter_by(status="leave").count()
-        absent  = q.filter_by(status="absent").count()
+        c = counts_by_emp.get(emp.id, Counter())
+        present = c.get("present", 0)
+        leave   = c.get("leave", 0)
+        absent  = c.get("absent", 0)
+        total   = present + leave + absent
         pct = (present / total * 100.0) if total else 0.0
         rows.append({
             "emp": emp, "sup": sup,
@@ -1988,7 +2048,15 @@ def index():
     if role == "hr":
         return redirect(url_for("hr_inbox"))
     if role == "safety_officer":
+        if getattr(u, "ptw_training_active", False):
+            return redirect(url_for("ptw_training_home"))
         return redirect(url_for("hse_checkin"))
+    if role == "safety_supervisor":
+        return redirect(url_for("safety_supervisor_home"))
+    if role == "welfare_officer":
+        return redirect(url_for("welfare_home"))
+    if role == "environment_officer":
+        return redirect(url_for("env_dashboard"))
     return redirect(url_for("employees"))
 
 # اختيار المشرف والأسبوع لطباعة الحزمة
@@ -2229,6 +2297,22 @@ def admin_kpi():
                      .filter(Evaluation.week_start == ws, Evaluation.week_end == we).scalar())
     avg_score = round(float(avg_score_val), 1) if avg_score_val else None
 
+    # ---------- Pending requests ----------
+    pending_requests = apply_company_filter(
+        Request.query.filter_by(status="pending"), Request).count()
+
+    # ---------- Active evaluated employees this week ----------
+    active_evaluated = sum(r["done_c"] for r in sup_rows)
+    active_total     = sum(r["target"] for r in sup_rows)
+
+    # ---------- Chart: top supervisors by coverage ----------
+    chart_sups = sorted(
+        [r for r in sup_rows if r["coverage"] is not None],
+        key=lambda x: x["coverage"], reverse=True
+    )[:10]
+    chart_labels  = [r["name"].split()[0] if r["name"] else r["code"] for r in chart_sups]
+    chart_values  = [round(r["coverage"], 1) for r in chart_sups]
+
     return render_template(
         "admin_kpi.html",
         ws=ws, we=we, pws=pws, pwe=pwe,
@@ -2240,7 +2324,12 @@ def admin_kpi():
         leave_rate=leave_rate,
         avg_score=avg_score,
         band_counts=band_counts,
-        sup_rows=sup_rows, site_rows=site_rows
+        sup_rows=sup_rows, site_rows=site_rows,
+        pending_requests=pending_requests,
+        active_evaluated=active_evaluated,
+        active_total=active_total,
+        chart_labels=chart_labels,
+        chart_values=chart_values,
     )
 
 
@@ -2253,6 +2342,46 @@ def admin_supervisor_history(sup_id):
              .order_by(SupervisorEvaluation.week_start.desc())
              .all())
     return render_template("supervisor_history.html", sup=sup, evals=evals)
+
+
+@app.route("/admin/supervisor/<int:sup_id>/employees")
+@admin_required
+def admin_supervisor_employees(sup_id):
+    sup = User.query.filter_by(id=sup_id, role="supervisor").first_or_404()
+
+    ws, we = default_week_today()
+    if request.args.get("week_start") and request.args.get("week_end"):
+        ws = parse_date(request.args["week_start"])
+        we = parse_date(request.args["week_end"])
+
+    employees = (Employee.query.filter_by(user_id=sup.id, is_active=True)
+                 .order_by(Employee.name.asc()).all())
+    emp_ids = [e.id for e in employees]
+
+    evals_map = {}
+    if emp_ids:
+        evals = (Evaluation.query
+                 .filter(Evaluation.employee_id.in_(emp_ids),
+                         Evaluation.week_start == ws, Evaluation.week_end == we)
+                 .all())
+        evals_map = {e.employee_id: e for e in evals}
+
+    rows = []
+    for emp in employees:
+        ev = evals_map.get(emp.id)
+        rows.append({"emp": emp, "ev": ev})
+
+    kpi_target = len(employees)
+    kpi_done   = len(evals_map)
+    kpi_coverage = round(kpi_done / kpi_target * 100.0, 0) if kpi_target else None
+    scored = [e.total_score for e in evals_map.values() if e.total_score is not None]
+    kpi_avg = round(sum(scored) / len(scored), 1) if scored else None
+
+    return render_template("admin_supervisor_employees.html", sup=sup, rows=rows,
+                           ws=ws, we=we, kpi_target=kpi_target, kpi_done=kpi_done,
+                           kpi_coverage=kpi_coverage, kpi_avg=kpi_avg)
+
+
 @app.get("/_health")
 def _health():
     return "ok"
@@ -2314,7 +2443,50 @@ def site_print_bundle():
 @hr_required
 def hr_inbox():
     rows = apply_company_filter(HRTask.query, HRTask).order_by(HRTask.created_at.desc()).all()
+
+    # ── ترميم ذاتي: أي إنذار موقّع من الموظف لكن ملف الـ PDF غير موجود
+    #    (بسبب فشل توليد سابق) — نحاول توليده الآن قبل عرض صندوق HR
+    for t in rows:
+        if t.type == "warning" and t.request and t.request.warning_sig and not t.warning_pdf:
+            try:
+                pdf_name = generate_warning_pdf(t.request, t.request.warning_sig)
+                if pdf_name:
+                    t.warning_pdf = pdf_name
+                    db.session.commit()
+            except Exception as e:
+                app.logger.error("hr_inbox auto-generate warning PDF (task %s): %s", t.id, e)
+                db.session.rollback()
+
     return render_template("hr_inbox.html", rows=rows)
+
+
+@app.get("/hr/id-expiry")
+@hr_required
+def hr_id_expiry():
+    """صفحة HR لمتابعة بطاقات/إقامات الموظفين القريبة من الانتهاء أو المنتهية فعلاً"""
+    from datetime import date, timedelta
+    q = (request.args.get("q") or "").strip()
+
+    today = date.today()
+    soon  = today + timedelta(days=30)
+
+    emp_q = apply_company_filter(
+        Employee.query.filter(Employee.id_expiry_date.isnot(None),
+                              Employee.id_expiry_date <= soon,
+                              Employee.is_active == True),
+        Employee)
+    if q:
+        like = f"%{q}%"
+        emp_q = emp_q.filter(or_(Employee.name.ilike(like), Employee.emp_number.ilike(like)))
+
+    rows = emp_q.order_by(Employee.id_expiry_date.asc()).all()
+
+    expired = [e for e in rows if e.id_expiry_date < today]
+    expiring_soon = [e for e in rows if e.id_expiry_date >= today]
+
+    return render_template("hr_id_expiry.html", expired=expired, expiring_soon=expiring_soon,
+                           q=q, today=today)
+
 
 @app.post("/hr/task/<int:task_id>/apply")
 @hr_required
@@ -2327,6 +2499,70 @@ def hr_task_apply(task_id):
         t.applied_at = datetime.now(timezone.utc)
         t.applied_by = cur_user().id
         db.session.commit()
+    return redirect(url_for("hr_inbox"))
+
+
+@app.post("/hr/task/<int:task_id>/regenerate-warning-pdf")
+@hr_required
+def hr_task_regenerate_warning_pdf(task_id):
+    """إعادة توليد PDF الإنذار يدوياً — تُظهر سبب الفشل الفعلي بدل الفشل الصامت"""
+    t = db.session.get(HRTask, task_id)
+    if not t or t.type != "warning":
+        abort(404)
+    req = t.request
+    sig = req.warning_sig if req else None
+    if not req or not sig:
+        flash("This warning has no employee signature yet.", "danger")
+        return redirect(url_for("hr_inbox"))
+    try:
+        pdf_name = generate_warning_pdf(req, sig)
+        if pdf_name:
+            t.warning_pdf = pdf_name
+            db.session.commit()
+            flash("PDF generated successfully.", "success")
+        else:
+            flash("PDF generation failed: no filename returned (check the reportlab library).", "danger")
+    except Exception as e:
+        db.session.rollback()
+        app.logger.error("manual regenerate warning PDF (task %s): %s", task_id, e)
+        flash(f"PDF generation failed: {e}", "danger")
+    return redirect(url_for("hr_inbox"))
+
+
+@app.post("/hr/task/<int:task_id>/set-reason")
+@hr_required
+def hr_task_set_reason(task_id):
+    """HR يحدد السبب الرسمي والشركة (NSH/GA) لخطاب الإنذار من الويب"""
+    t = db.session.get(HRTask, task_id)
+    if not t or t.type != "warning":
+        abort(404)
+    reason  = (request.form.get("official_reason") or "").strip()
+    company = (request.form.get("warning_company") or "NSH").strip().upper()
+    if company not in ("NSH", "GA"):
+        company = "NSH"
+    if not reason:
+        flash("Official reason is required.", "danger")
+        return redirect(url_for("hr_inbox"))
+    try:
+        t.official_reason = reason
+        t.warning_company = company
+    except Exception:
+        from sqlalchemy import text as _text
+        with db.engine.begin() as _conn:
+            _conn.execute(_text("ALTER TABLE hr_task ADD COLUMN IF NOT EXISTS official_reason TEXT NULL"))
+            _conn.execute(_text("ALTER TABLE hr_task ADD COLUMN IF NOT EXISTS warning_company VARCHAR(10) NULL"))
+        t.official_reason = reason
+        t.warning_company = company
+    db.session.commit()
+    # إشعار للمشرف
+    if t.request:
+        threading.Thread(
+            target=_send_push_to_user,
+            args=(t.request.supervisor_id, "إنذار — جاهز للتوقيع",
+                  "تم تحديد السبب الرسمي، يمكنك الآن فتح نموذج الإنذار"),
+            daemon=True,
+        ).start()
+    flash("Official reason recorded.", "success")
     return redirect(url_for("hr_inbox"))
 
 @app.route("/admin")
@@ -2382,7 +2618,17 @@ def login():
         elif user.role == "hr":
             return redirect(url_for("hr_inbox"))
         elif user.role == "safety_officer":
+            if getattr(user, "ptw_training_active", False):
+                return redirect(url_for("ptw_training_home"))
             return redirect(url_for("hse_checkin"))
+        elif user.role == "safety_supervisor":
+            return redirect(url_for("safety_supervisor_home"))
+        elif user.role == "safety_manager":
+            return redirect(url_for("safety_manager_dashboard"))
+        elif user.role == "welfare_officer":
+            return redirect(url_for("welfare_home"))
+        elif user.role == "environment_officer":
+            return redirect(url_for("env_dashboard"))
         else:
             return redirect(url_for("employees"))
 
@@ -2625,8 +2871,21 @@ def admin_users_hide(user_id):
         current = getattr(u, "is_hidden", False) or False
         u.is_hidden = not current
         db.session.commit()
-        flash("تم الإخفاء." if u.is_hidden else "تم الإظهار.", "success")
+        flash("Hidden." if u.is_hidden else "تم الإظهار.", "success")
     return redirect(url_for("admin_users"))
+
+@app.post("/admin/users/<int:user_id>/ptw-training")
+@admin_required
+def admin_users_toggle_ptw(user_id):
+    u = db.session.get(User, user_id) or abort(404)
+    if u.role != "safety_officer":
+        flash("PTW training is only for safety officers.", "warning")
+    else:
+        u.ptw_training_active = not bool(getattr(u, "ptw_training_active", False))
+        db.session.commit()
+        flash(("PTW training activated." if u.ptw_training_active else "PTW training deactivated."), "success")
+    return redirect(url_for("admin_users"))
+
 
 @app.post("/admin/users/<int:user_id>/role")
 @admin_required
@@ -2639,7 +2898,8 @@ def admin_users_set_role(user_id):
         flash("Cannot change role of admin here.", "warning")
         return redirect(url_for("admin_users"))
 
-    if new_role not in ["supervisor", "site_supervisor"]:
+    if new_role not in ["supervisor", "site_supervisor", "safety_officer", "safety_supervisor",
+                        "welfare_officer", "environment_officer"]:
         flash("Invalid role.", "danger")
     else:
         u.role = new_role
@@ -2648,6 +2908,526 @@ def admin_users_set_role(user_id):
 
     return redirect(url_for("admin_users"))
 
+
+# ── Admin: Safety Team Assignment ────────────────────────────────────
+
+OFFICER_ROLES = ("safety_officer", "welfare_officer", "environment_officer")
+
+
+# ── PTW Training: 7 modules × 6 doors (door 6 = reference, no submission) ────────
+PTW_MODULES = [
+  {"seq": 1, "title": "Foundation: System, Roles and Documents",
+   "title_ar": "الأساس: النظام والأدوار والوثائق",
+   "doors": [
+    {"seq": 1, "title": "Orientation: project permit types and where to find them",
+     "ref": "CSAR 4.12 · CSM I-4 / 4.3 · 4.5",
+     "brief": "Go with your supervisor to an active work area. Identify three permits of different types — note the type, where posted, and how to tell them apart visually. Do not verify anything. Max permit validity on this project: 12 hours.",
+     "questions": [
+      "Identify three permits of different types.",
+      "For each: what type is it? Where is it posted? How do you tell it apart from the others visually?",
+      "Do not verify anything on the permit — this door is for visual orientation only.",
+     ]},
+    {"seq": 2, "title": "Roles: who they are and where they sign",
+     "ref": "CSM I-4 / 4.4 · CSM 4.3 · CSAR 7 · 8",
+     "brief": "Hold an active cold work permit with your supervisor. Identify all six roles by name, verify each signature is in the correct section, and speak to one of the six role-holders about their responsibility.",
+     "questions": [
+      "Identify all six roles by name from the permit itself — write them in a table.",
+      "Check: is each role's signature in the correct section?",
+      "Go to one of the six role-holders — ask them: what is your responsibility under this permit?",
+      "Does their answer match the table above?",
+     ]},
+    {"seq": 3, "title": "The system: documents behind the permit",
+     "ref": "CSAR 5 · 6 · CSM 4.6.3.D · CSM II-15 · SMG 06-003 · CSM 4.10.9 · CSM 4.6.3.E",
+     "brief": "Choose a different active cold work permit in a different area. Request and verify: WMS, JSA, SGL, daily checklist, gas test record. Compare SGL names to actual headcount and one JSA step to the work being done.",
+     "questions": [
+      "Ask the receiver for: WMS, JSA, SGL, and the daily checklist.",
+      "For each document: does it exist? Does its number match what is written in Section 1? Is its content specific to this job or generic?",
+      "Compare SGL names against who is actually in the area — is everyone listed?",
+      "Compare one JSA step with the work being done in front of you — does it match?",
+     ]},
+    {"seq": 4, "title": "Audit: documents, roles and formal observations",
+     "ref": "CSM 4.6.3 · CSAR 5 · 6 · 7",
+     "brief": "Field practical (3 hours). New active cold work area. Apply the full checklist — permit position, six roles, Sections 1 and 2, all supporting documents. Each finding written as: Observation / Requirement reference / Required action.",
+     "questions": [
+      "Go to an active work area (active cold permit) not visited in the previous doors.",
+      "Ask the receiver for: the permit, WMS, JSA, SGL, and the daily checklist.",
+      "Apply the checklist item by item.",
+      "Write your findings in formal format.",
+      "Present your findings to your field supervisor before the session ends.",
+     ]},
+    {"seq": 5, "title": "Evaluation: independent report on an active cold work permit",
+     "ref": "CSM 4.6.3 · 4.10 · CSAR 5 · 6 · 7",
+     "brief": "Work alone — no supervisor. Active cold work permit, not visited before (3 hours field). Verify all six roles, Sections 1 and 2, all supporting documents. Speak to two workers about task hazards. Write a complete report.",
+     "questions": [
+      "Go to an active cold work permit location not visited before.",
+      "Meet the receiver and supervisor. Explain your purpose: independent training evaluation.",
+      "Apply the full checklist on your own.",
+      "Talk to two workers in the area about the task hazards.",
+      "Write a report: what was compliant, what was deficient, what you recommend.",
+     ]},
+    {"seq": 6, "title": "Reference — System background and technical references",
+     "ref": "CSM I-4 / 4.1 · 4.3 · CSAR 4.12 · CSM Intro · CSAR 6.2 Table 6.1 · CSAR 7.1 · 7.7",
+     "brief": "Reference material for Module 1 — consult when needed. Covers: why the permit system exists, two-case framework (operating vs. new-construction), manual structure (CSAR vs. WSSM), CSAR Table 6.1 mandatory HIP topics, the six-role signature map, Clause 7.7 five responsibilities of the Field HSE Officer, and the activity-document comparison (HIP / WMS / JSA).",
+     "ref_only": True,
+     "questions": [],
+    },
+  ]},
+  {"seq": 2, "title": "Hot Work",
+   "title_ar": "الأعمال الساخنة",
+   "doors": [
+    {"seq": 1, "title": "Orientation: the red permit and where to find it on site",
+     "ref": "CSM I-4 / 4.5 · 4.10.2 · II-10 / 10.1",
+     "brief": "Go with your supervisor to an active welding, cutting or heavy-equipment area. Locate the red permit (Form 9873-2). Observe: fire watcher position, PWAS unit on equipment, gas test record. Do not verify — observe and note only.",
+     "questions": [
+      "Locate the red permit — posted or held by the receiver.",
+      "Observe: where is the fire watcher positioned? Can you see a PWAS unit on the equipment? Is a gas tester present or is a gas test record visible?",
+      "Do not verify anything — observe and note only.",
+     ]},
+    {"seq": 2, "title": "The complete hot work system",
+     "ref": "CSM 4.6.3.B · 4.10.3–4.10.5 · 4.10.10 · 4.10.12 · 4.10.13 · GI 2.709 · CSM II-10 · III-2",
+     "brief": "With your supervisor. Different welding/cutting area. Request the active red permit and verify the five elements: fire watcher (name/cert/30-min rule), PWAS, gas test Section 4 at 0% LEL, Section 2 hazards specific not generic, WMS and JSA present.",
+     "questions": [
+      "Request the active red permit.",
+      "Verify all five elements above one by one.",
+      "Go to the fire watcher — ask: how many minutes do you stay after welding stops?",
+      "Look at the heavy equipment — is the PWAS fitted and working?",
+     ]},
+    {"seq": 3, "title": "Independent verification on a different hot work permit",
+     "ref": "CSM 4.6.3 · 4.10 · II-10 · III-2 · SMG 06-003 · CSM II-15",
+     "brief": "Fully independent. New hot work area not visited before. Request the red permit and all attachments. Apply the complete hot work checklist and write at least one formal finding.",
+     "questions": [
+      "Request the red permit and all its attachments.",
+      "Apply the complete checklist above on your own.",
+      "Verify in the field: fire watcher at his post, PWAS working, gas test record current.",
+      "Write at least one formal finding: observation / reference / required action.",
+     ]},
+    {"seq": 4, "title": "Audit: formal findings on active hot work permits",
+     "ref": "CSM 4.6.3 · 4.10 · II-10 · III-2",
+     "brief": "Field practical (3 hours). New welding/cutting/grinding area. Apply the full audit checklist and write all findings in formal format: observation / reference / required action.",
+     "questions": [
+      "Go to an active welding, cutting or grinding area not visited before.",
+      "Request the active hot work permit and all its attachments.",
+      "Apply the audit checklist item by item.",
+      "Verify in the field: fire watcher in position, PWAS operational, gas test record present.",
+      "Write all findings in formal format and present them.",
+     ]},
+    {"seq": 5, "title": "Evaluation: independent report at the welding and cutting area",
+     "ref": "CSM 4.6.3 · 4.10 · II-10 · III-2",
+     "brief": "Work alone. Active hot work permit (welding or torch cutting), not visited before (3 hours field). Apply the full system: six roles, Sections 1/2/4, fire watcher, PWAS on all heavy equipment, JSA vs actual work, SGL, firefighting equipment ready.",
+     "questions": [
+      "Go to an active hot work area (welding or torch cutting) not visited before.",
+      "Meet the receiver, Originator and safety officer in the area.",
+      "Apply the full checklist on your own.",
+      "Speak to the fire watcher: ask how many minutes he stays after welding stops and what he checks.",
+      "Write a report: what matched requirements, what needs correction, what you observed in the field that is absent from the permit.",
+     ]},
+    {"seq": 6, "title": "Reference — Hot work: technical references and scenarios",
+     "ref": "CSM I-4 / 4.5 · II-10 / 10.1 · III-2 · GI 2.709 · CSM 4.6.3.B · 4.10.12 · 4.10.13",
+     "brief": "Reference material for Module 2 — consult when needed. Covers: WSSM Chapter II-10 (cutting and welding), Chapter III-2 (heavy equipment), approach distances for overhead power lines, gas testing limits (O₂, LEL, H₂S), and common scenarios with answers.",
+     "ref_only": True,
+     "questions": [],
+    },
+  ]},
+  {"seq": 3, "title": "Work at Height and Grating",
+   "title_ar": "العمل على ارتفاع والقريتنق",
+   "doors": [
+    {"seq": 1, "title": "Orientation: work at height and grating on site",
+     "ref": "CSM II-5 / 5.3.2 · II-4 / 4.5 · CSAR 4.18",
+     "brief": "Go with your supervisor to an active work-at-height area. Observe: fall protection in use, harness condition, grating permit if any grating was opened, rescue equipment location. Do not verify — observe and note only.",
+     "questions": [
+      "Write the work-at-height activities you saw and where the permit was posted.",
+      "What fall protection equipment did you observe being used? Was the harness twin-lanyard type?",
+      "Was any grating or handrail opened? If so, was a grating permit visible? Write what you observed.",
+     ]},
+    {"seq": 2, "title": "The complete work-at-height system",
+     "ref": "CSM II-5 / 5.3.2 · 5.5 · I-6 · CSAR 4.18 · 4.10 · 4.13",
+     "brief": "With your supervisor. Different height work area. Request the permit and verify: rescue plan (A–G sections site-specific), fall protection (twin lanyard, shock absorber), all floor openings covered, grating permit Parts 1–6 if applicable, daily checklist seven groups.",
+     "questions": [
+      "Is a rescue plan attached to the permit? Is it site-specific or generic? State what you found for each section (A–G).",
+      "Fall protection: twin lanyard? Shock absorber? Harness condition? Write findings for each item.",
+      "Are all floor openings in the area covered, secured and marked? Write the exact status of each opening.",
+     ]},
+    {"seq": 3, "title": "Independent verification at a different height work area",
+     "ref": "CSM II-5 · I-6 · II-4 · CSAR 4.18 · 4.10",
+     "brief": "Fully independent. New work-at-height area not visited before. Request the permit and all attachments. Apply the complete height work checklist and write at least one formal finding.",
+     "questions": [
+      "Grating permit: issued for this shift only? Has Part 6 been completed from the previous shift?",
+      "Rescue plan sections A through G — which sections are complete and which are incomplete? Write your evidence.",
+      "Write at least one formal finding: observation / reference / required action.",
+     ]},
+    {"seq": 4, "title": "Audit: formal findings on height work and grating permits",
+     "ref": "CSM II-4 · II-5 · I-6 · CSAR 4.18",
+     "brief": "Field practical (3 hours). New height work area. Apply the full audit checklist — rescue plan, fall protection, grating permit Parts 1–6, floor openings, SGL. Write all findings in formal format.",
+     "questions": [
+      "Is a rescue plan attached and site-specific? Write the evidence for each of sections A through G.",
+      "Check all floor openings: covered, secured and marked? Write the exact status of each.",
+      "Grating permit (if applicable): issued for this shift only? Has Part 6 been completed from the previous shift?",
+      "Write one formal finding from today's field audit.",
+     ]},
+    {"seq": 5, "title": "Evaluation: independent report at the height work area",
+     "ref": "CSM II-4 · II-5 · CSAR 4.18",
+     "brief": "Work alone. Active work-at-height area not visited before (3 hours field). Verify all six roles, Sections 1 and 2, rescue plan A–G, fall protection, grating permit Parts 1–6 (if applicable), daily checklist seven groups, SGL complete.",
+     "questions": [
+      "Verify the fall protection: harness condition, lanyard type (twin?), shock absorber present? Write your findings.",
+      "Review rescue plan sections A through G — write whether each section is complete or incomplete.",
+      "Write a report: what was compliant, what was deficient, your observations versus the permit.",
+     ]},
+    {"seq": 6, "title": "Reference — Work at height and grating: technical references and scenarios",
+     "ref": "CSM II-5 / 5.3.2 · 5.5 · II-4 / 4.5 · I-6 · CSAR 4.18 · 6.2 · 4.10 · 4.13 · 7.6 · 7.7",
+     "brief": "Reference material for Module 3 — consult when needed. Covers: grating permit six-part structure, rescue plan requirements, fall protection specifications, floor opening coverage, daily checklist seven groups, and common work-at-height scenarios with answers.",
+     "ref_only": True,
+     "questions": [],
+    },
+  ]},
+  {"seq": 4, "title": "Confined Spaces and Excavations",
+   "title_ar": "الأماكن المحصورة والحفريات",
+   "doors": [
+    {"seq": 1, "title": "Orientation: confined spaces and excavations on site",
+     "ref": "CSM I-6 / 6.3 · II-1 / 1.4 · 4.10.2",
+     "brief": "Go with your supervisor to an active confined space or excavation area. Observe: entry permit posted, gas tester present or record visible, entry attendant at the entry point, shoring or sloping in place. Do not verify — observe and note only.",
+     "questions": [
+      "Write the confined space or excavation activities you saw and where the permit was posted.",
+      "Was the entry attendant physically at the entry point? Was a gas test record visible? Write what you observed.",
+      "Was shoring or sloping in place? What class was the confined space (if marked on the permit)?",
+     ]},
+    {"seq": 2, "title": "The complete confined space and excavation system",
+     "ref": "CSM I-6 / 6.3 · 6.3.2 · II-1 / 1.4 · 4.10.3–4.10.5 · 4.10.9 · 4.10.10",
+     "brief": "With your supervisor. Different confined space or excavation. Verify: classification (A/B/C), gas test current with four readings within limits, rescue plan site-specific, entry attendant in position, shoring or sloping in place, underground services marked.",
+     "questions": [
+      "What class is the confined space? Is it correctly classified? Write your evidence.",
+      "Gas test record: attached and current? Write the four readings (O₂, LEL, H₂S, CO) and whether within acceptable limits.",
+      "Rescue plan attached? Entry attendant physically present at the entry point? Write what you found.",
+     ]},
+    {"seq": 3, "title": "Independent verification at a different confined space or excavation",
+     "ref": "CSM I-6 · II-1 · 4.10",
+     "brief": "Fully independent. New confined space or excavation not visited before. Request the permit and all attachments. Apply the complete checklist and write at least one formal finding.",
+     "questions": [
+      "Classify the confined space (A, B or C) based on what you found — justify your classification.",
+      "Verify gas readings: write the four values and confirm they are within acceptable limits.",
+      "Write at least one formal finding: observation / reference / required action.",
+     ]},
+    {"seq": 4, "title": "Audit: formal findings on confined space and excavation permits",
+     "ref": "CSM I-6 · II-1 · 4.10",
+     "brief": "Field practical (3 hours). New confined space or excavation area. Apply the full audit checklist — classification, gas test, rescue plan, entry attendant, shoring/sloping, underground services. Write all findings in formal format.",
+     "questions": [
+      "Classification correct? Gas test current with all four values within limits? Write both findings.",
+      "Rescue plan attached and site-specific? Entry attendant physically present at entry? Write your evidence.",
+      "Shoring or sloping in place? Underground services located and marked before digging? Write findings.",
+      "Write one formal finding from today's field audit.",
+     ]},
+    {"seq": 5, "title": "Evaluation: independent report at the confined space or excavation area",
+     "ref": "CSM I-6 · II-1 · 4.10",
+     "brief": "Work alone. Active confined space or excavation not visited before (3 hours field). Verify all six roles, classification, gas test, rescue plan A–G, entry attendant in position, shoring/sloping, underground services, daily inspection, SGL complete.",
+     "questions": [
+      "Verify gas readings at the time of your visit. Write the four values and compare to acceptable limits.",
+      "Check shoring or sloping: in place? Competent person inspection signed today?",
+      "Write a report: what was compliant, what was deficient, your recommendations.",
+     ]},
+    {"seq": 6, "title": "Reference — Confined spaces and excavations: technical references and scenarios",
+     "ref": "CSM I-6 / 6.3 · 6.3.2 · II-1 / 1.4 · 4.10.3–4.10.5 · 4.10.9 · 4.10.10 · GI 2.709",
+     "brief": "Reference material for Module 4 — consult when needed. Covers: three-class classification system (A/B/C), gas testing four parameters and limits, excavation shoring requirements (depth >1.2 m), competent person inspection requirements, and confined space scenarios with answers.",
+     "ref_only": True,
+     "questions": [],
+    },
+  ]},
+  {"seq": 5, "title": "Lifting and Heavy Equipment",
+   "title_ar": "الرفع والمعدات الثقيلة",
+   "doors": [
+    {"seq": 1, "title": "Orientation: lifting and heavy equipment on site",
+     "ref": "CSM III-7 / 7.7 · III-2 · 4.6.3.B",
+     "brief": "Go with your supervisor to an active lifting or heavy-equipment area. Observe: lifting permit posted, PWAS unit on equipment, rigger and operator, load chart on the crane, exclusion zone marked. Do not verify — observe and note only.",
+     "questions": [
+      "Write the lifting activities you saw and where the permit was posted or held.",
+      "Was the PWAS unit visible and fitted to the equipment? Was the exclusion zone marked?",
+      "Could you see the load chart on the crane? Write what you observed.",
+     ]},
+    {"seq": 2, "title": "The complete lifting and heavy equipment system",
+     "ref": "CSM III-7 / 7.7 · III-2 · 4.6.3.B · 4.10.12 · CSAR 4.10 · 4.13",
+     "brief": "With your supervisor. Different lifting area. Verify: lifting permit present and lift correctly classified (critical or not), certified rigger and operator, load chart on crane, exclusion zone established (max boom + 20%), PWAS functioning, rigging tags current, no personnel under load.",
+     "questions": [
+      "Is the lift correctly classified as critical or non-critical? Write your justification.",
+      "PWAS: verify it is installed and functioning on the crane or excavator. Write the unit and status found.",
+      "Rigging inspection tags: all items tagged with current colour code? Write each item — acceptable or rejected.",
+     ]},
+    {"seq": 3, "title": "Independent verification at a different lifting and equipment area",
+     "ref": "CSM III-7 · III-2 · 4.10 · CSAR 4.10 · 4.13",
+     "brief": "Fully independent. New lifting area not visited before. Request the permit and all attachments. Apply the complete lifting checklist and write at least one formal finding.",
+     "questions": [
+      "Exclusion zone: established and enforced? Estimate the radius — does it match the requirement (max boom + 20%)?",
+      "Ground conditions and outrigger pads: assessed and on solid ground? Write what you found.",
+      "Write at least one formal finding: observation / reference / required action.",
+     ]},
+    {"seq": 4, "title": "Audit: formal findings on lifting and heavy equipment permits",
+     "ref": "CSM III-7 · III-2 · 4.10",
+     "brief": "Field practical (3 hours). New lifting area. Apply the full audit checklist — permit, classification, certified rigger and operator, load chart, exclusion zone, PWAS, rigging tags, no personnel under load. Write all findings in formal format.",
+     "questions": [
+      "Lifting permit present? Is the lift correctly classified as critical or non-critical?",
+      "Rigging tags: all items tagged with current colour code? Write each item — acceptable or rejected.",
+      "Exclusion zone: established and enforced? Estimate the radius — does it match the requirement?",
+      "Write one formal finding from today's field audit.",
+     ]},
+    {"seq": 5, "title": "Evaluation: independent report at the lifting and equipment area",
+     "ref": "CSM III-7 · III-2 · 4.10",
+     "brief": "Work alone. Active lifting or heavy-equipment area not visited before (3 hours field). Verify all six roles, permit classification, load chart, rigging inspection, exclusion zone, PWAS, ground assessment, outriggers, no personnel under load, SGL complete.",
+     "questions": [
+      "Verify PWAS on all heavy equipment in the lifting area. Write the unit number and whether functioning.",
+      "Ground conditions and outrigger pads: on solid ground? Ground assessment available?",
+      "Write a report: what was compliant, what was deficient, your recommendations.",
+     ]},
+    {"seq": 6, "title": "Reference — Lifting and heavy equipment: technical references and scenarios",
+     "ref": "CSM III-7 / 7.7 · III-2 · 4.6.3.B · 4.10.12 · CSAR 4.10 · 4.13",
+     "brief": "Reference material for Module 5 — consult when needed. Covers: critical lift definition (four conditions), exclusion zone calculation, PWAS mandatory requirement, rigging colour-code inspection system, rejection criteria for wire rope and synthetic slings, and lifting scenarios with answers.",
+     "ref_only": True,
+     "questions": [],
+    },
+  ]},
+  {"seq": 6, "title": "Electrical Isolation, Pressure Testing and Radiography",
+   "title_ar": "العزل الكهربائي واختبار الضغط والإشعاع",
+   "doors": [
+    {"seq": 1, "title": "Orientation: electrical isolation, pressure testing and radiography on site",
+     "ref": "CSM I-5 / 5.5.14 · III-3 / 3.6.5 · III-4 / 4.3 · III-6 / 6.3.9",
+     "brief": "Go with your supervisor to an active electrical isolation, pressure test or radiography area. Observe: isolation permit posted, locks and tags on isolation points, pressure gauge present, exclusion zone for radiography. Do not verify — observe and note only.",
+     "questions": [
+      "Write the type of permit (isolation, pressure test or radiography) and where it was posted.",
+      "For electrical isolation: could you see locks and tags on each isolation point? How many isolation points were there?",
+      "For pressure testing: was the exclusion zone marked? For radiography: was radiation area cordoned off?",
+     ]},
+    {"seq": 2, "title": "The complete electrical isolation, pressure testing and radiography system",
+     "ref": "CSM I-5 / 5.5.14 · III-3 / 3.6.5 · III-4 / 4.3 · 4.3.1 · III-6 / 6.3.9 · III-9",
+     "brief": "With your supervisor. Different isolation/pressure/radiography area. Verify: all isolation points locked and tagged, each worker has personal lock, zero energy verified, or pressure gauge calibrated with test pressure within limits, or exclusion zone established with radiation officer present.",
+     "questions": [
+      "Electrical isolation: count isolation points — is each locked and tagged with a personal lock? Write each point found.",
+      "Pressure test: test pressure vs. design pressure — is the ratio within limits? Is the gauge calibrated?",
+      "Radiography: who was present? Was the exclusion zone established and marked? Write what you found.",
+     ]},
+    {"seq": 3, "title": "Independent verification at a different isolation, pressure or radiation area",
+     "ref": "CSM I-5 · III-3 · III-4 · III-6 · III-9",
+     "brief": "Fully independent. New isolation/pressure/radiography area not visited before. Request the permit and all attachments. Apply the complete checklist and write at least one formal finding.",
+     "questions": [
+      "List all isolation points and their lock/tag status. Was zero energy verified at each point?",
+      "Pressure test gauge: calibrated? What is the calibration expiry date? Is the test pressure within limits?",
+      "Write at least one formal finding: observation / reference / required action.",
+     ]},
+    {"seq": 4, "title": "Audit: formal findings on electrical, pressure and radiation permits",
+     "ref": "CSM I-5 · III-3 · III-4 · III-6 · III-9",
+     "brief": "Field practical (3 hours). New isolation/pressure/radiography area. Apply the full audit checklist. Write all findings in formal format.",
+     "questions": [
+      "Energy isolation: count isolation points — is each locked and tagged? Write each point found.",
+      "Pressure test gauge: calibrated? What is the calibration expiry date?",
+      "Exclusion zone demarcated? Were any personnel inside the zone during the operation?",
+      "Write one formal finding from today's field audit.",
+     ]},
+    {"seq": 5, "title": "Evaluation: independent report at the isolation, pressure or radiation area",
+     "ref": "CSM I-5 · III-3 · III-4 · III-6",
+     "brief": "Work alone. Active isolation/pressure/radiography area not visited before (3 hours field). Verify all six roles, all isolation points, personal locks, zero energy verification, pressure test permit, calibrated gauge, exclusion zone, SGL complete.",
+     "questions": [
+      "Verify zero energy at each isolation point. Write the verification method and reading at each point.",
+      "Pressure test: test pressure vs. design pressure — is the ratio within limits?",
+      "Write a report: what was compliant, what was deficient, your recommendations.",
+     ]},
+    {"seq": 6, "title": "Reference — Electrical isolation, pressure testing and radiography: technical references",
+     "ref": "CSM I-5 / 5.5.14 · III-3 / 3.6.5 · III-4 / 4.3 · 4.3.1 · III-6 / 6.3.9 · III-9 · CSAR 10.4",
+     "brief": "Reference material for Module 6 — consult when needed. Covers: LOTO five-step sequence, personal lock rule, zero energy verification, hydrostatic vs. pneumatic test pressure limits (1.5× and 1.1×), radiography exclusion zone calculation, dosimeter requirements, and scenarios with answers.",
+     "ref_only": True,
+     "questions": [],
+    },
+  ]},
+  {"seq": 7, "title": "Permit Sections, Governance and Final Audit",
+   "title_ar": "أقسام التصريح والحوكمة والتدقيق النهائي",
+   "doors": [
+    {"seq": 1, "title": "Orientation: the main permit on site",
+     "ref": "CSM 4.6.3.A–B · 4.7.1–4.7.2 · 4.10.6 · 4.10.8",
+     "brief": "Go with your supervisor and examine an active permit in full — all eleven sections. Note which sections are signed, what the approval period is, how Section 10 is filled, and whether Sections 8 and 9 have been used. Do not assess compliance — observe and note.",
+     "questions": [
+      "What is the maximum validity period shown on the permit (Section 5)? When does it expire?",
+      "Section 10: who signed it and when? What field verification must precede the Section 10 signature?",
+      "Observe Sections 8 and 9 — have they been used (suspension or daily revalidation)? Write what you found.",
+     ]},
+    {"seq": 2, "title": "Guided verification: critical rules in the main permit",
+     "ref": "CSM 4.6.3.A–B · 4.7.1–4.7.5 · 4.10.3–4.10.5 · 4.10.6 · 4.10.8–4.10.10 · 4.10.11",
+     "brief": "With your supervisor. Different permit. Verify renewal, suspension and cancellation compliance: Approver re-signed before expiry, Section 8 used when conditions changed, Section 11 completed at closure. Check endorsement matrix for Section 7.",
+     "questions": [
+      "When must a permit be suspended? List three conditions that require suspension.",
+      "After suspension, what must happen before work restarts? Who verifies?",
+      "Scenario: Section 7 blank on a confined space entry permit. Is this a finding? Justify with the endorsement matrix.",
+     ]},
+    {"seq": 3, "title": "Independent verification using the 15-deficiency list on a different permit",
+     "ref": "All sections",
+     "brief": "Fully independent. Different permit from a different area. Apply the 15-deficiency list from the manual on the full permit. Write formal findings for each deficiency found.",
+     "questions": [
+      "Describe deficiency No. 15 from the manual and its penalty tier.",
+      "Apply the 15-deficiency list to the permit you reviewed — which deficiencies did you find?",
+      "Write one formal finding in full format (Observation / Reference / Required action) for each deficiency found.",
+     ]},
+    {"seq": 4, "title": "Audit: 15-deficiency list on a multi-permit area",
+     "ref": "All sections",
+     "brief": "Field practical (3 hours). Audit two active permits of different types using the 15-deficiency list. Verify Sections 1–10, all supporting documents, all roles, all field controls. Write formal findings for each gap.",
+     "questions": [
+      "Audit two active permits of different types. For each: write the permit type, most significant finding, and formal finding text.",
+      "Compare Section 10 signatures across the two permits — were both signed today after field verification?",
+      "Write a summary finding report with recommendations.",
+     ]},
+    {"seq": 5, "title": "Evaluation: final comprehensive audit",
+     "ref": "All sections — all modules",
+     "brief": "Final assessment. Work alone. One active permit of your choice, full audit across all seven module areas. Write a complete formal finding report with references and present to your supervisor.",
+     "questions": [
+      "Select one active permit and conduct a complete audit covering all seven module areas. Write the permit type and location.",
+      "Write all findings in formal format (Observation / Reference / Required action) — at least three findings.",
+      "What was the most significant finding during this full training programme? Why does it matter?",
+     ]},
+    {"seq": 6, "title": "Reference — Permit sections and governance: technical references and scenarios",
+     "ref": "CSM 4.6.3.A–B · 4.7.1–4.7.5 · 4.8.3 · 4.9 · 4.10.3–4.10.14 · 4.11 · CSAR 4.19 · 7.3.B · 7.7 · 7.9 · 8.2",
+     "brief": "Reference material for Module 7 — consult when needed. Covers: all eleven permit sections and their signatories, endorsement matrix (Section 7), renewal vs. suspension vs. cancellation procedures, the 15-deficiency list with penalty tiers, governance roles and responsibilities.",
+     "ref_only": True,
+     "questions": [],
+    },
+  ]},
+]
+PTW_MOD_BY_SEQ = {m["seq"]: m for m in PTW_MODULES}
+
+
+class PtwDoorSubmission(db.Model):
+    __tablename__ = "ptw_door_submission"
+    id            = db.Column(db.Integer, primary_key=True)
+    officer_id    = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    module_seq    = db.Column(db.Integer, nullable=False)
+    door_seq      = db.Column(db.Integer, nullable=False)
+    submitted_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    answers       = db.Column(db.Text, nullable=True)    # JSON list of answer strings
+    photo_path    = db.Column(db.String(255), nullable=True)
+    status        = db.Column(db.String(20), default="pending")  # pending | approved | rejected
+    reviewer_id   = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    reviewed_at   = db.Column(db.DateTime, nullable=True)
+    reviewer_note = db.Column(db.Text, nullable=True)
+
+
+@app.route("/admin/safety-teams", methods=["GET", "POST"])
+@admin_required
+def admin_safety_teams():
+    """Admin: assign officers to safety supervisors."""
+    _c = cid()
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "assign":
+            sup_id = int(request.form.get("sup_id") or 0)
+            off_id = int(request.form.get("off_id") or 0)
+            if sup_id and off_id:
+                exists = OfficerTeam.query.filter_by(supervisor_id=sup_id, officer_id=off_id).first()
+                if not exists:
+                    db.session.add(OfficerTeam(supervisor_id=sup_id, officer_id=off_id, company_id=_c))
+                    db.session.commit()
+                    flash("Officer assigned.", "success")
+        elif action == "remove":
+            tid = int(request.form.get("team_id") or 0)
+            row = db.session.get(OfficerTeam, tid)
+            if row:
+                db.session.delete(row)
+                db.session.commit()
+                flash("Removed.", "success")
+        return redirect(url_for("admin_safety_teams"))
+
+    supervisors_q = User.query.filter(User.role == "safety_supervisor", User.is_active == True)
+    if _c:
+        supervisors_q = supervisors_q.filter(User.company_id == _c)
+    supervisors = supervisors_q.order_by(User.name).all()
+
+    officers_q = User.query.filter(User.role.in_(OFFICER_ROLES), User.is_active == True)
+    if _c:
+        officers_q = officers_q.filter(User.company_id == _c)
+    all_officers = officers_q.order_by(User.role, User.name).all()
+
+    teams = {}
+    for sup in supervisors:
+        rows = (db.session.query(OfficerTeam, User)
+                .join(User, OfficerTeam.officer_id == User.id)
+                .filter(OfficerTeam.supervisor_id == sup.id)
+                .order_by(User.role, User.name).all())
+        teams[sup.id] = rows
+
+    assigned_ids = {row.OfficerTeam.officer_id
+                    for sup in supervisors for row in teams[sup.id]}
+    unassigned = [o for o in all_officers if o.id not in assigned_ids]
+
+    return render_template("admin_safety_teams.html",
+                           supervisors=supervisors, teams=teams,
+                           all_officers=all_officers, unassigned=unassigned)
+
+
+# ── Admin: Officers Report (multi-select) ────────────────────────────
+
+@app.route("/admin/officers-report", methods=["GET", "POST"])
+@admin_required
+def admin_officers_report():
+    _c = cid()
+    today = datetime.now(RIYADH_TZ).date()
+
+    officers_q = User.query.filter(User.role.in_(OFFICER_ROLES), User.is_active == True)
+    if _c:
+        officers_q = officers_q.filter(User.company_id == _c)
+    all_officers = officers_q.order_by(User.role, User.name).all()
+
+    rows = []
+    date_from = date_to = None
+    selected_ids = []
+
+    if request.method == "POST":
+        raw_from     = (request.form.get("date_from") or "").strip()
+        raw_to       = (request.form.get("date_to")   or "").strip()
+        selected_ids = [int(x) for x in request.form.getlist("officer_ids") if x.isdigit()]
+        try:
+            date_from = parse_date(raw_from)
+            date_to   = parse_date(raw_to)
+        except Exception:
+            flash("Invalid dates.", "danger")
+            return redirect(url_for("admin_officers_report"))
+
+        if not selected_ids:
+            selected_ids = [o.id for o in all_officers]
+
+        for o in all_officers:
+            if o.id not in selected_ids:
+                continue
+            if o.role == "safety_officer":
+                submissions = HseCheckin.query.filter(
+                    HseCheckin.officer_id == o.id,
+                    HseCheckin.date.between(date_from, date_to)
+                ).count()
+                finds = (WlfFinding.query
+                         .filter(WlfFinding.officer_id == o.id,
+                                 WlfFinding.date.between(date_from, date_to))
+                         .count()) if hasattr(WlfFinding, "date") else 0
+                rows.append({"user": o, "role_label": "Safety Officer",
+                             "submissions": submissions, "findings": finds,
+                             "detail": f"{submissions} check-ins"})
+            elif o.role == "welfare_officer":
+                submissions = WlfLevelWork.query.filter(
+                    WlfLevelWork.officer_id == o.id,
+                    WlfLevelWork.date.between(date_from, date_to)
+                ).count()
+                finds = WlfFinding.query.filter(
+                    WlfFinding.officer_id == o.id,
+                    WlfFinding.date.between(date_from, date_to)
+                ).count()
+                rows.append({"user": o, "role_label": "Welfare Officer",
+                             "submissions": submissions, "findings": finds,
+                             "detail": f"{submissions} field submissions"})
+            elif o.role == "environment_officer":
+                submissions = EnvLevelWork.query.filter(
+                    EnvLevelWork.officer_id == o.id,
+                    EnvLevelWork.date.between(date_from, date_to)
+                ).count()
+                finds = WlfFinding.query.filter(
+                    WlfFinding.officer_id == o.id,
+                    WlfFinding.date.between(date_from, date_to)
+                ).count()
+                rows.append({"user": o, "role_label": "Environment Officer",
+                             "submissions": submissions, "findings": finds,
+                             "detail": f"{submissions} env submissions"})
+
+    return render_template("admin_officers_report.html",
+                           all_officers=all_officers, rows=rows,
+                           date_from=date_from, date_to=date_to,
+                           selected_ids=selected_ids, today=today)
 
 
 # ----- Supervisor: Employees -----
@@ -2663,6 +3443,61 @@ def employees():
             .order_by(Employee.name)
             .all())
     return render_template("employees.html", user=u, employees=emps)
+
+
+@app.route("/employee/<int:emp_id>/edit", methods=["GET", "POST"])
+@login_required
+def employee_edit(emp_id):
+    """تعديل بيانات الموظف: الاسم، رقم الموظف (emp_number)، وتاريخ انتهاء
+    البطاقة/الإقامة. يقدر يعدّل: المشرف (لموظفيه هو بس) أو الأدمن (أي موظف)."""
+    u = cur_user()
+    if u.role not in ("supervisor", "admin"):
+        abort(403)
+
+    emp = db.session.get(Employee, emp_id)
+    if not emp:
+        abort(404)
+    if u.role == "supervisor" and emp.user_id != u.id:
+        abort(403)
+
+    # الصفحة التي نرجع لها بعد الحفظ — نفس الصفحة اللي جاء منها المستخدم
+    back_url = url_for("admin_employees") if u.role == "admin" else url_for("employees")
+
+    if request.method == "POST":
+        new_name   = (request.form.get("name") or "").strip()
+        new_number = (request.form.get("emp_number") or "").strip()
+        expiry_str = (request.form.get("id_expiry_date") or "").strip()
+
+        if not new_name:
+            flash("Employee name is required.", "danger")
+            return redirect(url_for("employee_edit", emp_id=emp_id))
+        if not new_number:
+            flash("Employee ID is required.", "danger")
+            return redirect(url_for("employee_edit", emp_id=emp_id))
+
+        expiry_date = None
+        if expiry_str:
+            try:
+                expiry_date = datetime.strptime(expiry_str, "%Y-%m-%d").date()
+            except Exception:
+                flash("Invalid expiry date format.", "danger")
+                return redirect(url_for("employee_edit", emp_id=emp_id))
+
+        emp.name = new_name
+        emp.emp_number = new_number
+        emp.id_expiry_date = expiry_date
+
+        try:
+            db.session.commit()
+        except IntegrityError:
+            db.session.rollback()
+            flash(f"Employee ID ({new_number}) is already used by another employee.", "danger")
+            return redirect(url_for("employee_edit", emp_id=emp_id))
+
+        flash("Employee details updated successfully.", "success")
+        return redirect(back_url)
+
+    return render_template("employee_edit.html", emp=emp, back_url=back_url)
 
 
 
@@ -2915,6 +3750,18 @@ def report_employee(emp_id):
     # admin can view any employee; supervisor only his own
     if u.role == "admin":
         emp = Employee.query.get_or_404(emp_id)
+    elif u.role == "site_supervisor":
+        # ضمن نطاقه الآن أو كان ضمنه سابقاً (حسب سجل الحركة)
+        emp = Employee.query.get_or_404(emp_id)
+        scope = _site_scope_sup_ids(u)
+        allowed = emp.user_id in scope
+        if not allowed:
+            allowed = db.session.query(EmployeeAssignmentLog.id).filter(
+                EmployeeAssignmentLog.employee_id == emp.id,
+                or_(EmployeeAssignmentLog.from_user_id.in_(scope),
+                    EmployeeAssignmentLog.to_user_id.in_(scope))).first() is not None
+        if not allowed:
+            abort(403)
     else:
         emp = Employee.query.filter_by(id=emp_id, user_id=u.id).first_or_404()
 
@@ -3300,7 +4147,31 @@ def admin_employee_history(emp_id):
     emp = Employee.query.get_or_404(emp_id)
     evals = (Evaluation.query.filter_by(employee_id=emp.id)
              .order_by(Evaluation.week_start.desc()).all())
-    return render_template("employee_history.html", emp=emp, evals=evals)
+    avg_score = round(sum((e.total_score or 0) for e in evals) / len(evals), 1) if evals else None
+    return render_template("employee_history.html", emp=emp, evals=evals, avg_score=avg_score)
+
+# ----- Employee full report history (supervisor: own employees, site_supervisor: employees of
+#       supervisors they oversee (read-only), admin: any) -----
+@app.route("/reports/employee/<int:emp_id>/all")
+@login_required
+def employee_reports_all(emp_id):
+    u = cur_user()
+    if u.role == "admin":
+        emp = Employee.query.get_or_404(emp_id)
+    elif u.role == "site_supervisor":
+        emp = Employee.query.get_or_404(emp_id)
+        link = SiteSupervisorMap.query.filter_by(site_sup_id=u.id, supervisor_id=emp.user_id).first()
+        if not link:
+            abort(403)
+    else:
+        emp = Employee.query.filter_by(id=emp_id, user_id=u.id).first_or_404()
+
+    evals = (Evaluation.query.filter_by(employee_id=emp.id)
+             .order_by(Evaluation.week_start.desc()).all())
+    avg_score = round(sum((e.total_score or 0) for e in evals) / len(evals), 1) if evals else None
+    back_url = url_for("site_employee_requests") if u.role == "site_supervisor" else url_for("employees")
+    return render_template("employee_history.html", emp=emp, evals=evals, avg_score=avg_score,
+                           back_url=back_url)
 
 # ===================== Site Supervisor Features =====================
 # Manage assigned supervisors
@@ -3357,7 +4228,39 @@ def site_supervisors():
     links = (db.session.query(SiteSupervisorMap, User)
              .join(User, SiteSupervisorMap.supervisor_id == User.id)
              .filter(SiteSupervisorMap.site_sup_id == u.id).all())
-    return render_template("site_supervisors.html", links=links)
+
+    # ── KPIs + نسبة الإنجاز لكل مشرف (أي أسبوع) ──
+    cur_ws, cur_we = default_week_today()
+    ws = _safe_date(request.args.get("ws")) or cur_ws
+    we = _safe_date(request.args.get("we")) or (ws + timedelta(days=4))
+    prev_ws = ws - timedelta(days=7)
+    next_ws = ws + timedelta(days=7)
+    is_current_week = (ws, we) == (cur_ws, cur_we)
+
+    sup_ids = [sup.id for _, sup in links]
+    emp_totals_map, emp_done_map = _week_scope(sup_ids, ws, we, is_current_week)
+
+    sup_rows = []
+    for link, sup in links:
+        target = emp_totals_map.get(sup.id, 0)
+        done_c = emp_done_map.get(sup.id, 0)
+        coverage = round(done_c / target * 100.0, 0) if target else None
+        sup_rows.append({
+            "link_id": link.id, "id": sup.id, "code": sup.supervisor_code,
+            "name": sup.name, "target": target, "done_c": done_c,
+            "coverage": coverage,
+        })
+
+    kpi_total_sups   = len(links)
+    kpi_evaluated    = sum(1 for r in sup_rows if r["target"] > 0 and r["done_c"] >= r["target"])
+    kpi_total_emps   = sum(r["target"] for r in sup_rows)
+    kpi_done_emps    = sum(r["done_c"] for r in sup_rows)
+
+    return render_template("site_supervisors.html", links=links, sup_rows=sup_rows,
+                           kpi_total_sups=kpi_total_sups, kpi_evaluated=kpi_evaluated,
+                           kpi_total_emps=kpi_total_emps, kpi_done_emps=kpi_done_emps,
+                           ws=ws, we=we, prev_ws=prev_ws, next_ws=next_ws,
+                           is_current_week=is_current_week)
 
 @app.post("/site/supervisors/<int:link_id>/remove")
 @login_required
@@ -3372,6 +4275,606 @@ def site_supervisors_remove(link_id):
     db.session.commit()
     flash("Removed.", "success")
     return redirect(url_for("site_supervisors"))
+
+
+@app.get("/site/supervisor/<int:sup_id>/detail")
+@login_required
+def site_supervisor_detail(sup_id):
+    u = cur_user()
+    if u.role != "site_supervisor":
+        abort(403)
+
+    link = SiteSupervisorMap.query.filter_by(site_sup_id=u.id, supervisor_id=sup_id).first()
+    if not link:
+        abort(403)
+    sup = User.query.filter_by(id=sup_id, role="supervisor").first_or_404()
+
+    # صلاحية استعراض أسابيع سابقة: نفس نمط ws/we المستخدم بباقي صفحات التقارير
+    ws = _safe_date(request.args.get("ws")) or default_week_today()[0]
+    we = _safe_date(request.args.get("we")) or (ws + timedelta(days=4))
+    prev_ws = ws - timedelta(days=7)
+    next_ws = ws + timedelta(days=7)
+    is_current_week = (ws, we) == default_week_today()
+
+    # الأسبوع الحالي → القائمة الحيّة. أسبوع ماضٍ → القائمة كما كانت وقتها.
+    if is_current_week:
+        employees = (Employee.query.filter_by(user_id=sup.id, is_active=True)
+                     .order_by(Employee.name.asc()).all())
+    else:
+        hist_ids = _roster_at(sup.id, we)
+        employees = (Employee.query.filter(Employee.id.in_(hist_ids))
+                     .order_by(Employee.name.asc()).all()) if hist_ids else []
+    emp_ids = [e.id for e in employees]
+
+    # التقييمات تُنسب لمن قيّم فعلاً — لا تنتقل مع الموظف عند نقله
+    evaluated_ids = set()
+    if emp_ids:
+        evaluated_ids = {row[0] for row in
+                        db.session.query(Evaluation.employee_id)
+                        .filter(Evaluation.employee_id.in_(emp_ids),
+                                Evaluation.evaluator_id == sup.id,
+                                Evaluation.week_start == ws, Evaluation.week_end == we)
+                        .all()}
+
+    avg_sc = (db.session.query(func.avg(Evaluation.total_score))
+              .filter(Evaluation.evaluator_id == sup.id,
+                      Evaluation.week_start == ws, Evaluation.week_end == we)
+              .scalar())
+
+    # غير المكتملين أولاً، ثم المكتملين — كلاهما مرتب بالاسم
+    not_done = [e for e in employees if e.id not in evaluated_ids]
+    done     = [e for e in employees if e.id in evaluated_ids]
+
+    kpi_target   = len(employees)
+    kpi_done     = len(done)
+    kpi_coverage = round(kpi_done / kpi_target * 100.0, 0) if kpi_target else None
+
+    return render_template("site_supervisor_detail.html", sup=sup,
+                           not_done=not_done, done=done,
+                           kpi_target=kpi_target, kpi_done=kpi_done,
+                           kpi_coverage=kpi_coverage,
+                           avg_score=round(float(avg_sc), 1) if avg_sc else None,
+                           ws=ws, we=we, prev_ws=prev_ws, next_ws=next_ws,
+                           is_current_week=is_current_week)
+
+
+# ─────────────────────────────────────────────
+#  Site Supervisor → إدارة موظفي المشرفين (نقل / فصل / استقالة)
+# ─────────────────────────────────────────────
+
+def _site_scope_sup_ids(u):
+    """أرقام المشرفين التابعين لهذا الـ site_supervisor."""
+    return [row[0] for row in
+            db.session.query(SiteSupervisorMap.supervisor_id)
+            .filter(SiteSupervisorMap.site_sup_id == u.id).all()]
+
+
+def _site_scope_supervisors(u):
+    """كائنات المشرفين التابعين لهذا الـ site_supervisor مرتبة بالاسم."""
+    return (db.session.query(User)
+            .join(SiteSupervisorMap, SiteSupervisorMap.supervisor_id == User.id)
+            .filter(SiteSupervisorMap.site_sup_id == u.id)
+            .order_by(User.name.asc()).all())
+
+
+def _roster_at(sup_id, on_date):
+    """موظفو المشرف كما كانوا في تاريخ محدد — يعيد بناء القائمة من سجل الحركة.
+
+    القاعدة: مالك الموظف في تاريخ ما = from_user_id لأول حركة سُجّلت بعد ذلك
+    التاريخ. إن لم توجد حركة بعده، فالمالك الحالي هو نفسه المالك وقتها.
+    (تتعامل بشكل صحيح مع النقل المتعدد أ→ب→ج، لأنها تحسب المالك لا الطرفين.)
+
+    ملاحظة: السجل يبدأ من تاريخ تفعيل الميزة — لأي أسبوع أقدم يرجع المالك الحالي.
+    """
+    # created_at مخزّن naive في MySQL — قارن بـ naive
+    cutoff = datetime.combine(on_date, datetime.max.time())
+
+    # المرشحون: من هم عنده الآن + كل من ظهر في سجله (دخولاً أو خروجاً)
+    cand = {e.id for e in Employee.query.filter_by(user_id=sup_id).all()}
+    linked = (EmployeeAssignmentLog.query
+              .filter(or_(EmployeeAssignmentLog.from_user_id == sup_id,
+                          EmployeeAssignmentLog.to_user_id == sup_id)).all())
+    cand |= {m.employee_id for m in linked}
+    if not cand:
+        return set()
+
+    # أول حركة بعد التاريخ لكل موظف مرشح
+    rows = (EmployeeAssignmentLog.query
+            .filter(EmployeeAssignmentLog.employee_id.in_(cand),
+                    EmployeeAssignmentLog.created_at > cutoff)
+            .order_by(EmployeeAssignmentLog.created_at.asc()).all())
+    first_after = {}
+    for m in rows:
+        first_after.setdefault(m.employee_id, m)
+
+    # المالك الحالي لكل مرشح
+    cur_owner = dict(
+        db.session.query(Employee.id, Employee.user_id)
+        .filter(Employee.id.in_(cand)).all())
+
+    out = set()
+    for e_id in cand:
+        owner = (first_after[e_id].from_user_id if e_id in first_after
+                 else cur_owner.get(e_id))
+        if owner == sup_id:
+            out.add(e_id)
+    return out
+
+
+def _roster_at_bulk(sup_ids, on_date):
+    """نفس منطق _roster_at لكن لعدة مشرفين دفعة واحدة — 3 استعلامات بدل 3 لكل مشرف.
+
+    يعيد dict: {sup_id: set(employee_ids)}
+    """
+    out = {sid: set() for sid in sup_ids}
+    if not sup_ids:
+        return out
+
+    cutoff = datetime.combine(on_date, datetime.max.time())
+
+    # (1) المالك الحالي لكل موظف يخص أياً من هؤلاء المشرفين
+    cur_owner = dict(
+        db.session.query(Employee.id, Employee.user_id)
+        .filter(Employee.user_id.in_(sup_ids)).all())
+
+    # (2) كل من ظهر في سجل الحركة مرتبطاً بأحدهم
+    linked = (EmployeeAssignmentLog.query
+              .filter(or_(EmployeeAssignmentLog.from_user_id.in_(sup_ids),
+                          EmployeeAssignmentLog.to_user_id.in_(sup_ids))).all())
+    cand = set(cur_owner.keys()) | {m.employee_id for m in linked}
+    if not cand:
+        return out
+
+    # مالكهم الحالي (قد يكون موظف غادر نطاق هؤلاء المشرفين)
+    missing = cand - set(cur_owner.keys())
+    if missing:
+        cur_owner.update(dict(
+            db.session.query(Employee.id, Employee.user_id)
+            .filter(Employee.id.in_(missing)).all()))
+
+    # (3) أول حركة بعد التاريخ لكل موظف مرشح
+    rows = (EmployeeAssignmentLog.query
+            .filter(EmployeeAssignmentLog.employee_id.in_(cand),
+                    EmployeeAssignmentLog.created_at > cutoff)
+            .order_by(EmployeeAssignmentLog.created_at.asc()).all())
+    first_after = {}
+    for m in rows:
+        first_after.setdefault(m.employee_id, m)
+
+    for e_id in cand:
+        owner = (first_after[e_id].from_user_id if e_id in first_after
+                 else cur_owner.get(e_id))
+        if owner in out:
+            out[owner].add(e_id)
+    return out
+
+
+def _week_scope(u_sup_ids, ws, we, is_current):
+    """يعيد (target_map, done_map) لكل مشرف في أسبوع محدد.
+
+    done: يُنسب لمن قيّم فعلاً (evaluator_id) — لا يتأثر بنقل الموظف لاحقاً.
+    target: الأسبوع الحالي → القائمة الحيّة، الأسابيع الماضية → من سجل الحركة.
+    """
+    if not u_sup_ids:
+        return {}, {}
+
+    done_map = dict(
+        db.session.query(Evaluation.evaluator_id, func.count(Evaluation.id))
+        .filter(Evaluation.evaluator_id.in_(u_sup_ids),
+                Evaluation.week_start == ws, Evaluation.week_end == we)
+        .group_by(Evaluation.evaluator_id).all())
+
+    if is_current:
+        target_map = dict(
+            db.session.query(Employee.user_id, func.count(Employee.id))
+            .filter(Employee.user_id.in_(u_sup_ids), Employee.is_active == True)
+            .group_by(Employee.user_id).all())
+    else:
+        rosters = _roster_at_bulk(u_sup_ids, we)
+        target_map = {sid: len(ids) for sid, ids in rosters.items()}
+
+    return target_map, done_map
+
+
+def _log_emp_assignment(emp, action, actor, from_user_id=None, to_user_id=None, note=""):
+    """تسجيل أي حركة على الموظف — لا حذف نهائي، كل شيء يُسجَّل."""
+    try:
+        db.session.add(EmployeeAssignmentLog(
+            employee_id=emp.id,
+            from_user_id=from_user_id,
+            to_user_id=to_user_id,
+            action=action,
+            actor_id=getattr(actor, "id", None),
+            note=(note or "")[:255],
+            company_id=getattr(emp, "company_id", None) or cid(),
+        ))
+    except Exception as _e:
+        app.logger.error("assignment log failed: %s", _e)
+
+
+def _site_guard_emp(u, emp):
+    """يتأكد أن الموظف تابع لأحد مشرفي هذا الـ site_supervisor."""
+    if u.role == "admin":
+        return True
+    return emp.user_id in _site_scope_sup_ids(u)
+
+
+@app.route("/site/employees/manage", methods=["GET"])
+@login_required
+def site_manage_employees():
+    """اختيار مشرف تابع → عرض موظفيه مع أزرار النقل / الفصل / الاستقالة."""
+    u = cur_user()
+    if u.role not in ("site_supervisor", "admin"):
+        abort(403)
+
+    my_supervisors = _site_scope_supervisors(u) if u.role == "site_supervisor" else \
+        apply_company_filter(User.query.filter_by(role="supervisor", is_active=True), User).order_by(User.name.asc()).all()
+
+    sup_id = request.args.get("sup_id", type=int)
+    show   = (request.args.get("show") or "active").strip()   # active | resigned | all
+    sel_sup, employees, logs = None, [], []
+
+    if sup_id:
+        allowed_ids = [s.id for s in my_supervisors]
+        if sup_id not in allowed_ids:
+            abort(403)
+        sel_sup = User.query.get_or_404(sup_id)
+
+        q = Employee.query.filter_by(user_id=sup_id)
+        if show == "active":
+            q = q.filter(Employee.status == "active", Employee.is_active == True)
+        elif show == "resigned":
+            q = q.filter(Employee.status == "resigned")
+        employees = q.order_by(Employee.name.asc()).all()
+
+        emp_ids = [e.id for e in employees]
+        if emp_ids:
+            logs = (db.session.query(EmployeeAssignmentLog)
+                    .filter(EmployeeAssignmentLog.employee_id.in_(emp_ids))
+                    .order_by(EmployeeAssignmentLog.created_at.desc())
+                    .limit(30).all())
+
+    # خريطة أسماء المستخدمين لعرض السجل
+    uid_set = set()
+    for lg in logs:
+        uid_set.update([lg.from_user_id, lg.to_user_id, lg.actor_id])
+    uid_set.discard(None)
+    name_map = {}
+    if uid_set:
+        name_map = {x.id: (x.name or x.supervisor_code)
+                    for x in User.query.filter(User.id.in_(list(uid_set))).all()}
+
+    # عدد موظفي كل مشرف (لعرضه في القائمة المنسدلة)
+    counts = {}
+    all_ids = [s.id for s in my_supervisors]
+    if all_ids:
+        counts = dict(
+            db.session.query(Employee.user_id, func.count(Employee.id))
+            .filter(Employee.user_id.in_(all_ids),
+                    Employee.status == "active", Employee.is_active == True)
+            .group_by(Employee.user_id).all())
+
+    return render_template("site_manage_employees.html",
+                           my_supervisors=my_supervisors, sel_sup=sel_sup,
+                           employees=employees, logs=logs, name_map=name_map,
+                           counts=counts, show=show)
+
+
+@app.post("/site/employees/<int:emp_id>/transfer")
+@login_required
+def site_employee_transfer(emp_id):
+    """نقل موظف من مشرف إلى مشرف آخر ضمن نطاق الـ site_supervisor."""
+    u = cur_user()
+    if u.role not in ("site_supervisor", "admin"):
+        abort(403)
+
+    emp = Employee.query.get_or_404(emp_id)
+    if not _site_guard_emp(u, emp):
+        abort(403)
+
+    target_id = request.form.get("target_sup_id", type=int)
+    back      = request.form.get("back") or url_for("site_manage_employees", sup_id=emp.user_id)
+
+    if not target_id:
+        flash("Select the receiving supervisor first.", "danger")
+        return redirect(back)
+    if target_id == emp.user_id:
+        flash("This employee is already under that supervisor.", "warning")
+        return redirect(back)
+
+    if u.role == "site_supervisor" and target_id not in _site_scope_sup_ids(u):
+        flash("The receiving supervisor is not within your scope.", "danger")
+        return redirect(back)
+
+    target = User.query.get(target_id)
+    if not target or target.role != "supervisor":
+        flash("Invalid receiving supervisor.", "danger")
+        return redirect(back)
+
+    old_id = emp.user_id
+    emp.user_id   = target_id
+    emp.status    = "active"
+    emp.is_active = True
+    _log_emp_assignment(emp, "transfer", u, from_user_id=old_id, to_user_id=target_id,
+                        note=request.form.get("note", ""))
+    db.session.commit()
+    flash(f"{emp.name} transferred to {target.name or target.supervisor_code}.", "success")
+    return redirect(url_for("site_manage_employees", sup_id=old_id))
+
+
+@app.post("/site/employees/bulk-transfer")
+@login_required
+def site_employees_bulk_transfer():
+    """نقل عدة موظفين دفعة واحدة."""
+    u = cur_user()
+    if u.role not in ("site_supervisor", "admin"):
+        abort(403)
+
+    emp_ids   = request.form.getlist("emp_ids", type=int)
+    target_id = request.form.get("target_sup_id", type=int)
+    from_id   = request.form.get("from_sup_id", type=int)
+
+    if not emp_ids:
+        flash("No employee selected.", "warning")
+        return redirect(url_for("site_manage_employees", sup_id=from_id))
+    if not target_id:
+        flash("Select the receiving supervisor.", "danger")
+        return redirect(url_for("site_manage_employees", sup_id=from_id))
+    if u.role == "site_supervisor" and target_id not in _site_scope_sup_ids(u):
+        flash("The receiving supervisor is not within your scope.", "danger")
+        return redirect(url_for("site_manage_employees", sup_id=from_id))
+
+    target = User.query.get(target_id)
+    if not target or target.role != "supervisor":
+        flash("Invalid receiving supervisor.", "danger")
+        return redirect(url_for("site_manage_employees", sup_id=from_id))
+
+    moved = 0
+    for e_id in emp_ids:
+        emp = Employee.query.get(e_id)
+        if not emp or not _site_guard_emp(u, emp) or emp.user_id == target_id:
+            continue
+        old_id = emp.user_id
+        emp.user_id   = target_id
+        emp.status    = "active"
+        emp.is_active = True
+        _log_emp_assignment(emp, "transfer", u, from_user_id=old_id, to_user_id=target_id,
+                            note="bulk")
+        moved += 1
+    db.session.commit()
+    flash(f"{moved} employee(s) transferred to {target.name or target.supervisor_code}.", "success")
+    return redirect(url_for("site_manage_employees", sup_id=from_id))
+
+
+@app.post("/site/employees/<int:emp_id>/unassign")
+@login_required
+def site_employee_unassign(emp_id):
+    """فصل الموظف عن مشرفه — يصبح unassigned (بدون حذف نهائي)."""
+    u = cur_user()
+    if u.role not in ("site_supervisor", "admin"):
+        abort(403)
+
+    emp = Employee.query.get_or_404(emp_id)
+    if not _site_guard_emp(u, emp):
+        abort(403)
+
+    old_id = emp.user_id
+    emp.status  = "unassigned"
+    emp.user_id = None
+    _log_emp_assignment(emp, "unassign", u, from_user_id=old_id, to_user_id=None,
+                        note=request.form.get("note", ""))
+    db.session.commit()
+    flash(f"{emp.name} unassigned from the supervisor — moved to Unassigned.", "success")
+    return redirect(url_for("site_manage_employees", sup_id=old_id))
+
+
+@app.post("/site/employees/<int:emp_id>/resign")
+@login_required
+def site_employee_resign(emp_id):
+    """تسجيل استقالة الموظف — يبقى في السجل ولا يُحذف."""
+    u = cur_user()
+    if u.role not in ("site_supervisor", "admin"):
+        abort(403)
+
+    emp = Employee.query.get_or_404(emp_id)
+    if not _site_guard_emp(u, emp):
+        abort(403)
+
+    old_id = emp.user_id
+    emp.status      = "resigned"
+    emp.is_active   = False
+    emp.resigned_at = datetime.now(RIYADH_TZ).date()
+    _log_emp_assignment(emp, "resign", u, from_user_id=old_id, to_user_id=None,
+                        note=request.form.get("note", ""))
+    db.session.commit()
+    flash(f"{emp.name} marked as resigned.", "success")
+    return redirect(url_for("site_manage_employees", sup_id=old_id, show="resigned"))
+
+
+@app.post("/site/employees/<int:emp_id>/restore")
+@login_required
+def site_employee_restore(emp_id):
+    """إرجاع موظف مستقيل/مفصول إلى مشرف — عكس عملية الاستقالة."""
+    u = cur_user()
+    if u.role not in ("site_supervisor", "admin"):
+        abort(403)
+
+    emp = Employee.query.get_or_404(emp_id)
+    target_id = request.form.get("target_sup_id", type=int) or emp.user_id
+    if u.role == "site_supervisor" and target_id not in _site_scope_sup_ids(u):
+        abort(403)
+
+    target = User.query.get(target_id)
+    if not target or target.role != "supervisor":
+        flash("Invalid receiving supervisor.", "danger")
+        return redirect(url_for("site_manage_employees", sup_id=emp.user_id))
+
+    old_id = emp.user_id
+    emp.user_id     = target_id
+    emp.status      = "active"
+    emp.is_active   = True
+    emp.resigned_at = None
+    _log_emp_assignment(emp, "reactivate", u, from_user_id=old_id, to_user_id=target_id)
+    db.session.commit()
+    flash(f"{emp.name} restored to {target.name or target.supervisor_code}.", "success")
+    return redirect(url_for("site_manage_employees", sup_id=target_id))
+
+
+@app.get("/site/employee/<int:emp_id>/profile")
+@login_required
+def site_employee_profile(emp_id):
+    """ملف الموظف الكامل: تقييمات + حضور + طلبات + سجل الحركة."""
+    u = cur_user()
+    if u.role not in ("site_supervisor", "admin"):
+        abort(403)
+
+    emp = Employee.query.get_or_404(emp_id)
+
+    # الصلاحية: تابع لأحد مشرفيك الآن، أو كان تابعاً لهم سابقاً (سجل الحركة)
+    if u.role == "site_supervisor":
+        scope = _site_scope_sup_ids(u)
+        allowed = emp.user_id in scope
+        if not allowed:
+            allowed = db.session.query(EmployeeAssignmentLog.id).filter(
+                EmployeeAssignmentLog.employee_id == emp.id,
+                or_(EmployeeAssignmentLog.from_user_id.in_(scope),
+                    EmployeeAssignmentLog.to_user_id.in_(scope))).first() is not None
+        if not allowed:
+            abort(403)
+
+    # ── التقييمات ──
+    evals = (Evaluation.query.filter_by(employee_id=emp.id)
+             .order_by(Evaluation.week_start.desc()).all())
+    avg_score = round(sum((e.total_score or 0) for e in evals) / len(evals), 1) if evals else None
+    last_score = evals[0].total_score if evals else None
+
+    # اسم المُقيِّم لكل تقييم (من قيّم فعلاً، لا المالك الحالي)
+    ev_uids = {e.evaluator_id for e in evals if e.evaluator_id}
+    ev_names = {x.id: (x.name or x.supervisor_code)
+                for x in User.query.filter(User.id.in_(list(ev_uids))).all()} if ev_uids else {}
+
+    # ── الحضور: آخر 60 يوم + ملخص ──
+    since = datetime.now(RIYADH_TZ).date() - timedelta(days=60)
+    att = (Attendance.query.filter(Attendance.employee_id == emp.id,
+                                   Attendance.date >= since)
+           .order_by(Attendance.date.desc()).all())
+    att_summary = Counter(a.status for a in att)
+    att_total = len(att)
+    att_rate = round(att_summary.get("present", 0) / att_total * 100.0, 0) if att_total else None
+
+    # ── الطلبات ──
+    reqs = (Request.query.filter_by(employee_id=emp.id)
+            .order_by(Request.created_at.desc()).limit(50).all())
+    req_summary = Counter(r.status for r in reqs)
+
+    # ── سجل الحركة بين المشرفين ──
+    moves = (EmployeeAssignmentLog.query.filter_by(employee_id=emp.id)
+             .order_by(EmployeeAssignmentLog.created_at.desc()).all())
+    mv_uids = set()
+    for m in moves:
+        mv_uids.update([m.from_user_id, m.to_user_id, m.actor_id])
+    mv_uids.discard(None)
+    mv_names = {x.id: (x.name or x.supervisor_code)
+                for x in User.query.filter(User.id.in_(list(mv_uids))).all()} if mv_uids else {}
+
+    cur_sup = User.query.get(emp.user_id) if emp.user_id else None
+    back_url = url_for("site_manage_employees", sup_id=emp.user_id) if emp.user_id \
+               else url_for("site_manage_employees")
+
+    return render_template("site_employee_profile.html",
+                           emp=emp, cur_sup=cur_sup, back_url=back_url,
+                           evals=evals, ev_names=ev_names,
+                           avg_score=avg_score, last_score=last_score,
+                           att=att[:30], att_summary=att_summary,
+                           att_total=att_total, att_rate=att_rate,
+                           reqs=reqs, req_summary=req_summary,
+                           moves=moves, mv_names=mv_names)
+
+
+@app.get("/site/employee/<int:emp_id>/movement")
+@login_required
+def site_employee_movement(emp_id):
+    """سجل حركة موظف واحد — JSON للعرض داخل الصفحة."""
+    u = cur_user()
+    if u.role not in ("site_supervisor", "admin"):
+        return jsonify(error="forbidden"), 403
+    emp = Employee.query.get_or_404(emp_id)
+
+    rows = (EmployeeAssignmentLog.query.filter_by(employee_id=emp.id)
+            .order_by(EmployeeAssignmentLog.created_at.desc()).limit(50).all())
+    uids = set()
+    for r in rows:
+        uids.update([r.from_user_id, r.to_user_id, r.actor_id])
+    uids.discard(None)
+    nm = {x.id: (x.name or x.supervisor_code)
+          for x in User.query.filter(User.id.in_(list(uids))).all()} if uids else {}
+
+    return jsonify({
+        "employee": {"id": emp.id, "name": emp.name, "emp_number": emp.emp_number,
+                     "status": emp.status},
+        "rows": [{
+            "action": r.action,
+            "from":   nm.get(r.from_user_id, "—"),
+            "to":     nm.get(r.to_user_id, "—"),
+            "by":     nm.get(r.actor_id, "—"),
+            "note":   r.note or "",
+            "at":     r.created_at.strftime("%Y-%m-%d %H:%M") if r.created_at else "",
+        } for r in rows]
+    })
+
+
+
+
+@app.route("/site/employees/unassigned", methods=["GET", "POST"])
+@login_required
+def site_unassigned_employees():
+    u = cur_user()
+    if u.role != "site_supervisor":
+        abort(403)
+
+    my_supervisors = (db.session.query(User)
+                       .join(SiteSupervisorMap, SiteSupervisorMap.supervisor_id == User.id)
+                       .filter(SiteSupervisorMap.site_sup_id == u.id)
+                       .order_by(User.name.asc()).all())
+
+    if request.method == "POST":
+        emp_id        = request.form.get("emp_id", type=int)
+        supervisor_id = request.form.get("supervisor_id", type=int)
+        emp = Employee.query.get_or_404(emp_id) if emp_id else None
+        if not emp or not supervisor_id:
+            flash("Please choose an employee and a supervisor.", "danger")
+        else:
+            ok, msg, _status = _assign_employee_to_supervisor(emp, supervisor_id, u)
+            flash(msg, "success" if ok else "danger")
+        return redirect(url_for("site_unassigned_employees"))
+
+    emp_q = apply_company_filter(Employee.query.filter_by(status="unassigned"), Employee)
+    employees = emp_q.order_by(Employee.name.asc()).all()
+    return render_template("site_unassigned_employees.html",
+                           employees=employees, my_supervisors=my_supervisors)
+
+
+@app.get("/site/employees/requests")
+@login_required
+def site_employee_requests():
+    """طلبات موظفي المشرفين الخاضعين لهذا الـ site_supervisor — قراءة فقط"""
+    u = cur_user()
+    if u.role != "site_supervisor":
+        abort(403)
+
+    my_sup_ids = [row[0] for row in
+                 db.session.query(SiteSupervisorMap.supervisor_id)
+                 .filter(SiteSupervisorMap.site_sup_id == u.id).all()]
+
+    rows = []
+    if my_sup_ids:
+        rows = (Request.query
+                .join(Employee, Request.employee_id == Employee.id)
+                .filter(Employee.user_id.in_(my_sup_ids))
+                .order_by(Request.created_at.desc()).all())
+
+    return render_template("site_employee_requests.html", rows=rows)
+
 
 # New evaluation for a supervisor
 @app.route("/site/evaluate/<int:sup_user_id>/new", methods=["GET", "POST"])
@@ -3479,45 +4982,14 @@ def site_report_supervisor(sup_user_id):
         return redirect(url_for("site_report_select") if u.role == "site_supervisor" else url_for("admin_site_report_picker"))
 
     ws = parse_date(week_start); we = parse_date(week_end)
-    se = SupervisorEvaluation.query.filter_by(supervisor_id=sup_user_id, week_start=ws, week_end=we).first_or_404()
     supervisor = User.query.get_or_404(sup_user_id)
+    se = SupervisorEvaluation.query.filter_by(supervisor_id=sup_user_id, week_start=ws, week_end=we).first()
+    if not se:
+        flash(f"No evaluation found for {supervisor.name} in week {ws} → {we}.", "warning")
+        return redirect(url_for("site_report_select") if u.role == "site_supervisor" else url_for("admin_site_report_picker"))
     evaluator = db.session.get(User, se.evaluator_id)
     return render_template("site_report_supervisor.html", se=se, supervisor=supervisor, evaluator=evaluator)
 
-@app.route("/site/daily/reports")
-@login_required
-def site_daily_reports_site():
-    u = cur_user()
-    if u.role != "site_supervisor":
-        abort(403)
-
-    # تاريخ اليوم أو اللي اختاره
-    d_s = request.args.get("d")
-    if d_s:
-        d_val = parse_date(d_s)
-    else:
-        d_val = date.today()
-
-    # المشرفين اللي تابعين لهذا الـ site supervisor
-    links = (db.session.query(SiteSupervisorMap, User)
-             .join(User, SiteSupervisorMap.supervisor_id == User.id)
-             .filter(SiteSupervisorMap.site_sup_id == u.id)
-             .all())
-    sup_ids = [su.id for _, su in links]
-
-    # نفس استعلام صفحة /daily/reports لكن مفلتر على اللي فوق
-    q = (db.session.query(DailyEvaluation, Employee)
-         .join(Employee, DailyEvaluation.employee_id == Employee.id)
-         .filter(DailyEvaluation.eval_date == d_val))
-
-    if sup_ids:
-        q = q.filter(Employee.user_id.in_(sup_ids))
-
-    rows = (q.order_by(Employee.name.asc()).all())
-
-    # نستخدم نفس التمبليت الجاهز
-    return render_template("daily_reports.html", rows=rows, d=d_val)
-    
 @app.route("/site/attendance")
 @login_required
 def site_attendance_site():
@@ -3574,41 +5046,6 @@ def site_requests_site():
 
     return render_template("requests_inbox.html", items=items)
 
-@app.route("/site/daily/report/<int:emp_id>")
-@login_required
-def site_daily_report_employee(emp_id):
-    u = cur_user()
-    if u.role != "site_supervisor":
-        abort(403)
-
-    d_str = request.args.get("d")
-    if not d_str:
-        flash("Missing date.", "warning")
-        return redirect(url_for("site_daily_reports_site"))
-    d_val = parse_date(d_str)
-
-    # الموظف
-    emp = Employee.query.get_or_404(emp_id)
-
-    # تأكد أن الموظف يتبع مشرف من مشرفين هذا الـ site supervisor
-    link = (db.session.query(SiteSupervisorMap)
-            .filter_by(site_sup_id=u.id, supervisor_id=emp.user_id)
-            .first())
-    if not link:
-        abort(403)
-
-    # التقييم اليومي نفسه
-    de = (DailyEvaluation.query
-          .filter_by(employee_id=emp_id, eval_date=d_val)
-          .first_or_404())
-
-    # نستعمل نفس القالب اللي تستعمله للمشرف العادي
-    return render_template("daily_report_employee.html",
-                           employee=emp,
-                           de=de,
-                           d=d_val)
-
-
 
 # ----- Admin: Site reviews picker & consolidated -----
 @app.route("/admin/site/reports", methods=["GET", "POST"])
@@ -3661,10 +5098,46 @@ def admin_site_reports_all():
 
 import traceback
 
+# مسارات يطلبها المتصفح تلقائياً — 404 طبيعي، لا داعي لتلويث اللوق
+_QUIET_404 = {
+    "/favicon.ico", "/apple-touch-icon.png",
+    "/apple-touch-icon-precomposed.png", "/robots.txt",
+}
+
+
 @app.errorhandler(404)
 def _not_found(e):
-    app.logger.error("404 path=%s method=%s", request.path, request.method)
+    if request.path not in _QUIET_404:
+        app.logger.error("404 path=%s method=%s", request.path, request.method)
     return "Not Found", 404
+
+
+@app.route("/favicon.ico")
+@app.route("/apple-touch-icon.png")
+@app.route("/apple-touch-icon-precomposed.png")
+def _browser_icons():
+    """المتصفح يطلب هذه تلقائياً — نخدمها من الشعار بدل 404 متكرر."""
+    return redirect(url_for("static", filename="img/logo.png"))
+
+
+@app.errorhandler(OperationalError)
+def _db_connection_lost(e):
+    """انقطاع اتصال MySQL — نظّف الجلسة وأعطِ رسالة مفهومة بدل صفحة 500."""
+    app.logger.error("DB connection lost on %s: %s", request.path, e)
+    try:
+        db.session.rollback()
+        db.session.remove()
+    except Exception:
+        pass
+    if request.path.startswith("/api/"):
+        return jsonify(error="تعذّر الاتصال بقاعدة البيانات، حاول مرة أخرى"), 503
+    return ("<div style='font-family:system-ui;padding:40px;text-align:center'>"
+            "<h2>انقطع الاتصال بقاعدة البيانات</h2>"
+            "<p style='color:#64748b'>حاول تحديث الصفحة بعد لحظات.</p>"
+            "<a href='javascript:location.reload()' "
+            "style='display:inline-block;margin-top:12px;padding:10px 22px;"
+            "background:#1d4ed8;color:#fff;border-radius:8px;text-decoration:none'>"
+            "إعادة المحاولة</a></div>"), 503
 
 # ============================================================
 #  ملف التعديلات للتطبيق — أضف هذا الكود في آخر ملف main.py
@@ -3684,7 +5157,7 @@ from werkzeug.security import generate_password_hash, check_password_hash
 #  إعداد رفع الملفات
 # ─────────────────────────────────────────────
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-ALLOWED_EXTENSIONS = {"pdf"}
+ALLOWED_EXTENSIONS = {"pdf", "jpg", "jpeg", "png"}
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 app.config["UPLOAD_FOLDER"] = UPLOAD_FOLDER
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024  # 10 ميجا كحد أقصى
@@ -3737,9 +5210,13 @@ class LeaveForm(db.Model):
 # ─────────────────────────────────────────────
 def get_api_user():
     auth = freq.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
+    if auth.startswith("Bearer "):
+        token_str = auth[7:]
+    else:
+        # قبول التوكن من query parameter (لفتح الملفات في Safari)
+        token_str = freq.args.get("token", "")
+    if not token_str:
         return None
-    token_str = auth[7:]
     tok = MobileToken.query.filter_by(token=token_str).first()
     return tok.user if tok else None
 
@@ -3790,12 +5267,60 @@ def api_hr_required(f):
 #  مساعد توليد نموذج الإجازة PDF
 # ─────────────────────────────────────────────
 
+# ─────────────────────────────────────────────
+#  بيانات شركات خطاب الإنذار — فقط اللوقو واسم الشركة يختلفان حسب اختيار
+#  الموارد البشرية، وباقي بيانات الترويسة (العنوان/الهاتف...) ثابتة كما بالخطاب الأصلي
+# ─────────────────────────────────────────────
+WARNING_COMPANY_NAMES = {
+    "NSH": {"logo": "logo.png",  "name_ar": "شركة ناصر سعيد الهاجري وشركاه للمقاولات",
+            "name_en": "NASSER S. AL-HAJRI & PARTNERS FOR CONT. CO."},
+    "GA":  {"logo": "logo2.png", "name_ar": "شركة الخليج آسيا",
+            "name_en": "GULF ASIA CO."},
+}
+
+WARNING_LETTERHEAD = {
+    "lines_en": [
+        "C.R. 2060006231",
+        "P.O. Box No. 495, Dhahran Airport 31932",
+        "SAUDI ARABIA",
+        "Tel.: (013) 814 7779 / (013) 8650009",
+        "Fax: (013) 814 4441 / (013) 8984211",
+        "E-mail: nsh@alhajricorporation.com",
+        "Website: www.alhajricorporation.com",
+    ],
+    "footer_en": "Jubail: Tel.: (013) 3448768, 69, 71, 75 - Fax: (013) 3448770, 3448772",
+    "footer_branches_en": "Branches: DUBAI, KUWAIT, BAHRAIN",
+}
+
+
+def decode_signature_image(raw_value):
+    """يفك ترميز صورة التوقيع (PNG) من base64.
+    المتصفح يرسل التوقيع عبر canvas.toDataURL() الذي يُنتج قيمة كاملة على
+    شكل 'data:image/png;base64,XXXXX' — فك التشفير المباشر لهذه القيمة
+    كاملة (بدون إزالة البادئة) يفشل بخطأ 'Incorrect padding' لأن الرموز
+    ':' و'/' و';' و',' ليست من أبجدية base64، وهذا كان يسبب عدم ظهور
+    التوقيع أبداً بأي من نماذج PDF الثلاثة (إجازة/استئذان/إنذار) رغم
+    رسمه بنجاح بالمتصفح."""
+    import base64
+    s = (raw_value or "").strip()
+    if s.lower().startswith("data:") and "," in s:
+        s = s.split(",", 1)[1]
+    return base64.b64decode(s)
+
+
+def build_warning_declaration(emp_name, job_title, emp_no, date_str, reason_text):
+    """نص الإقرار الرسمي الموحّد — تستخدمه دالة توليد الـ PDF وأيضاً تحقق صفحة
+    التوقيع (كتابة النص يدوياً) لضمان تطابق النصين حرفياً دائماً"""
+    return (f"أقر أنا / {emp_name} وظيفتي {job_title} رقم {emp_no} الموقع على هذا الإنذار "
+            f"على المخالفة الصادرة مني بتاريخ {date_str} وهي {reason_text} .")
+
+
 def generate_warning_pdf(req: "Request", sig: "WarningSignature") -> str:
-    """يولّد نموذج إنذار PDF مع توقيع الموظف"""
+    """يولّد خطاب إنذار PDF بنفس تصميم الترويسة الرسمية للشركة مع توقيع الموظف"""
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage, HRFlowable, PageBreak
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.units import cm
         from reportlab.pdfbase import pdfmetrics
@@ -3805,13 +5330,34 @@ def generate_warning_pdf(req: "Request", sig: "WarningSignature") -> str:
         return ""
 
     # ── تسجيل الخط العربي ──
+    # مهم جداً: نجرب DejaVu Sans أولاً. الجملة الواحدة غالباً تخلط عربي مع
+    # اسم إنجليزي/أرقام/علامة % و/ — وخط Noto Naskh Arabic عربي فقط بدون أي
+    # غطاء للحروف اللاتينية أو / أو %، فتظهر هذي الرموز كمربعات فارغة رغم
+    # صحة النص العربي نفسه. DejaVu Sans يغطي العربي والإنجليزي والأرقام
+    # والرموز بخط واحد فلا يحصل نقص أبداً بجملة مختلطة.
     ARABIC_FONT = "Arabic"
-    ARABIC_TTF  = "/usr/share/fonts/google-droid/DroidSansArabic.ttf"
+    ARABIC_TTF_CANDIDATES = [
+        os.path.join(BASE_DIR, "static", "fonts", "DejaVuSans.ttf"),
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        os.path.join(BASE_DIR, "static", "fonts", "NotoNaskhArabic-Regular.ttf"),
+        "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+        os.path.join(BASE_DIR, "static", "fonts", "DroidSansArabic.ttf"),
+        "/usr/share/fonts/google-droid/DroidSansArabic.ttf",
+        "C:\\Windows\\Fonts\\tahoma.ttf",
+    ]
     LATIN_FONT  = "Helvetica"
-    try:
-        pdfmetrics.registerFont(TTFont(ARABIC_FONT, ARABIC_TTF))
-    except Exception:
-        ARABIC_FONT = "Helvetica"  # fallback
+    font_registered = False
+    for _ttf_path in ARABIC_TTF_CANDIDATES:
+        if os.path.exists(_ttf_path):
+            try:
+                pdfmetrics.registerFont(TTFont(ARABIC_FONT, _ttf_path))
+                font_registered = True
+                break
+            except Exception:
+                continue
+    if not font_registered:
+        ARABIC_FONT = "Helvetica"  # fallback أخير — لا يدعم العربية
 
     def ar(text):
         """عكس النص العربي فقط لـ ReportLab (RTL)"""
@@ -3829,11 +5375,36 @@ def generate_warning_pdf(req: "Request", sig: "WarningSignature") -> str:
             except Exception:
                 return t
 
+    def ar_wrap(text, max_chars=58):
+        """لفقرات عربية طويلة تحتاج أكثر من سطر: نقسّم النص يدوياً لأسطر
+        ونطبّق ar() على كل سطر لوحده بدل الفقرة كاملة. لو طبّقنا bidi على
+        الفقرة كوحدة واحدة ثم تركنا reportlab يكسرها لأسطر، يطلع ترتيب
+        الأسطر معكوساً (السطر الثاني منطقياً يظهر فوق الأول) لأن reportlab
+        يكسر السطور حسب الترتيب البصري بعد إعادة الترتيب لا قبلها."""
+        words = str(text).split(" ")
+        lines, cur = [], ""
+        for w in words:
+            trial = (cur + " " + w).strip()
+            if len(trial) > max_chars and cur:
+                lines.append(cur)
+                cur = w
+            else:
+                cur = trial
+        if cur:
+            lines.append(cur)
+        return "<br/>".join(ar(l) for l in lines)
+
     def font_for(text):
-        """اختر الخط المناسب حسب المحتوى"""
         if any("؀" <= c <= "ۿ" for c in str(text)):
             return ARABIC_FONT
         return LATIN_FONT
+
+    def cell(text, size=10.5, color=None):
+        t = ar(text)
+        is_ar = any("؀" <= c <= "ۿ" for c in str(text))
+        return Paragraph(t, ParagraphStyle("c%s" % uuid.uuid4().hex[:6], fontName=font_for(text),
+                                           fontSize=size, alignment=2 if is_ar else 0,
+                                           textColor=color or colors.black))
 
     emp  = req.employee
     sup  = req.supervisor
@@ -3842,200 +5413,671 @@ def generate_warning_pdf(req: "Request", sig: "WarningSignature") -> str:
         reason_text = (task_item.official_reason if task_item and task_item.official_reason else req.reason) or "—"
     except Exception:
         reason_text = req.reason or "—"
+
+    company_code = "NSH"
+    try:
+        if task_item and task_item.warning_company in WARNING_COMPANY_NAMES:
+            company_code = task_item.warning_company
+    except Exception:
+        pass
+    co_name = WARNING_COMPANY_NAMES.get(company_code, WARNING_COMPANY_NAMES["NSH"])
+    lh = WARNING_LETTERHEAD
+
     fname = f"warning_{req.id}_{uuid.uuid4().hex[:8]}.pdf"
     fpath = os.path.join(UPLOAD_FOLDER, fname)
 
     doc = SimpleDocTemplate(fpath, pagesize=A4,
                             rightMargin=2*cm, leftMargin=2*cm,
-                            topMargin=2*cm, bottomMargin=2*cm)
+                            topMargin=1.5*cm, bottomMargin=1.5*cm)
 
     styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("wtitle", parent=styles["Title"],
-                                 fontName=ARABIC_FONT,
-                                 fontSize=18, spaceAfter=6,
-                                 alignment=1,
-                                 textColor=colors.HexColor("#c0392b"))
-    sub_style   = ParagraphStyle("wsub", parent=styles["Normal"],
-                                 fontName=ARABIC_FONT,
-                                 fontSize=11, spaceAfter=10, alignment=1)
-    body_style  = ParagraphStyle("wbody", parent=styles["Normal"],
-                                 fontName=ARABIC_FONT,
-                                 fontSize=11, spaceAfter=6, alignment=2)  # right align
     elements = []
 
-    # ── شعار الشركة ──
-    logo_path = os.path.join(BASE_DIR, "static", "img", "logo.png")
-    if os.path.exists(logo_path):
-        elements.append(RLImage(logo_path, width=4*cm, height=2*cm))
+    # ══════════════════════════════════════════════════════
+    #  الصفحة الأولى: تقرير سبب الإنذار (تعبئة المشرف الميدانية)
+    #  — تُضاف فقط لو فيه تقرير ميداني محفوظ لهذا الطلب (WarningFieldReport)،
+    #  وإلا تبدأ الصفحة الرسمية مباشرة كما كانت (توافقاً مع الإنذارات القديمة)
+    # ══════════════════════════════════════════════════════
+    wfr = getattr(req, "warning_field_report", None)
+    if wfr:
+        elements.append(Paragraph(
+            ar("تقرير سبب الإنذار"),
+            ParagraphStyle("wfr_title", fontName=ARABIC_FONT, fontSize=17, alignment=1,
+                           textColor=colors.HexColor("#1a1f3a"), spaceAfter=16)
+        ))
+
+        wfr_hdr = Table([
+            [cell("اليوم"), cell("التاريخ"), cell("اسم الموظف"), cell("ID"), cell("اسم المشرف"), cell("ID")],
+            [cell(wfr.day_name or "—"),
+             cell(wfr.report_date.strftime("%Y-%m-%d") if wfr.report_date else "—"),
+             cell(wfr.employee_name_snapshot or "—"),
+             cell(wfr.employee_no_snapshot or "—"),
+             cell(wfr.supervisor_name_snapshot or "—"),
+             cell(wfr.supervisor_code_snapshot or "—")],
+        ], colWidths=[2.2*cm, 2.8*cm, 3.6*cm, 2.2*cm, 3.6*cm, 2.2*cm])
+        wfr_hdr.setStyle(TableStyle([
+            ("GRID",          (0, 0), (-1, -1), 0.7, colors.HexColor("#555555")),
+            ("BACKGROUND",    (0, 0), (-1, 0), colors.HexColor("#f0f0f0")),
+            ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
+            ("VALIGN",        (0, 0), (-1, -1), "MIDDLE"),
+            ("TOPPADDING",    (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ]))
+        elements.append(wfr_hdr)
+        elements.append(Spacer(1, 1.2*cm))
+
+        elements.append(Paragraph(
+            ar("سبب الإنذار"),
+            ParagraphStyle("wfr_reason_title", fontName=ARABIC_FONT, fontSize=13, alignment=1,
+                           textColor=colors.HexColor("#1a1f3a"))
+        ))
+        reason_box = Table([[Paragraph(
+            ar_wrap(wfr.reason_text or "—", max_chars=70),
+            ParagraphStyle("wfr_reason", fontName=ARABIC_FONT, fontSize=11.5, leading=26, alignment=2)
+        )]], colWidths=[17*cm])
+        reason_box.setStyle(TableStyle([
+            ("BOX",           (0, 0), (-1, -1), 0.7, colors.HexColor("#555555")),
+            ("TOPPADDING",    (0, 0), (-1, -1), 14),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 14),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 12),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 12),
+        ]))
         elements.append(Spacer(1, 0.3*cm))
+        elements.append(reason_box)
+        elements.append(Spacer(1, 1.5*cm))
 
-    # ── عنوان النموذج ──
-    elements.append(Paragraph(ar("نموذج إنذار رسمي"), title_style))
-    elements.append(Paragraph("Official Warning Notice", ParagraphStyle("wsub_en", parent=styles["Normal"], fontName=LATIN_FONT, fontSize=11, spaceAfter=10, alignment=1)))
-    elements.append(Spacer(1, 0.5*cm))
+        wfr_sign_img = None
+        try:
+            wfr_sign_img = RLImage(io.BytesIO(decode_signature_image(wfr.signature)), width=4.5*cm, height=1.8*cm)
+        except Exception:
+            wfr_sign_img = None
 
-    # ── بيانات الموظف ──
+        sig_tbl = Table([[
+            wfr_sign_img if wfr_sign_img else Paragraph("_" * 25, styles["Normal"]),
+            cell("توقيع المشرف", size=11, color=colors.HexColor("#1a1f3a")),
+        ]], colWidths=[12*cm, 5*cm])
+        sig_tbl.setStyle(TableStyle([("ALIGN", (0, 0), (0, 0), "LEFT"), ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                                     ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+        elements.append(sig_tbl)
+        elements.append(PageBreak())
+
     from zoneinfo import ZoneInfo
-    now_str = datetime.now(ZoneInfo("Asia/Riyadh")).strftime("%Y/%m/%d")
-    def cell(text):
-        t = ar(text)
-        return Paragraph(t, ParagraphStyle("c", fontName=font_for(text), fontSize=10, alignment=2 if any("؀"<=c<="ۿ" for c in str(text)) else 0))
-
-    rows = [
-        [cell("البند"), cell("البيانات")],
-        [cell("اسم الموظف"),   cell(emp.name if emp else "—")],
-        [cell("رقم الموظف"),   cell(emp.emp_number if emp else "—")],
-        [cell("القسم"),        cell(emp.department or "—")],
-        [cell("الموقع"),       cell(emp.site or "—")],
-        [cell("المشرف"),       cell(sup.name if sup else "—")],
-        [cell("سبب الإنذار"),  cell(reason_text)],
-        [cell("تاريخ الإنذار"), cell(now_str)],
-    ]
-
-    tbl = Table(rows, colWidths=[5*cm, 11*cm])
-    tbl.setStyle(TableStyle([
-        ("BACKGROUND",    (0, 0), (-1, 0), colors.HexColor("#c0392b")),
-        ("TEXTCOLOR",     (0, 0), (-1, 0), colors.white),
-        ("FONTNAME",      (0, 0), (-1, -1), ARABIC_FONT),
-        ("FONTSIZE",      (0, 0), (-1, 0), 12),
-        ("ALIGN",         (0, 0), (-1, -1), "RIGHT"),
-        ("FONTSIZE",      (0, 1), (-1, -1), 10),
-        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.HexColor("#fdf2f2"), colors.white]),
-        ("GRID",          (0, 0), (-1, -1), 0.5, colors.grey),
-        ("TOPPADDING",    (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
-    ]))
-    elements.append(tbl)
-    elements.append(Spacer(1, 1*cm))
-
-    # ── نص الإنذار ──
-    elements.append(Paragraph(
-        ar("بناءً على المخالفة المذكورة أعلاه، يُنذر الموظف رسمياً ويُطلب منه الالتزام بالأنظمة والتعليمات."),
-        ParagraphStyle("warn_body", parent=styles["Normal"], fontName=ARABIC_FONT, fontSize=10, leading=16, alignment=2)
-    ))
-    elements.append(Spacer(1, 1*cm))
-
-    # ── توقيع الموظف ──
-    sign_elements = []
+    today = datetime.now(ZoneInfo("Asia/Riyadh")).date()
+    greg_str = f"{today.day:02d} / {today.month:02d} / {today.year}"
     try:
-        img_data = base64.b64decode(sig.signature)
-        img_buf  = io.BytesIO(img_data)
-        sign_img = RLImage(img_buf, width=5*cm, height=2*cm)
-        sign_elements.append(sign_img)
+        from hijridate import Gregorian
+        h = Gregorian(today.year, today.month, today.day).to_hijri()
+        hijri_str = f"{h.day:02d} / {h.month:02d} / {h.year}"
     except Exception:
-        sign_elements.append(Paragraph("_" * 30, styles["Normal"]))
+        hijri_str = "—"
 
-    sig_name = sig.employee_name or (emp.name if emp else "")
-    signed_date = sig.signed_at.strftime("%Y/%m/%d") if sig.signed_at else now_str
+    # ══ ترويسة الشركة (شعار + بيانات إنجليزية يسار / اسم عربي يمين) ══
+    # اللوقو واسم الشركة فقط يتغيران حسب اختيار الموارد البشرية (NSH/GA)،
+    # وباقي بيانات الترويسة (العنوان والتواصل) ثابتة كما بالخطاب الأصلي
+    logo_path = os.path.join(BASE_DIR, "static", "img", co_name["logo"])
+    logo_cell = Paragraph("", styles["Normal"])
+    if os.path.exists(logo_path):
+        try:
+            logo_cell = RLImage(logo_path, width=2.8*cm, height=2.8*cm)
+        except Exception as _logo_err:
+            app.logger.error("warning PDF: invalid logo file %s: %s", logo_path, _logo_err)
+            logo_cell = Paragraph("", styles["Normal"])
 
-    sign_rows = [
-        [cell("توقيع الموظف"), cell("اسم الموظف"), cell("التاريخ")],
-        [sign_elements, cell(sig_name), cell(signed_date)],
-    ]
-    sign_tbl = Table(sign_rows, colWidths=[6*cm, 5*cm, 5*cm])
-    sign_tbl.setStyle(TableStyle([
-        ("ALIGN",         (0, 0), (-1, -1), "CENTER"),
-        ("FONTNAME",      (0, 0), (-1, -1), LATIN_FONT),
-        ("FONTSIZE",      (0, 0), (-1, -1), 10),
-        ("BACKGROUND",    (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
-        ("TEXTCOLOR",     (0, 0), (-1, 0), colors.white),
-        ("BOX",           (0, 0), (-1, -1), 0.5, colors.grey),
-        ("INNERGRID",     (0, 0), (-1, -1), 0.5, colors.grey),
-        ("TOPPADDING",    (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+    en_block = [Paragraph(co_name["name_en"], ParagraphStyle("co_en_name", fontName=LATIN_FONT, fontSize=10,
+                          alignment=0, textColor=colors.HexColor("#1a1f3a"), spaceAfter=2))]
+    for ln in lh["lines_en"]:
+        en_block.append(Paragraph(ln, ParagraphStyle("co_en_l", fontName=LATIN_FONT, fontSize=7.5,
+                        alignment=0, textColor=colors.HexColor("#444444"), leading=10)))
+
+    ar_block = [Paragraph(ar(co_name["name_ar"]), ParagraphStyle("co_ar_name", fontName=ARABIC_FONT, fontSize=13,
+                          alignment=2, textColor=colors.HexColor("#1a1f3a")))]
+
+    header_tbl = Table([[en_block, logo_cell, ar_block]],
+                        colWidths=[7.5*cm, 2.8*cm, 6.7*cm])
+    header_tbl.setStyle(TableStyle([
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("ALIGN",  (0, 0), (0, 0), "LEFT"),
+        ("ALIGN",  (1, 0), (1, 0), "CENTER"),
+        ("ALIGN",  (2, 0), (2, 0), "RIGHT"),
     ]))
-    elements.append(sign_tbl)
+    elements.append(header_tbl)
+    elements.append(Spacer(1, 0.2*cm))
+    elements.append(HRFlowable(width="100%", thickness=1.2, color=colors.HexColor("#c0392b")))
+    elements.append(Spacer(1, 0.7*cm))
+
+    # ══ التاريخ (هجري وميلادي) — الأرقام تبقى بالخط اللاتيني ══
+    date_tbl = Table([[
+        cell(f"الموافق : {greg_str} م", size=10.5),
+        cell(f"التاريخ : {hijri_str} هـ", size=10.5),
+    ]], colWidths=[8.5*cm, 8.5*cm])
+    date_tbl.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "CENTER")]))
+    elements.append(date_tbl)
+    elements.append(Spacer(1, 0.6*cm))
+
+    # ══ الموضوع ══
+    elements.append(Paragraph(
+        ar(f"الموضوع : {reason_text}"),
+        ParagraphStyle("subject", fontName=ARABIC_FONT, fontSize=13, alignment=1,
+                       textColor=colors.HexColor("#1a1f3a"), spaceAfter=4)
+    ))
+    elements.append(HRFlowable(width="45%", thickness=0.8, color=colors.HexColor("#1a1f3a"), hAlign="CENTER"))
+    elements.append(Spacer(1, 0.9*cm))
+
+    # ══ نص الإقرار الأول ══
+    emp_name   = (sig.employee_name if sig and sig.employee_name else (emp.name if emp else "—"))
+    emp_no     = emp.emp_number if emp else "—"
+    job_title  = (sig.job_title if sig and sig.job_title else (emp.department if emp and emp.department else "—"))
+    body1 = build_warning_declaration(emp_name, job_title, emp_no, greg_str, reason_text)
+    elements.append(Paragraph(
+        ar_wrap(body1),
+        ParagraphStyle("body1", fontName=ARABIC_FONT, fontSize=11.5, leading=20, alignment=2)
+    ))
+    elements.append(Spacer(1, 0.6*cm))
+
+    # ══ نص الإقرار الثاني (الخصم والتعهد) ══
+    body2 = ("كما أقر وأوافق على خصم 25% من أجر اليوم وأتعهد بعدم تكرار ذلك مستقبلاً "
+             "وإلا حق للشركة اتخاذ الإجراءات النظامية بموجب نظام العمل السعودي .")
+    elements.append(Paragraph(
+        ar_wrap(body2),
+        ParagraphStyle("body2", fontName=ARABIC_FONT, fontSize=11.5, leading=20, alignment=2)
+    ))
+    elements.append(Spacer(1, 1.2*cm))
+
+    # ══ توقيع الموظف — الاسم يُسجَّل مع التوقيع نفسه ══
+    sig_name = (sig.employee_name if sig and sig.employee_name else emp_name)
+    sign_img = None
+    try:
+        img_data = decode_signature_image(sig.signature)
+        sign_img = RLImage(io.BytesIO(img_data), width=4.5*cm, height=1.8*cm)
+    except Exception:
+        sign_img = None
+
+    name_row = Table([[
+        Spacer(1, 0.2*cm),
+        cell(sig_name, size=11),
+        cell("الأسم :", size=11, color=colors.HexColor("#1a1f3a")),
+    ]], colWidths=[6*cm, 6*cm, 3*cm])
+    name_row.setStyle(TableStyle([("ALIGN", (0, 0), (-1, -1), "RIGHT"), ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+    elements.append(name_row)
+    elements.append(Spacer(1, 0.3*cm))
+
+    sig_row = Table([[
+        sign_img if sign_img else Paragraph("_" * 25, styles["Normal"]),
+        cell("التوقيع :", size=11, color=colors.HexColor("#1a1f3a")),
+    ]], colWidths=[12*cm, 3*cm])
+    sig_row.setStyle(TableStyle([("ALIGN", (0, 0), (0, 0), "LEFT"), ("ALIGN", (1, 0), (1, 0), "RIGHT"),
+                                 ("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
+    elements.append(sig_row)
+    elements.append(Spacer(1, 1.3*cm))
+
+    # ══ توقيع مدير الموارد البشرية في المشروع ══
+    elements.append(Paragraph(
+        ar("توقيع مدير الموارد البشرية في المشروع"),
+        ParagraphStyle("hr_mgr_lbl", fontName=ARABIC_FONT, fontSize=11, alignment=1,
+                       textColor=colors.HexColor("#1a1f3a"))
+    ))
+    elements.append(Spacer(1, 1.1*cm))
+    elements.append(HRFlowable(width="45%", thickness=0.6, color=colors.grey, hAlign="CENTER"))
+    elements.append(Spacer(1, 1.1*cm))
+
+    # ══ أعتماد إدارة الموارد البشرية (صندوق فارغ للاعتماد) ══
+    elements.append(Paragraph(
+        ar("أعتماد إدارة الموارد البشرية"),
+        ParagraphStyle("hr_dept_lbl", fontName=ARABIC_FONT, fontSize=11, alignment=1,
+                       textColor=colors.HexColor("#1a1f3a"))
+    ))
+    elements.append(Spacer(1, 0.3*cm))
+    approval_box = Table([[Spacer(1, 1.6*cm)]], colWidths=[7*cm])
+    approval_box.setStyle(TableStyle([("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#1a1f3a"))]))
+    approval_box.hAlign = "CENTER"
+    elements.append(approval_box)
+    elements.append(Spacer(1, 1*cm))
+
+    # ══ تذييل الصفحة (بيانات التواصل والفروع) ══
+    if lh.get("footer_en"):
+        elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cccccc")))
+        elements.append(Spacer(1, 0.2*cm))
+        elements.append(Paragraph(lh["footer_en"], ParagraphStyle("f_en", fontName=LATIN_FONT, fontSize=7,
+                        alignment=1, textColor=colors.HexColor("#888888"))))
+        if lh.get("footer_branches_en"):
+            elements.append(Paragraph(lh["footer_branches_en"], ParagraphStyle("f_en2", fontName=LATIN_FONT,
+                            fontSize=7, alignment=1, textColor=colors.HexColor("#888888"))))
 
     doc.build(elements)
     return fname
 
-def generate_leave_pdf(req: "Request") -> str:
-    """
-    يولّد نموذج إجازة ثابت كـ PDF ويحفظه في مجلد uploads.
-    يرجع اسم الملف المحفوظ.
-    يستخدم reportlab — ثبّته بـ: pip install reportlab
-    """
+def generate_leave_pdf(req: "Request", sig: "LeaveSignature" = None) -> str:
+    """نموذج إجازة رسمي عربي/إنجليزي صفحة واحدة مع إمكانية التوقيع."""
     try:
         from reportlab.lib.pagesizes import A4
         from reportlab.lib import colors
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+        from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
+                                        Paragraph, Spacer, Image as RLImage,
+                                        HRFlowable)
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.units import cm
         from reportlab.pdfbase import pdfmetrics
         from reportlab.pdfbase.ttfonts import TTFont
+        import base64, io
     except ImportError:
-        # لو reportlab غير مثبت، أرجع اسم فارغ
         return ""
+
+    # ── خط عربي ──
+    # مهم: DejaVu Sans أولاً — يغطي العربي والإنجليزي والأرقام بخط واحد،
+    # فيتفادى مشكلة المربعات عند اختلاط اسم إنجليزي داخل نص عربي
+    ARABIC_FONT = "Arabic"
+    ARABIC_TTF_CANDIDATES = [
+        os.path.join(BASE_DIR, "static", "fonts", "DejaVuSans.ttf"),
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        os.path.join(BASE_DIR, "static", "fonts", "NotoNaskhArabic-Regular.ttf"),
+        "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+        os.path.join(BASE_DIR, "static", "fonts", "DroidSansArabic.ttf"),
+        "/usr/share/fonts/google-droid/DroidSansArabic.ttf",
+    ]
+    LATIN_FONT  = "Helvetica"
+    use_arabic = False
+    for _ttf_path in ARABIC_TTF_CANDIDATES:
+        if os.path.exists(_ttf_path):
+            try:
+                pdfmetrics.registerFont(TTFont(ARABIC_FONT, _ttf_path))
+                use_arabic = True
+                break
+            except Exception:
+                continue
+    if not use_arabic:
+        ARABIC_FONT = "Helvetica"
+
+    def ar(txt: str) -> str:
+        if not use_arabic:
+            return txt
+        try:
+            import arabic_reshaper
+            from bidi.algorithm import get_display
+            return get_display(arabic_reshaper.reshape(txt))
+        except Exception:
+            return txt
 
     emp  = req.employee
     sup  = req.supervisor
+    company_name = ""
+    try:
+        from sqlalchemy.orm import relationship
+        if emp and emp.company_id:
+            from main import Company
+            c = Company.query.get(emp.company_id)
+            if c:
+                company_name = c.name or ""
+    except Exception:
+        pass
+
+    days_count = "—"
+    if req.start_date and req.end_date:
+        days_count = str((req.end_date - req.start_date).days + 1)
+
     fname = f"leave_{req.id}_{uuid.uuid4().hex[:8]}.pdf"
     fpath = os.path.join(UPLOAD_FOLDER, fname)
 
-    doc = SimpleDocTemplate(fpath, pagesize=A4,
-                            rightMargin=2*cm, leftMargin=2*cm,
-                            topMargin=2*cm, bottomMargin=2*cm)
+    W, H = A4
+    doc  = SimpleDocTemplate(fpath, pagesize=A4,
+                              rightMargin=1.8*cm, leftMargin=1.8*cm,
+                              topMargin=1.5*cm, bottomMargin=1.5*cm)
 
-    styles = getSampleStyleSheet()
-    title_style = ParagraphStyle("title", parent=styles["Title"],
-                                 fontSize=16, spaceAfter=12)
-    normal = styles["Normal"]
+    styles   = getSampleStyleSheet()
+    ar_style = ParagraphStyle("ar", fontName=ARABIC_FONT, fontSize=10,
+                               alignment=2, leading=16)
+    en_style = ParagraphStyle("en", fontName=LATIN_FONT,  fontSize=9,
+                               alignment=0, textColor=colors.HexColor("#555555"), leading=14)
+    hdr_style= ParagraphStyle("hdr",fontName=ARABIC_FONT, fontSize=14,
+                               alignment=1, spaceAfter=2, textColor=colors.HexColor("#1a1f3a"))
+
+    DARK  = colors.HexColor("#1a1f3a")
+    BLUE  = colors.HexColor("#2563eb")
+    LIGHT = colors.HexColor("#f0f4ff")
+    GREY  = colors.HexColor("#f8f8f8")
+
+    def cell(ar_text, en_text="", bold=False, bg=None, center=False):
+        align = 1 if center else 2
+        f     = ARABIC_FONT
+        p_ar  = Paragraph(ar(ar_text), ParagraphStyle("c", fontName=f,
+                          fontSize=10, alignment=align, leading=14,
+                          textColor=colors.black))
+        p_en  = Paragraph(en_text, ParagraphStyle("ce", fontName=LATIN_FONT,
+                          fontSize=8,  alignment=1 if center else 0,
+                          textColor=colors.HexColor("#777777"), leading=12))
+        return [p_ar, p_en] if en_text else p_ar
 
     elements = []
 
-    # عنوان النموذج
-    elements.append(Paragraph("نموذج إجازة رسمي", title_style))
+    # ══ رأس الصفحة: شعار + اسم الشركة + عنوان ══
+    logo_path = os.path.join(BASE_DIR, "static", "img", "logo.png")
+    header_cols = []
+    if os.path.exists(logo_path):
+        try:
+            header_cols.append(RLImage(logo_path, width=2.5*cm, height=2.5*cm))
+        except Exception:
+            header_cols.append(Paragraph("", styles["Normal"]))
+    else:
+        header_cols.append(Paragraph("", styles["Normal"]))
+
+    header_cols.append(
+        Table([[Paragraph(ar("نموذج طلب إجازة"), ParagraphStyle("t1",
+                          fontName=ARABIC_FONT, fontSize=16, alignment=1,
+                          textColor=DARK, spaceAfter=4))],
+               [Paragraph("LEAVE REQUEST FORM", ParagraphStyle("t2",
+                          fontName=LATIN_FONT,  fontSize=10, alignment=1,
+                          textColor=BLUE))],
+               [Paragraph(ar(company_name) if company_name else "",
+                          ParagraphStyle("t3", fontName=ARABIC_FONT, fontSize=9,
+                          alignment=1, textColor=colors.HexColor("#888888")))]],
+              colWidths=[W - 3.6*cm - 5*cm])
+    )
+    header_cols.append(Paragraph("", styles["Normal"]))
+
+    # ملاحظة: العمود الثالث كان بعرض None سابقاً، وهذا كان يسبب LayoutError
+    # (ارتفاع خيالي 2147483659pt) لأن العمودين الأولين كانا يستهلكان كامل عرض
+    # الصفحة فلا يبقى شيء للعمود الثالث — نعطيه الآن عرضاً صريحاً ثابتاً
+    hdr_tbl = Table([header_cols], colWidths=[2.5*cm, W - 3.6*cm - 5*cm, 2.5*cm])
+    hdr_tbl.setStyle(TableStyle([
+        ("VALIGN", (0,0), (-1,-1), "MIDDLE"),
+        ("TOPPADDING",    (0,0), (-1,-1), 6),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+    ]))
+    elements.append(hdr_tbl)
+    elements.append(HRFlowable(width="100%", thickness=2, color=BLUE, spaceAfter=10))
+
+    # ══ بيانات الموظف ══
+    def info_row(label_ar, label_en, val):
+        val_str = val or "—"
+        is_ar_val = any("؀" <= c <= "ۿ" for c in str(val_str))
+        return [
+            Paragraph(ar(label_ar), ParagraphStyle("lbl", fontName=ARABIC_FONT,
+                      fontSize=9, alignment=2, textColor=colors.HexColor("#555"))),
+            Paragraph(label_en, ParagraphStyle("lble", fontName=LATIN_FONT,
+                      fontSize=7.5, alignment=0, textColor=colors.HexColor("#999"))),
+            Paragraph(ar(str(val_str)) if is_ar_val else str(val_str),
+                      ParagraphStyle("val", fontName=ARABIC_FONT if is_ar_val else LATIN_FONT,
+                      fontSize=10, alignment=2 if is_ar_val else 0, textColor=DARK)),
+        ]
+
+    info_data = [
+        info_row("اسم الموظف",    "Employee Name",   emp.name if emp else ""),
+        info_row("رقم الموظف",    "Employee No.",    emp.emp_number if emp else ""),
+        info_row("القسم",         "Department",      emp.department if emp else ""),
+        info_row("الموقع",        "Site",            emp.site if emp else ""),
+        info_row("المشرف المباشر","Direct Supervisor",sup.name if sup else ""),
+    ]
+    info_tbl = Table(info_data, colWidths=[3.5*cm, 3*cm, 9*cm])
+    info_tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0), (-1,-1), GREY),
+        ("ROWBACKGROUNDS",(0,0), (-1,-1), [colors.white, GREY]),
+        ("GRID",          (0,0), (-1,-1), 0.3, colors.HexColor("#dddddd")),
+        ("TOPPADDING",    (0,0), (-1,-1), 6),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+        ("LEFTPADDING",   (0,0), (-1,-1), 6),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 6),
+        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+    ]))
+    elements.append(info_tbl)
+    elements.append(Spacer(1, 0.4*cm))
+
+    # ══ بيانات الإجازة ══
+    elements.append(
+        Paragraph(ar("تفاصيل الإجازة  |  Leave Details"),
+                  ParagraphStyle("sec", fontName=ARABIC_FONT, fontSize=11,
+                  alignment=1, textColor=BLUE, spaceAfter=4))
+    )
+
+    leave_data = [
+        info_row("نوع الإجازة",    "Leave Type",     "إجازة اعتيادية" if req.type == "leave" else req.type),
+        info_row("تاريخ البداية",  "Start Date",     str(req.start_date) if req.start_date else ""),
+        info_row("تاريخ الانتهاء", "End Date",       str(req.end_date)   if req.end_date   else ""),
+        info_row("عدد الأيام",     "No. of Days",    days_count),
+        info_row("السبب",          "Reason",         req.reason or ""),
+    ]
+    leave_tbl = Table(leave_data, colWidths=[3.5*cm, 3*cm, 9*cm])
+    leave_tbl.setStyle(TableStyle([
+        ("BACKGROUND",    (0,0), (-1,0), LIGHT),
+        ("ROWBACKGROUNDS",(0,0), (-1,-1), [LIGHT, colors.white]),
+        ("GRID",          (0,0), (-1,-1), 0.3, colors.HexColor("#c0d0ff")),
+        ("TOPPADDING",    (0,0), (-1,-1), 6),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 6),
+        ("LEFTPADDING",   (0,0), (-1,-1), 6),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 6),
+        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+    ]))
+    elements.append(leave_tbl)
     elements.append(Spacer(1, 0.5*cm))
 
-    # بيانات النموذج في جدول
-    rows = [
-        ["البند", "البيانات"],
-        ["اسم الموظف",   emp.name if emp else "—"],
-        ["رقم الموظف",   emp.emp_number if emp else "—"],
-        ["القسم",        emp.department if emp else "—"],
-        ["الموقع",       emp.site if emp else "—"],
-        ["المشرف",       sup.name if sup else "—"],
-        ["نوع الطلب",    req.type or "إجازة"],
-        ["تاريخ البداية", str(req.start_date) if req.start_date else "—"],
-        ["تاريخ النهاية", str(req.end_date)   if req.end_date   else "—"],
-        ["عدد الأيام",   str((req.end_date - req.start_date).days + 1)
-                         if req.start_date and req.end_date else "—"],
-        ["السبب",        req.reason or "—"],
-        ["تاريخ الموافقة", str(req.decided_at.date()) if req.decided_at else "—"],
-    ]
+    # ══ التوقيعات ══
+    elements.append(
+        Paragraph(ar("التوقيعات  |  Signatures"),
+                  ParagraphStyle("sec2", fontName=ARABIC_FONT, fontSize=11,
+                  alignment=1, textColor=BLUE, spaceAfter=4))
+    )
 
-    tbl = Table(rows, colWidths=[5*cm, 11*cm])
+    # بناء خلية توقيع الموظف
+    emp_sig_cell = []
+    if sig and sig.signature:
+        try:
+            img_data = decode_signature_image(sig.signature)
+            img_buf  = io.BytesIO(img_data)
+            emp_sig_cell.append(RLImage(img_buf, width=4.5*cm, height=1.8*cm))
+        except Exception:
+            emp_sig_cell.append(Paragraph("_" * 20, styles["Normal"]))
+        emp_sig_cell.append(Paragraph(
+            ar(sig.employee_name or (emp.name if emp else "")),
+            ParagraphStyle("sn", fontName=ARABIC_FONT, fontSize=8.5,
+                           alignment=1, textColor=DARK)))
+        signed_date = sig.signed_at.strftime("%Y/%m/%d") if sig.signed_at else ""
+        emp_sig_cell.append(Paragraph(signed_date,
+            ParagraphStyle("sd", fontName=LATIN_FONT, fontSize=8,
+                           alignment=1, textColor=colors.HexColor("#777"))))
+    else:
+        emp_sig_cell = [Spacer(1, 1.2*cm),
+                        Paragraph(ar("توقيع الموظف"),
+                            ParagraphStyle("sl", fontName=ARABIC_FONT, fontSize=8.5,
+                                           alignment=1, textColor=colors.HexColor("#aaa")))]
+
+    sup_sig_cell  = [Spacer(1, 1.2*cm),
+                     Paragraph(ar("توقيع المشرف"),
+                         ParagraphStyle("s2", fontName=ARABIC_FONT, fontSize=8.5,
+                                        alignment=1, textColor=colors.HexColor("#aaa")))]
+    hr_sig_cell   = [Spacer(1, 1.2*cm),
+                     Paragraph(ar("توقيع الموارد البشرية"),
+                         ParagraphStyle("s3", fontName=ARABIC_FONT, fontSize=8.5,
+                                        alignment=1, textColor=colors.HexColor("#aaa")))]
+
+    sig_tbl = Table([[emp_sig_cell, sup_sig_cell, hr_sig_cell]],
+                    colWidths=[5.3*cm, 5.3*cm, 5.3*cm])
+    sig_tbl.setStyle(TableStyle([
+        ("BOX",           (0,0), (0,0), 1, colors.HexColor("#2563eb")),
+        ("BOX",           (1,0), (1,0), 1, colors.HexColor("#cccccc")),
+        ("BOX",           (2,0), (2,0), 1, colors.HexColor("#cccccc")),
+        ("ALIGN",         (0,0), (-1,-1), "CENTER"),
+        ("VALIGN",        (0,0), (-1,-1), "BOTTOM"),
+        ("TOPPADDING",    (0,0), (-1,-1), 10),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+        ("BACKGROUND",    (0,0), (0,0), colors.HexColor("#f0f4ff")),
+    ]))
+    elements.append(sig_tbl)
+
+    # ══ تذييل ══
+    elements.append(Spacer(1, 0.5*cm))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cccccc")))
+    from datetime import datetime as dt_cls
+    elements.append(Paragraph(
+        f"Generated: {dt_cls.utcnow().strftime('%Y-%m-%d')}  |  NSH SafeTrack",
+        ParagraphStyle("ft", fontName=LATIN_FONT, fontSize=7.5,
+                       alignment=1, textColor=colors.HexColor("#aaaaaa"))))
+
+    doc.build(elements)
+    return fname
+
+
+def generate_permission_pdf(req: "Request", sig: "PermissionSignature" = None) -> str:
+    """نموذج استئذان رسمي عربي/إنجليزي مع التوقيع."""
+    try:
+        from reportlab.lib.pagesizes import A4
+        from reportlab.lib import colors
+        from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
+                                        Paragraph, Spacer, Image as RLImage,
+                                        HRFlowable)
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.units import cm
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+        import base64, io
+    except ImportError:
+        return ""
+
+    ARABIC_FONT = "Arabic"
+    ARABIC_TTF_CANDIDATES = [
+        os.path.join(BASE_DIR, "static", "fonts", "DejaVuSans.ttf"),
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        os.path.join(BASE_DIR, "static", "fonts", "NotoNaskhArabic-Regular.ttf"),
+        "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+        os.path.join(BASE_DIR, "static", "fonts", "DroidSansArabic.ttf"),
+        "/usr/share/fonts/google-droid/DroidSansArabic.ttf",
+    ]
+    LATIN_FONT  = "Helvetica"
+    use_arabic = False
+    for _ttf_path in ARABIC_TTF_CANDIDATES:
+        if os.path.exists(_ttf_path):
+            try:
+                pdfmetrics.registerFont(TTFont(ARABIC_FONT, _ttf_path))
+                use_arabic = True
+                break
+            except Exception:
+                continue
+    if not use_arabic:
+        ARABIC_FONT = "Helvetica"
+
+    def ar(txt):
+        if not use_arabic:
+            return txt
+        try:
+            import arabic_reshaper
+            from bidi.algorithm import get_display
+            return get_display(arabic_reshaper.reshape(txt))
+        except Exception:
+            return txt
+
+    emp = req.employee
+    sup = req.supervisor
+    fname = f"permission_{req.id}_{uuid.uuid4().hex[:8]}.pdf"
+    fpath = os.path.join(UPLOAD_FOLDER, fname)
+    W, H  = A4
+
+    styles = getSampleStyleSheet()
+    DARK   = colors.HexColor("#1a1f3a")
+    BLUE   = colors.HexColor("#2563eb")
+    LIGHT  = colors.HexColor("#f0f4ff")
+    GREY   = colors.HexColor("#f8f8f8")
+
+    doc = SimpleDocTemplate(fpath, pagesize=A4,
+                            rightMargin=1.8*cm, leftMargin=1.8*cm,
+                            topMargin=1.5*cm, bottomMargin=1.5*cm)
+    elements = []
+
+    def info_row(label_ar, label_en, val):
+        val_str = val or "—"
+        is_ar_val = any("؀" <= c <= "ۿ" for c in str(val_str))
+        return [
+            Paragraph(ar(label_ar), ParagraphStyle("lbl", fontName=ARABIC_FONT, fontSize=9,
+                      alignment=2, textColor=colors.HexColor("#555"))),
+            Paragraph(label_en, ParagraphStyle("lble", fontName=LATIN_FONT, fontSize=7.5,
+                      alignment=0, textColor=colors.HexColor("#999"))),
+            Paragraph(ar(str(val_str)) if is_ar_val else str(val_str),
+                      ParagraphStyle("val", fontName=ARABIC_FONT if is_ar_val else LATIN_FONT,
+                      fontSize=10, alignment=2 if is_ar_val else 0, textColor=DARK)),
+        ]
+
+    # رأس
+    logo_path = os.path.join(BASE_DIR, "static", "img", "logo.png")
+    logo_cell = Paragraph("", styles["Normal"])
+    if os.path.exists(logo_path):
+        try:
+            logo_cell = RLImage(logo_path, width=2.5*cm, height=2.5*cm)
+        except Exception as _logo_err:
+            app.logger.error("permission PDF: invalid logo file %s: %s", logo_path, _logo_err)
+            logo_cell = Paragraph("", styles["Normal"])
+    title_tbl = Table([[logo_cell,
+        Table([[Paragraph(ar("نموذج استئذان"), ParagraphStyle("t1", fontName=ARABIC_FONT,
+                              fontSize=16, alignment=1, textColor=DARK))],
+               [Paragraph("PERMISSION FORM", ParagraphStyle("t2", fontName=LATIN_FONT,
+                              fontSize=10, alignment=1, textColor=BLUE))]],
+              colWidths=[W - 3.6*cm - 2.5*cm])]], colWidths=[2.5*cm, W - 3.6*cm - 2.5*cm])
+    title_tbl.setStyle(TableStyle([("VALIGN",(0,0),(-1,-1),"MIDDLE"),
+                                   ("TOPPADDING",(0,0),(-1,-1),6),
+                                   ("BOTTOMPADDING",(0,0),(-1,-1),6)]))
+    elements.append(title_tbl)
+    elements.append(HRFlowable(width="100%", thickness=2, color=BLUE, spaceAfter=10))
+
+    rows = [
+        info_row("اسم الموظف",   "Employee Name",  emp.name if emp else ""),
+        info_row("رقم الموظف",   "Employee No.",   emp.emp_number if emp else ""),
+        info_row("القسم",        "Department",     emp.department if emp else ""),
+        info_row("المشرف",       "Supervisor",     sup.name if sup else ""),
+        info_row("التاريخ",      "Date",           str(req.start_date or req.created_at.date())),
+        info_row("السبب",        "Reason",         req.reason or ""),
+    ]
+    tbl = Table(rows, colWidths=[3.5*cm, 3*cm, 9*cm])
     tbl.setStyle(TableStyle([
-        ("BACKGROUND",   (0, 0), (-1, 0), colors.HexColor("#2c3e50")),
-        ("TEXTCOLOR",    (0, 0), (-1, 0), colors.white),
-        ("FONTSIZE",     (0, 0), (-1, 0), 12),
-        ("ALIGN",        (0, 0), (-1, -1), "RIGHT"),
-        ("FONTSIZE",     (0, 1), (-1, -1), 10),
-        ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.HexColor("#f2f2f2"), colors.white]),
-        ("GRID",         (0, 0), (-1, -1), 0.5, colors.grey),
-        ("TOPPADDING",   (0, 0), (-1, -1), 6),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 6),
+        ("ROWBACKGROUNDS",(0,0),(-1,-1),[LIGHT, colors.white]),
+        ("GRID",(0,0),(-1,-1),0.3,colors.HexColor("#c0d0ff")),
+        ("TOPPADDING",(0,0),(-1,-1),6),("BOTTOMPADDING",(0,0),(-1,-1),6),
+        ("LEFTPADDING",(0,0),(-1,-1),6),("RIGHTPADDING",(0,0),(-1,-1),6),
+        ("VALIGN",(0,0),(-1,-1),"MIDDLE"),
     ]))
     elements.append(tbl)
-    elements.append(Spacer(1, 1.5*cm))
+    elements.append(Spacer(1, 0.6*cm))
 
-    # خط التوقيع
-    sign_data = [
-        ["توقيع الموظف", "توقيع المشرف", "توقيع الموارد البشرية"],
-        [" " * 20,       " " * 20,        " " * 20],
-    ]
-    sign_tbl = Table(sign_data, colWidths=[5.5*cm, 5.5*cm, 5.5*cm])
-    sign_tbl.setStyle(TableStyle([
-        ("ALIGN",  (0, 0), (-1, -1), "CENTER"),
-        ("FONTSIZE",(0, 0), (-1, -1), 10),
-        ("BOX",    (0, 1), (0, 1), 1, colors.black),
-        ("BOX",    (1, 1), (1, 1), 1, colors.black),
-        ("BOX",    (2, 1), (2, 1), 1, colors.black),
-        ("TOPPADDING",   (0, 0), (-1, -1), 8),
-        ("BOTTOMPADDING",(0, 0), (-1, -1), 8),
+    # توقيعات
+    elements.append(Paragraph(ar("التوقيعات  |  Signatures"),
+        ParagraphStyle("sec", fontName=ARABIC_FONT, fontSize=11, alignment=1,
+                       textColor=BLUE, spaceAfter=4)))
+
+    def sig_cell(sig_obj, label_ar, label_en, name_str=""):
+        if sig_obj and sig_obj.signature:
+            try:
+                img_buf = io.BytesIO(decode_signature_image(sig_obj.signature))
+                img     = RLImage(img_buf, width=4.5*cm, height=1.8*cm)
+                return [img,
+                        Paragraph(ar(sig_obj.employee_name or name_str),
+                            ParagraphStyle("sn", fontName=ARABIC_FONT, fontSize=8.5, alignment=1, textColor=DARK)),
+                        Paragraph(sig_obj.signed_at.strftime("%Y/%m/%d") if sig_obj.signed_at else "",
+                            ParagraphStyle("sd", fontName=LATIN_FONT, fontSize=8, alignment=1,
+                                           textColor=colors.HexColor("#777")))]
+            except Exception:
+                pass
+        return [Spacer(1, 1.2*cm),
+                Paragraph(ar(label_ar), ParagraphStyle("s_lbl", fontName=ARABIC_FONT, fontSize=8.5,
+                             alignment=1, textColor=colors.HexColor("#aaa"))),
+                Paragraph(label_en, ParagraphStyle("s_lble", fontName=LATIN_FONT, fontSize=7.5,
+                             alignment=1, textColor=colors.HexColor("#ccc")))]
+
+    emp_col = sig_cell(sig, "توقيع الموظف", "Employee Signature", emp.name if emp else "")
+    sup_col = sig_cell(None, "توقيع المشرف", "Supervisor Signature")
+    mgr_col = sig_cell(None, "توقيع الإدارة", "Management Signature")
+
+    sig_tbl = Table([[emp_col, sup_col, mgr_col]], colWidths=[5.3*cm, 5.3*cm, 5.3*cm])
+    sig_tbl.setStyle(TableStyle([
+        ("BOX",(0,0),(0,0),1,BLUE),("BOX",(1,0),(1,0),1,colors.HexColor("#cccccc")),
+        ("BOX",(2,0),(2,0),1,colors.HexColor("#cccccc")),
+        ("ALIGN",(0,0),(-1,-1),"CENTER"),("VALIGN",(0,0),(-1,-1),"BOTTOM"),
+        ("TOPPADDING",(0,0),(-1,-1),10),("BOTTOMPADDING",(0,0),(-1,-1),8),
+        ("BACKGROUND",(0,0),(0,0),LIGHT),
     ]))
-    elements.append(sign_tbl)
-
+    elements.append(sig_tbl)
+    elements.append(Spacer(1, 0.4*cm))
+    elements.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#cccccc")))
+    from datetime import datetime as dt_cls
+    elements.append(Paragraph(
+        f"Generated: {dt_cls.utcnow().strftime('%Y-%m-%d')}  |  NSH SafeTrack",
+        ParagraphStyle("ft", fontName=LATIN_FONT, fontSize=7.5, alignment=1,
+                       textColor=colors.HexColor("#aaaaaa"))))
     doc.build(elements)
     return fname
 
@@ -4233,16 +6275,15 @@ def api_employees():
     u = get_api_user()
     if u.role == "admin":
         emps = Employee.query.filter_by(is_active=True).order_by(Employee.name).all()
-    else:
-        emps = Employee.query.filter_by(user_id=u.id, is_active=True).order_by(Employee.name).all()
-
-    return jsonify([{
-        "id":         e.id,
-        "name":       e.name,
-        "emp_number": e.emp_number,
-        "department": e.department,
-        "site":       e.site,
-    } for e in emps])
+        return jsonify([{"id": e.id, "name": e.name, "emp_number": e.emp_number,
+                         "department": e.department, "site": e.site} for e in emps])
+    if u.role == "safety_supervisor":
+        officers = _get_safety_officers(u)
+        return jsonify([{"id": o.id, "name": o.name, "emp_number": o.supervisor_code,
+                         "department": None, "site": None, "_is_officer": True} for o in officers])
+    emps = Employee.query.filter_by(user_id=u.id, is_active=True).order_by(Employee.name).all()
+    return jsonify([{"id": e.id, "name": e.name, "emp_number": e.emp_number,
+                     "department": e.department, "site": e.site} for e in emps])
 
 
 # ─────────────────────────────────────────────
@@ -4284,33 +6325,47 @@ def api_request_new():
         start_date = data.get("start_date")
         end_date   = data.get("end_date")
 
-    # تحقق من الموظف
+    # تحقق من الموظف / الأفسر
     try:
         emp_id = int(emp_id or 0)
     except Exception:
         emp_id = 0
 
-    emp = db.session.get(Employee, emp_id) if emp_id else None
-    if not emp or (u.role != "admin" and emp.user_id != u.id):
-        return jsonify({"error": "Invalid employee"}), 400
-
-    # تحويل التواريخ
     def _pd(s):
         try:
             return parse_date(s) if s else None
         except Exception:
             return None
 
-    r = Request(
-        supervisor_id=u.id,
-        employee_id=emp.id,
-        type=rtype if rtype in {"leave", "permission", "warning", "late", "other", "secondment"} else "other",
-        start_date=_pd(start_date),
-        end_date=_pd(end_date),
-        reason=reason,
-        status="pending",
-        company_id=api_cid(),
-    )
+    if u.role == "safety_supervisor":
+        # emp_id here is a User.id (officer)
+        valid_ids = {o.id for o in _get_safety_officers(u)}
+        if emp_id not in valid_ids:
+            return jsonify({"error": "Invalid officer"}), 400
+        r = Request(
+            supervisor_id=u.id,
+            officer_user_id=emp_id,
+            type=rtype if rtype in {"leave", "sick", "permission", "warning", "late", "other", "secondment"} else "other",
+            start_date=_pd(start_date),
+            end_date=_pd(end_date),
+            reason=reason,
+            status="pending",
+            company_id=api_cid(),
+        )
+    else:
+        emp = db.session.get(Employee, emp_id) if emp_id else None
+        if not emp or (u.role != "admin" and emp.user_id != u.id):
+            return jsonify({"error": "Invalid employee"}), 400
+        r = Request(
+            supervisor_id=u.id,
+            employee_id=emp.id,
+            type=rtype if rtype in {"leave", "sick", "permission", "warning", "late", "other", "secondment"} else "other",
+            start_date=_pd(start_date),
+            end_date=_pd(end_date),
+            reason=reason,
+            status="pending",
+            company_id=api_cid(),
+        )
     db.session.add(r)
     db.session.flush()   # نحتاج r.id قبل الحفظ النهائي
 
@@ -4318,7 +6373,8 @@ def api_request_new():
     uploaded_file = freq.files.get("pdf_file")
     if uploaded_file and allowed_file(uploaded_file.filename):
         original_name = secure_filename(uploaded_file.filename)
-        saved_name    = f"req_{r.id}_{uuid.uuid4().hex[:8]}.pdf"
+        ext           = original_name.rsplit(".", 1)[-1].lower() if "." in original_name else "pdf"
+        saved_name    = f"req_{r.id}_{uuid.uuid4().hex[:8]}.{ext}"
         uploaded_file.save(os.path.join(UPLOAD_FOLDER, saved_name))
 
         att = RequestAttachment(
@@ -4358,11 +6414,17 @@ def api_requests_mine():
     result = []
     for r in reqs:
         emp = r.employee
+        _task = None
         try:
-            _task = HRTask.query.filter_by(request_id=r.id).first() if r.type == "warning" else None
-            _official = _task.official_reason if _task else None
+            _task     = HRTask.query.filter_by(request_id=r.id).first()
+            _official = _task.official_reason if _task and r.type == "warning" else None
         except Exception:
             _official = None
+        # نموذج الإجازة
+        _leave_form = LeaveForm.query.filter_by(request_id=r.id).first() if r.type == "leave" else None
+        _leave_sig  = LeaveSignature.query.filter_by(request_id=r.id).first() if r.type == "leave" else None
+        _perm_sig   = PermissionSignature.query.filter_by(request_id=r.id).first() if r.type == "permission" else None
+        _warn_sig   = WarningSignature.query.filter_by(request_id=r.id).first() if r.type == "warning" else None
         result.append({
             "id":            r.id,
             "type":          r.type,
@@ -4373,11 +6435,20 @@ def api_requests_mine():
             "created_at":    r.created_at.isoformat() if r.created_at else None,
             "admin_comment": r.admin_comment,
             "employee": {
-                "id":   emp.id   if emp else None,
-                "name": emp.name if emp else None,
+                "id":   emp.id   if emp else (r.officer_user_id if r.officer_user_id else None),
+                "name": emp.name if emp else (r.officer_user.name if r.officer_user else None),
             },
             "has_attachment":  len(r.attachments) > 0,
             "official_reason": _official,
+            # إجازة
+            "has_leave_form":  _leave_form is not None,
+            "leave_signed":    _leave_form.signed if _leave_form else False,
+            "leave_pdf_url":   f"/api/leave-form/{r.id}/download" if _leave_form else None,
+            # استئذان
+            "permission_signed": _perm_sig is not None,
+            # إنذار
+            "warning_signed":    _warn_sig is not None,
+            "warning_pdf_url":   f"/api/warning/{r.id}/download" if (_task and _task.warning_pdf) else None,
         })
 
     return jsonify(result)
@@ -4461,22 +6532,9 @@ def api_request_decide(req_id):
     leave_pdf_url = None
 
     if decision == "approve":
-        # تطبيق الإجازة على الحضور
+        # إجازة → تسجيل حضور + نموذج PDF
         if r.type == "leave":
             _apply_leave_attendance_for_request(r)
-
-        # إنشاء مهمة HR
-        existing = HRTask.query.filter_by(request_id=r.id).first()
-        if not existing:
-            db.session.add(HRTask(
-                request_id=r.id,
-                employee_id=r.employee_id,
-                type=r.type or "leave",
-                status="pending",
-            ))
-
-        # توليد نموذج الإجازة PDF (للإجازات فقط)
-        if r.type == "leave":
             existing_form = LeaveForm.query.filter_by(request_id=r.id).first()
             if not existing_form:
                 pdf_name = generate_leave_pdf(r)
@@ -4485,12 +6543,30 @@ def api_request_decide(req_id):
                     db.session.add(lf)
                     leave_pdf_url = f"/api/leave-form/{r.id}/download"
 
+        # سكليف → تسجيل غياب تلقائي
+        if r.type == "sick":
+            _apply_sick_attendance_for_request(r)
+
+        # إنشاء مهمة HR لجميع الأنواع
+        existing = HRTask.query.filter_by(request_id=r.id).first()
+        if not existing:
+            db.session.add(HRTask(
+                request_id=r.id,
+                employee_id=r.employee_id,
+                type=r.type or "leave",
+                status="pending",
+                company_id=r.company_id,
+            ))
+
     db.session.commit()
 
     # ─── إشعار للسوبرفايزر ───
+    type_labels = {"leave":"إجازة","sick":"سكليف","permission":"استئذان",
+                   "warning":"إنذار","secondment":"إعارة","late":"تأخر"}
+    type_ar = type_labels.get(r.type, r.type or "")
     _send_push_to_user(r.supervisor_id,
                        title="تحديث حالة الطلب",
-                       body=f"طلب {r.type} للموظف {r.employee.name if r.employee else ''} — {r.status}")
+                       body=f"طلب {type_ar} للموظف {r.employee.name if r.employee else ''} — {'مقبول' if r.status=='approved' else 'مرفوض'}")
 
     return jsonify({
         "message":       "Decision recorded",
@@ -4550,6 +6626,8 @@ def api_hr_inbox():
         except Exception:
             _warning_pdf     = None
             _official_reason = None
+        _has_attachment = (r and r.type == "sick" and
+                           RequestAttachment.query.filter_by(request_id=r.id).first() is not None)
         result.append({
             "id":         t.id,
             "type":       t.type,
@@ -4574,6 +6652,8 @@ def api_hr_inbox():
             "official_reason":        _official_reason,
             "supervisor_description": r.reason if r and t.type == "warning" else None,
             "reason_set":             _official_reason is not None,
+            "has_attachment":         _has_attachment,
+            "attachment_url":         (f"/api/requests/{r.id}/attachment" if (_has_attachment and r) else None),
         })
     return jsonify(result)
 
@@ -4597,10 +6677,9 @@ def api_hr_set_warning_reason(task_id):
         t.official_reason = reason
     except Exception:
         from sqlalchemy import text as _text
-        with db.engine.connect() as _conn:
+        with db.engine.begin() as _conn:
             _conn.execute(_text("ALTER TABLE hr_task ADD COLUMN IF NOT EXISTS official_reason TEXT NULL"))
             _conn.execute(_text("ALTER TABLE hr_task ADD COLUMN IF NOT EXISTS warning_pdf VARCHAR(255) NULL"))
-            _conn.commit()
         t.official_reason = reason
     # لا نحدث request.reason — يبقى وصف المشرف كما هو
     db.session.commit()
@@ -4991,7 +7070,7 @@ def _send_push_to_user(user_id: int, title: str, body: str, badge: int = None):
             import httpx
             KEY_ID    = os.getenv("APNS_KEY_ID")    or "69QBYQL8PG"
             TEAM_ID   = os.getenv("APNS_TEAM_ID")   or "76JS5SQN7L"
-            BUNDLE_ID = os.getenv("APNS_BUNDLE_ID") or "com.z.nsh"
+            BUNDLE_ID = os.getenv("APNS_BUNDLE_ID") or "com.nsh.zNSH"
             KEY_PATH  = os.getenv("APNS_KEY_PATH")  or os.path.join(BASE_DIR, "keys", "AuthKey_69QBYQL8PG.p8")
             if not os.path.exists(KEY_PATH):
                 app.logger.error("APNs: ملف .p8 غير موجود في %s", KEY_PATH)
@@ -5035,24 +7114,24 @@ def _send_push_to_user(user_id: int, title: str, body: str, badge: int = None):
                         "sound": "default",
                         "badge": badge,
                     }
-                })
+                }, ensure_ascii=False)
                 hdrs = {
                     "authorization": f"bearer {token}",
                     "apns-topic":    BUNDLE_ID,
                     "apns-push-type": "alert",
                     "content-type":  "application/json",
                 }
-                sent = False
-                for host in ["api.push.apple.com", "api.sandbox.push.apple.com"]:
-                    url = f"https://{host}/3/device/{dt}"
-                    with httpx.Client(http2=True, timeout=5) as client:
-                        resp = client.post(url, content=payload, headers=hdrs)
-                    app.logger.info("APNs: host=%s status=%s device=%s…", host, resp.status_code, dt[:20])
-                    if resp.status_code == 200:
-                        sent = True
-                        break
-                if not sent:
-                    app.logger.warning("APNs: فشل الإرسال لـ device=%s…", dt[:20])
+                url = f"https://api.push.apple.com/3/device/{dt}"
+                with httpx.Client(http2=True, timeout=5) as client:
+                    resp = client.post(url, content=payload.encode("utf-8"), headers=hdrs)
+                status = resp.status_code
+                try:
+                    reason = resp.json().get("reason", "")
+                except Exception:
+                    reason = ""
+                app.logger.info("APNs: status=%s reason=%s device=%s", status, reason, dt[:20])
+                if status != 200:
+                    app.logger.warning("APNs: failed device=%s status=%s reason=%s", dt[:20], status, reason)
         except Exception as e:
             app.logger.error("APNs error: %s", e, exc_info=True)
 
@@ -5219,57 +7298,6 @@ def api_admin_users_resign(user_id):
         "user_id":            u.id,
         "employees_unassigned": count,
     })
-
-# ─────────────────────────────────────────────
-#  20. Daily Reports — تقارير اليوم المحدد
-# ─────────────────────────────────────────────
-@app.get("/api/admin/reports/daily")
-@api_admin_required
-def api_admin_reports_daily():
-    date_str = freq.args.get("date")
-    if not date_str:
-        return jsonify({"error": "date is required"}), 400
-
-    try:
-        d = parse_date(date_str)
-    except Exception:
-        return jsonify({"error": "invalid date"}), 400
-
-    rows = (DailyEvaluation.query
-            .join(Employee, DailyEvaluation.employee_id == Employee.id)
-            .join(User, Employee.user_id == User.id, isouter=True)
-            .filter(DailyEvaluation.eval_date == d)
-            .order_by(User.name.asc(), Employee.name.asc())
-            .all())
-
-    result = []
-    for r in rows:
-        emp = r.employee
-        sup = emp.user if emp else None
-
-        result.append({
-            "id": r.id,
-            "eval_date": str(r.eval_date) if r.eval_date else None,
-            "supervisor": {
-                "id": sup.id if sup else None,
-                "name": sup.name if sup else None,
-                "code": sup.supervisor_code if sup else None,
-            },
-            "employee": {
-                "id": emp.id if emp else None,
-                "name": emp.name if emp else None,
-                "emp_number": emp.emp_number if emp else None,
-                "department": emp.department if emp else None,
-                "site": emp.site if emp else None,
-            },
-            "targets": r.targets_score,
-            "perf":    r.performance_score,
-            "total":   r.total_score,
-            "band":    r.overall_band,
-        })
-
-    return jsonify(result)
-
 
 # ─────────────────────────────────────────────
 #  21. Supervisor Reports — أسبوعي مع فلتر
@@ -5715,8 +7743,11 @@ def api_admin_monthly_report():
     logo_path = os.path.join(BASE_DIR, "static", "img", "logo.png")
     if os.path.exists(logo_path):
         from reportlab.platypus import Image as RLImage
-        elements.append(RLImage(logo_path, width=4*cm, height=2*cm))
-        elements.append(Spacer(1, 0.3*cm))
+        try:
+            elements.append(RLImage(logo_path, width=4*cm, height=2*cm))
+            elements.append(Spacer(1, 0.3*cm))
+        except Exception as _logo_err:
+            app.logger.error("monthly report: invalid logo file %s: %s", logo_path, _logo_err)
 
     elements.append(Paragraph(ar(f"التقرير الشهري — {month_name} {year}"), title_style))
     elements.append(Paragraph(ar("ملخص الأداء والحضور"), sub_style))
@@ -6075,6 +8106,32 @@ def api_employee_reactivate(emp_id):
     return jsonify(message="تم إعادة التفعيل")
 
 
+def _assign_employee_to_supervisor(emp, supervisor_id, actor):
+    """تعيين موظف unassigned لمشرف — يتحقق من الصلاحيات ويُرجع (ok, message, http_status)"""
+    if emp.status != "unassigned":
+        return False, "الموظف ليس في حالة unassigned", 400
+
+    if actor.role == "site_supervisor":
+        link = SiteSupervisorMap.query.filter_by(
+            site_sup_id=actor.id, supervisor_id=supervisor_id).first()
+        if not link:
+            return False, "المشرف ليس تحت إشرافك", 403
+    elif actor.role != "admin":
+        return False, "Forbidden", 403
+
+    sup = User.query.get(supervisor_id)
+    if not sup:
+        return False, "المشرف غير موجود", 404
+    if sup.role != "supervisor":
+        return False, "المستخدم المختار ليس مشرفاً", 400
+
+    emp.user_id   = supervisor_id
+    emp.status    = "active"
+    emp.is_active = True
+    db.session.commit()
+    return True, f"تم تعيين الموظف للمشرف {sup.name}", 200
+
+
 @app.post("/api/employees/<int:emp_id>/assign")
 @api_login_required
 def api_employee_assign(emp_id):
@@ -6086,27 +8143,10 @@ def api_employee_assign(emp_id):
         return jsonify(error="supervisor_id مطلوب"), 400
 
     emp = Employee.query.get_or_404(emp_id)
-    if emp.status != "unassigned":
-        return jsonify(error="الموظف ليس في حالة unassigned"), 400
-
-    # site_supervisor: يتحقق إن المشرف المختار تحت إشرافه
-    if u.role == "site_supervisor":
-        link = SiteSupervisorMap.query.filter_by(
-            site_sup_id=u.id, supervisor_id=supervisor_id).first()
-        if not link:
-            return jsonify(error="المشرف ليس تحت إشرافك"), 403
-    elif u.role != "admin":
-        return jsonify(error="Forbidden"), 403
-
-    sup = User.query.get_or_404(supervisor_id)
-    if sup.role != "supervisor":
-        return jsonify(error="المستخدم المختار ليس مشرفاً"), 400
-
-    emp.user_id   = supervisor_id
-    emp.status    = "active"
-    emp.is_active = True
-    db.session.commit()
-    return jsonify(message=f"تم تعيين الموظف للمشرف {sup.name}")
+    ok, msg, status = _assign_employee_to_supervisor(emp, supervisor_id, u)
+    if not ok:
+        return jsonify(error=msg), status
+    return jsonify(message=msg)
 
 
 @app.get("/api/employees/unassigned")
@@ -6155,55 +8195,6 @@ def api_supervisor_employees_full():
         "active":   [row(e) for e in actives],
         "resigned": [row(e) for e in resigned],
     })
-
-
-# ─────────────────────────────────────────────
-#  التقييم اليومي — حفظ (التطبيق)
-# ─────────────────────────────────────────────
-@app.post("/api/daily-eval/save")
-@api_login_required
-def api_daily_eval_save():
-    u    = get_api_user()
-    data = freq.get_json(force=True) or {}
-    emp_id    = data.get("employee_id")
-    eval_date = data.get("eval_date") or date.today().isoformat()
-
-    emp = (db.session.get(Employee, emp_id) if u.role == "admin"
-           else Employee.query.filter_by(id=emp_id, user_id=u.id).first())
-    if not emp:
-        return jsonify({"error": "Employee not found"}), 404
-
-    try:
-        eval_date = parse_date(eval_date)
-    except Exception:
-        return jsonify({"error": "Invalid date"}), 400
-
-    if DailyEvaluation.query.filter_by(employee_id=emp.id, eval_date=eval_date).first():
-        return jsonify({"error": "Evaluation already exists for this date"}), 409
-
-    de = DailyEvaluation(
-        employee_id=emp.id,
-        evaluator_id=u.id,
-        eval_date=eval_date,
-        t1_text=data.get("t1_text",""),    t1_percent=data.get("t1_percent",0),
-        t2_text=data.get("t2_text",""),    t2_percent=data.get("t2_percent",0),
-        t3_text=data.get("t3_text",""),    t3_percent=data.get("t3_percent",0),
-        t4_text=data.get("t4_text",""),    t4_percent=data.get("t4_percent",0),
-        p_punctuality=data.get("p_punctuality",0),
-        p_quality=data.get("p_quality",0),
-        p_productivity=data.get("p_productivity",0),
-        p_communication=data.get("p_communication",0),
-        p_problemsolving=data.get("p_problemsolving",0),
-        p_compliance=data.get("p_compliance",0),
-        strengths=data.get("strengths",""),
-        improvements=data.get("improvements",""),
-        training_needed=data.get("training_needed",""),
-        company_id=api_cid(),
-    )
-    compute_daily_scores(de)
-    db.session.add(de)
-    db.session.commit()
-    return jsonify({"message": "Saved", "total": de.total_score, "band": de.overall_band}), 201
 
 
 # ─────────────────────────────────────────────
@@ -6303,39 +8294,6 @@ def api_weekly_reports():
 
 
 # ─────────────────────────────────────────────
-#  تقارير يومية (التطبيق)
-# ─────────────────────────────────────────────
-@app.get("/api/reports/daily")
-@api_login_required
-def api_daily_reports():
-    u     = get_api_user()
-    d_str = freq.args.get("date") or date.today().isoformat()
-    try:
-        d_val = parse_date(d_str)
-    except Exception:
-        return jsonify({"error": "Invalid date"}), 400
-
-    q = (db.session.query(DailyEvaluation, Employee)
-         .join(Employee, DailyEvaluation.employee_id == Employee.id)
-         .filter(DailyEvaluation.eval_date == d_val))
-    if u.role != "admin":
-        q = q.filter(Employee.user_id == u.id)
-
-    return jsonify([{
-        "eval_id":    de.id,
-        "emp_id":     emp.id,
-        "emp_name":   emp.name,
-        "emp_number": emp.emp_number,
-        "department": emp.department,
-        "targets":    de.targets_score,
-        "perf":       de.perf_score,
-        "total":      de.total_score,
-        "band":       de.overall_band,
-        "eval_date":  str(de.eval_date),
-    } for de, emp in q.order_by(Employee.name).all()])
-
-
-# ─────────────────────────────────────────────
 #  كل التقارير الأسبوعية لموظف معين
 # ─────────────────────────────────────────────
 @app.get("/api/employees/<int:emp_id>/reports/weekly")
@@ -6368,40 +8326,6 @@ def api_employee_weekly_reports(emp_id):
         "week_start": str(ev.week_start),
         "week_end":   str(ev.week_end),
     } for ev in evals])
-
-
-# ─────────────────────────────────────────────
-#  كل التقارير اليومية لموظف معين
-# ─────────────────────────────────────────────
-@app.get("/api/employees/<int:emp_id>/reports/daily")
-@api_login_required
-def api_employee_daily_reports(emp_id):
-    u   = get_api_user()
-    emp = Employee.query.get_or_404(emp_id)
-    if u.role == "supervisor" and emp.user_id != u.id:
-        return jsonify(error="Forbidden"), 403
-    if u.role == "site_supervisor":
-        link = SiteSupervisorMap.query.filter_by(site_sup_id=u.id, supervisor_id=emp.user_id).first()
-        if not link:
-            return jsonify(error="Forbidden"), 403
-
-    evals = (DailyEvaluation.query
-             .filter_by(employee_id=emp.id)
-             .order_by(DailyEvaluation.eval_date.desc())
-             .all())
-
-    return jsonify([{
-        "eval_id":    de.id,
-        "emp_id":     emp.id,
-        "emp_name":   emp.name,
-        "emp_number": emp.emp_number,
-        "department": emp.department,
-        "targets":    de.targets_score,
-        "perf":       de.perf_score,
-        "total":      de.total_score,
-        "band":       de.overall_band,
-        "eval_date":  str(de.eval_date),
-    } for de in evals])
 
 
 # ══════════════════════════════════════════════════════════
@@ -6461,12 +8385,12 @@ def api_site_supervisors():
 def api_site_supervisor_report(sup_id):
     """تقرير مشرف محدد — يعيد قائمة تقييماته"""
     u = get_api_user()
-    if not u or u.role != "site_supervisor":
+    if not u or u.role not in ("site_supervisor", "admin", "super_admin"):
         return jsonify(error="forbidden"), 403
-
-    link = SiteSupervisorMap.query.filter_by(site_sup_id=u.id, supervisor_id=sup_id).first()
-    if not link:
-        return jsonify(error="forbidden"), 403
+    if u.role == "site_supervisor":
+        link = SiteSupervisorMap.query.filter_by(site_sup_id=u.id, supervisor_id=sup_id).first()
+        if not link:
+            return jsonify(error="forbidden"), 403
 
     ws_str = request.args.get("week_start")
     we_str = request.args.get("week_end")
@@ -6560,40 +8484,6 @@ def api_site_evaluate(sup_id):
     return jsonify(id=se.id, total_score=se.total_score, overall_band=se.overall_band), 201
 
 
-@app.get("/api/site/daily-reports")
-@api_login_required
-def api_site_daily_reports():
-    """التقارير اليومية لموظفي المشرفين التابعين"""
-    u = get_api_user()
-    if not u or u.role != "site_supervisor":
-        return jsonify(error="forbidden"), 403
-
-    d_str = request.args.get("d")
-    d_val = parse_date(d_str) if d_str else datetime.now(RIYADH_TZ).date()
-
-    links = (db.session.query(SiteSupervisorMap, User)
-             .join(User, SiteSupervisorMap.supervisor_id == User.id)
-             .filter(SiteSupervisorMap.site_sup_id == u.id).all())
-    sup_ids = [su.id for _, su in links]
-
-    q = (db.session.query(DailyEvaluation, Employee)
-         .join(Employee, DailyEvaluation.employee_id == Employee.id)
-         .filter(DailyEvaluation.eval_date == d_val))
-    if sup_ids:
-        q = q.filter(Employee.user_id.in_(sup_ids))
-
-    rows = q.order_by(Employee.name.asc()).all()
-    return jsonify([{
-        "eval_id":    de.id,
-        "emp_id":     emp.id,
-        "emp_name":   emp.name,
-        "emp_number": emp.emp_number,
-        "total":      de.total_score,
-        "band":       de.overall_band,
-        "eval_date":  str(de.eval_date),
-    } for de, emp in rows])
-
-
 @app.get("/api/site/attendance")
 @api_login_required
 def api_site_attendance():
@@ -6634,12 +8524,12 @@ def api_site_attendance():
 def api_site_supervisor_employees(sup_id):
     """موظفو مشرف محدد مع حالة تقييمهم الأسبوعي"""
     u = get_api_user()
-    if not u or u.role != "site_supervisor":
+    if not u or u.role not in ("site_supervisor", "admin", "super_admin"):
         return jsonify(error="forbidden"), 403
-
-    link = SiteSupervisorMap.query.filter_by(site_sup_id=u.id, supervisor_id=sup_id).first()
-    if not link:
-        return jsonify(error="forbidden"), 403
+    if u.role == "site_supervisor":
+        link = SiteSupervisorMap.query.filter_by(site_sup_id=u.id, supervisor_id=sup_id).first()
+        if not link:
+            return jsonify(error="forbidden"), 403
 
     ws, we = default_week_today()
     employees = Employee.query.filter_by(user_id=sup_id, is_active=True).order_by(Employee.name).all()
@@ -6662,6 +8552,62 @@ def api_site_supervisor_employees(sup_id):
             "week_end":   str(we),
         })
     return jsonify(result)
+
+
+# ---- API (تطبيق الآيفون) ----
+@app.post("/api/site/employees/<int:emp_id>/transfer")
+@api_login_required
+def api_site_employee_transfer(emp_id):
+    u = get_api_user()
+    if not u or u.role not in ("site_supervisor", "admin"):
+        return jsonify(error="forbidden"), 403
+
+    data = freq.get_json(force=True) or {}
+    target_id = data.get("target_sup_id")
+    if not target_id:
+        return jsonify(error="target_sup_id مطلوب"), 400
+
+    emp = Employee.query.get_or_404(emp_id)
+    if u.role == "site_supervisor":
+        scope = _site_scope_sup_ids(u)
+        if emp.user_id not in scope or int(target_id) not in scope:
+            return jsonify(error="خارج نطاقك"), 403
+
+    target = User.query.get(int(target_id))
+    if not target or target.role != "supervisor":
+        return jsonify(error="المشرف المستلم غير صالح"), 400
+
+    old_id = emp.user_id
+    emp.user_id   = int(target_id)
+    emp.status    = "active"
+    emp.is_active = True
+    _log_emp_assignment(emp, "transfer", u, from_user_id=old_id,
+                        to_user_id=int(target_id), note=data.get("note", ""))
+    db.session.commit()
+    return jsonify(message=f"تم نقل الموظف إلى {target.name or target.supervisor_code}")
+
+
+@app.get("/api/site/employee/<int:emp_id>/movement")
+@api_login_required
+def api_site_employee_movement(emp_id):
+    u = get_api_user()
+    if not u or u.role not in ("site_supervisor", "admin", "super_admin"):
+        return jsonify(error="forbidden"), 403
+    rows = (EmployeeAssignmentLog.query.filter_by(employee_id=emp_id)
+            .order_by(EmployeeAssignmentLog.created_at.desc()).limit(50).all())
+    uids = set()
+    for r in rows:
+        uids.update([r.from_user_id, r.to_user_id, r.actor_id])
+    uids.discard(None)
+    nm = {x.id: (x.name or x.supervisor_code)
+          for x in User.query.filter(User.id.in_(list(uids))).all()} if uids else {}
+    return jsonify([{
+        "action": r.action, "from": nm.get(r.from_user_id), "to": nm.get(r.to_user_id),
+        "by": nm.get(r.actor_id), "note": r.note or "",
+        "at": r.created_at.isoformat() if r.created_at else None,
+    } for r in rows])
+
+
 
 
 @app.get("/api/site/reports/summary")
@@ -6715,6 +8661,74 @@ def api_site_reports_summary():
         "not_evaluated_count": len(not_evaluated),
         "not_evaluated":  [emp_row(e) for e in not_evaluated],
         "evaluated":      [emp_row(e, eval_map[e.id]) for e in evaluated],
+    })
+
+
+@app.get("/api/site/tbt")
+@api_login_required
+def api_site_tbt():
+    """جلسات TBT التي أجراها سيفتي أوفسر لمشرفي الـ site supervisor"""
+    u = get_api_user()
+    if not u or u.role not in ("site_supervisor", "admin", "super_admin"):
+        return jsonify(error="forbidden"), 403
+    links = (db.session.query(SiteSupervisorMap, User)
+             .join(User, SiteSupervisorMap.supervisor_id == User.id)
+             .filter(SiteSupervisorMap.site_sup_id == u.id).all())
+    sup_ids = [su.id for _, su in links]
+    sup_map = {su.id: su.name for _, su in links}
+    if not sup_ids:
+        return jsonify([])
+    # آخر 30 يوم بشكل افتراضي، أو حسب المرسل
+    days = int(request.args.get("days", 30))
+    since = datetime.now(RIYADH_TZ).date() - timedelta(days=days)
+    tbts = (HseTbt.query
+            .filter(HseTbt.supervisor_id.in_(sup_ids))
+            .filter(HseTbt.date >= since)
+            .order_by(HseTbt.date.desc())
+            .all())
+    result = []
+    for t in tbts:
+        officer = User.query.get(t.officer_id)
+        att_count = HseTbtAttendance.query.filter_by(tbt_id=t.id).count()
+        result.append({
+            "id":              t.id,
+            "date":            str(t.date),
+            "topic":           t.topic or "",
+            "location":        t.location or "",
+            "supervisor_id":   t.supervisor_id,
+            "supervisor_name": sup_map.get(t.supervisor_id, ""),
+            "officer_name":    officer.name if officer else "",
+            "attendee_count":  att_count,
+        })
+    return jsonify(result)
+
+
+@app.get("/api/site/tbt/<int:tbt_id>")
+@api_login_required
+def api_site_tbt_detail(tbt_id):
+    """تفاصيل جلسة TBT مع قائمة الحضور"""
+    u = get_api_user()
+    if not u or u.role not in ("site_supervisor", "admin", "super_admin"):
+        return jsonify(error="forbidden"), 403
+    t = HseTbt.query.get_or_404(tbt_id)
+    # تحقق أن المشرف المرتبط بالـ TBT تابع للـ site supervisor
+    if u.role == "site_supervisor":
+        link = SiteSupervisorMap.query.filter_by(
+            site_sup_id=u.id, supervisor_id=t.supervisor_id).first()
+        if not link:
+            return jsonify(error="forbidden"), 403
+    officer = User.query.get(t.officer_id)
+    supervisor = User.query.get(t.supervisor_id) if t.supervisor_id else None
+    attendees = HseTbtAttendance.query.filter_by(tbt_id=t.id).all()
+    return jsonify({
+        "id":              t.id,
+        "date":            str(t.date),
+        "topic":           t.topic or "",
+        "location":        t.location or "",
+        "officer_name":    officer.name if officer else "",
+        "supervisor_name": supervisor.name if supervisor else "",
+        "attendees": [{"emp_number": a.emp_number, "emp_name": a.emp_name}
+                      for a in attendees],
     })
 
 
@@ -6832,23 +8846,29 @@ def api_admin_notify():
     data       = freq.get_json(force=True) or {}
     title      = (data.get("title") or "").strip()
     body       = (data.get("body")  or "").strip()
-    target     = data.get("target", "all")   # "all" | "supervisors" | "site_supervisors" | list of user_ids
+    target     = data.get("target", "all")   # "all" | "supervisors" | "site_supervisors" | "safety_officers" | "safety_supervisors" | "custom"
     user_ids   = data.get("user_ids", [])    # قائمة ids إذا target == "custom"
 
     if not title or not body:
         return jsonify(error="العنوان والرسالة مطلوبان"), 400
 
+    cid = api_cid()
     # تحديد المستلمين
     if target == "all":
         users = User.query.filter(
-            User.role.in_(["supervisor", "site_supervisor"]),
+            User.role.in_(["supervisor", "site_supervisor", "safety_officer", "safety_supervisor"]),
             User.is_active == True,
-            User.is_hidden == False
+            User.is_hidden == False,
+            User.company_id == cid
         ).all()
     elif target == "supervisors":
-        users = User.query.filter(User.role=="supervisor", User.is_active==True, User.is_hidden==False).all()
+        users = User.query.filter(User.role=="supervisor", User.is_active==True, User.is_hidden==False, User.company_id==cid).all()
     elif target == "site_supervisors":
-        users = User.query.filter(User.role=="site_supervisor", User.is_active==True, User.is_hidden==False).all()
+        users = User.query.filter(User.role=="site_supervisor", User.is_active==True, User.is_hidden==False, User.company_id==cid).all()
+    elif target == "safety_officers":
+        users = User.query.filter(User.role=="safety_officer", User.is_active==True, User.is_hidden==False, User.company_id==cid).all()
+    elif target == "safety_supervisors":
+        users = User.query.filter(User.role=="safety_supervisor", User.is_active==True, User.is_hidden==False, User.company_id==cid).all()
     elif target == "custom" and user_ids:
         users = User.query.filter(User.id.in_(user_ids), User.is_active == True).all()
     else:
@@ -6873,9 +8893,10 @@ def api_admin_notify():
 def api_admin_notify_users():
     """قائمة المشرفين للاختيار منهم عند الإرسال المخصص"""
     users = User.query.filter(
-        User.role.in_(["supervisor", "site_supervisor"]),
+        User.role.in_(["supervisor", "site_supervisor", "safety_officer", "safety_supervisor"]),
         User.is_active == True,
-        User.is_hidden == False
+        User.is_hidden == False,
+        User.company_id == api_cid()
     ).order_by(User.role, User.name).all()
     return jsonify([{
         "id":   u.id,
@@ -6972,14 +8993,16 @@ def api_warning_sign(request_id):
     data      = freq.get_json(force=True) or {}
     signature = (data.get("signature") or "").strip()
     emp_name  = (data.get("employee_name") or req.employee.name).strip()
+    job_title = (data.get("job_title") or (req.employee.department if req.employee else "") or "").strip()
 
     if not signature:
-        return jsonify(error="التوقيع مطلوب"), 400
+        return jsonify(error="Signature is required."), 400
 
     sig = WarningSignature.query.filter_by(request_id=request_id).first()
     if sig:
         sig.signature     = signature
         sig.employee_name = emp_name
+        sig.job_title      = job_title
         from zoneinfo import ZoneInfo
         sig.signed_at     = datetime.now(ZoneInfo("Asia/Riyadh"))
     else:
@@ -6988,12 +9011,14 @@ def api_warning_sign(request_id):
             request_id    = request_id,
             signature     = signature,
             employee_name = emp_name,
+            job_title     = job_title,
             signed_at     = datetime.now(ZoneInfo("Asia/Riyadh")),
         )
         db.session.add(sig)
     db.session.commit()
 
     # توليد PDF الإنذار
+    pdf_ok = False
     try:
         pdf_name = generate_warning_pdf(req, sig)
         if pdf_name:
@@ -7002,10 +9027,11 @@ def api_warning_sign(request_id):
             if task:
                 task.warning_pdf = pdf_name
                 db.session.commit()
+                pdf_ok = True
     except Exception as e:
         app.logger.error("warning PDF error: %s", e)
 
-    return jsonify(message="تم حفظ التوقيع"), 200
+    return jsonify(message="تم حفظ التوقيع", pdf_generated=pdf_ok), 200
 
 
 # ─────────────────────────────────────────────
@@ -7034,6 +9060,159 @@ def api_warning_download(request_id):
                      mimetype="application/pdf",
                      as_attachment=False,
                      download_name=task.warning_pdf)
+
+# ─────────────────────────────────────────────────────────────────
+#  توقيع الموظف على نموذج الإجازة
+# ─────────────────────────────────────────────────────────────────
+@app.post("/api/leave/sign/<int:request_id>")
+@api_login_required
+def api_leave_sign(request_id):
+    u   = get_api_user()
+    req = Request.query.get_or_404(request_id)
+    if req.supervisor_id != u.id and u.role not in ("admin", "hr"):
+        return jsonify(error="Forbidden"), 403
+
+    data      = freq.get_json(force=True) or {}
+    signature = (data.get("signature") or "").strip()
+    emp_name  = (data.get("employee_name") or (req.employee.name if req.employee else "")).strip()
+
+    if not signature:
+        return jsonify(error="Signature is required."), 400
+
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo("Asia/Riyadh"))
+    sig = LeaveSignature.query.filter_by(request_id=request_id).first()
+    if sig:
+        sig.signature = signature; sig.employee_name = emp_name; sig.signed_at = now
+    else:
+        sig = LeaveSignature(request_id=request_id, signature=signature,
+                             employee_name=emp_name, signed_at=now)
+        db.session.add(sig)
+
+    # تحديث حالة نموذج الإجازة
+    lf = LeaveForm.query.filter_by(request_id=request_id).first()
+    if lf:
+        lf.signed    = True
+        lf.signed_at = now
+        # أعد توليد PDF مع التوقيع
+        try:
+            pdf_name = generate_leave_pdf(req, sig)
+            if pdf_name:
+                lf.filename = pdf_name
+        except Exception as e:
+            app.logger.error("leave PDF regen error: %s", e)
+
+    db.session.commit()
+
+    # إشعار HR بعد التوقيع
+    try:
+        hr_users = User.query.filter_by(role="hr", company_id=req.company_id, is_active=True).all()
+        for hr in hr_users:
+            _send_push_to_user(hr.id, title="توقيع نموذج إجازة",
+                               body=f"وقّع {emp_name} على نموذج إجازة {req.employee.name if req.employee else ''}")
+    except Exception:
+        pass
+
+    return jsonify(message="تم حفظ التوقيع", signed=True), 200
+
+
+@app.get("/api/leave/form/<int:request_id>")
+@api_login_required
+def api_leave_form_info(request_id):
+    """معلومات نموذج الإجازة + حالة التوقيع"""
+    req = Request.query.get_or_404(request_id)
+    lf  = LeaveForm.query.filter_by(request_id=request_id).first()
+    sig = LeaveSignature.query.filter_by(request_id=request_id).first()
+    emp = req.employee
+    sup = req.supervisor
+    return jsonify({
+        "request_id":    request_id,
+        "employee_name": emp.name       if emp else "",
+        "emp_number":    emp.emp_number if emp else "",
+        "department":    emp.department if emp else "",
+        "site":          emp.site       if emp else "",
+        "supervisor":    sup.name       if sup else "",
+        "start_date":    str(req.start_date) if req.start_date else "",
+        "end_date":      str(req.end_date)   if req.end_date   else "",
+        "days":          str((req.end_date - req.start_date).days + 1) if req.start_date and req.end_date else "",
+        "reason":        req.reason or "",
+        "approved_at":   str(req.decided_at.date()) if req.decided_at else "",
+        "has_form":      lf is not None,
+        "pdf_url":       f"/api/leave-form/{request_id}/download" if lf else None,
+        "signed":        lf.signed if lf else False,
+        "signed_at":     str(lf.signed_at) if lf and lf.signed_at else None,
+        "signer_name":   sig.employee_name if sig else None,
+    })
+
+
+# ─────────────────────────────────────────────────────────────────
+#  توقيع الموظف على نموذج الاستئذان
+# ─────────────────────────────────────────────────────────────────
+@app.post("/api/permission/sign/<int:request_id>")
+@api_login_required
+def api_permission_sign(request_id):
+    u   = get_api_user()
+    req = Request.query.get_or_404(request_id)
+    if req.type != "permission":
+        return jsonify(error="ليس طلب استئذان"), 400
+    if req.supervisor_id != u.id and u.role not in ("admin", "hr"):
+        return jsonify(error="Forbidden"), 403
+
+    data      = freq.get_json(force=True) or {}
+    signature = (data.get("signature") or "").strip()
+    emp_name  = (data.get("employee_name") or (req.employee.name if req.employee else "")).strip()
+
+    if not signature:
+        return jsonify(error="Signature is required."), 400
+
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo("Asia/Riyadh"))
+    sig = PermissionSignature.query.filter_by(request_id=request_id).first()
+    if sig:
+        sig.signature = signature; sig.employee_name = emp_name; sig.signed_at = now
+    else:
+        sig = PermissionSignature(request_id=request_id, signature=signature,
+                                  employee_name=emp_name, signed_at=now)
+        db.session.add(sig)
+    db.session.commit()
+
+    # توليد PDF الاستئذان بعد التوقيع
+    try:
+        pdf_name = generate_permission_pdf(req, sig)
+        if pdf_name:
+            task = HRTask.query.filter_by(request_id=req.id).first()
+            if task:
+                task.warning_pdf = pdf_name  # نعيد استخدام حقل warning_pdf
+                db.session.commit()
+    except Exception as e:
+        app.logger.error("permission PDF error: %s", e)
+
+    return jsonify(message="تم حفظ التوقيع", signed=True), 200
+
+
+@app.get("/api/permission/form/<int:request_id>")
+@api_login_required
+def api_permission_form_info(request_id):
+    req = Request.query.get_or_404(request_id)
+    sig = PermissionSignature.query.filter_by(request_id=request_id).first()
+    emp = req.employee
+    sup = req.supervisor
+    task = HRTask.query.filter_by(request_id=request_id).first()
+    return jsonify({
+        "request_id":    request_id,
+        "employee_name": emp.name       if emp else "",
+        "emp_number":    emp.emp_number if emp else "",
+        "department":    emp.department if emp else "",
+        "supervisor":    sup.name       if sup else "",
+        "date":          str(req.start_date or req.created_at.date()),
+        "reason":        req.reason or "",
+        "status":        req.status,
+        "signed":        sig is not None,
+        "signed_at":     str(sig.signed_at) if sig else None,
+        "signer_name":   sig.employee_name  if sig else None,
+        "pdf_url":       f"/api/warning/{request_id}/download" if (task and task.warning_pdf) else None,
+    })
+
 
 # =====================================================================
 # WEEKLY REPORT EXPORTS
@@ -7268,6 +9447,79 @@ ALLOWED_IMAGE_EXTENSIONS = {"jpg", "jpeg", "png", "gif", "webp"}
 HSE_UPLOAD_DIR = os.path.join(UPLOAD_FOLDER, "hse")
 
 
+# ── PDF Arabic support (shared) ──────────────────────────────────────
+# يُسجَّل مرة واحدة ويُعاد استخدامه في كل تقارير الـ PDF.
+# DejaVu Sans مقصود: يغطي العربي واللاتيني والأرقام والرموز بخط واحد،
+# بينما Noto Naskh عربي فقط فتظهر الأسماء الإنجليزية والأرقام كمربعات.
+_PDF_AR_FONT = None
+
+def pdf_arabic_font():
+    """يسجّل خطاً يدعم العربية ويعيد اسمه — أو 'Helvetica' إن لم يوجد."""
+    global _PDF_AR_FONT
+    if _PDF_AR_FONT:
+        return _PDF_AR_FONT
+    try:
+        from reportlab.pdfbase import pdfmetrics
+        from reportlab.pdfbase.ttfonts import TTFont
+    except ImportError:
+        _PDF_AR_FONT = "Helvetica"
+        return _PDF_AR_FONT
+
+    for path in (
+        os.path.join(BASE_DIR, "static", "fonts", "DejaVuSans.ttf"),
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        os.path.join(BASE_DIR, "static", "fonts", "NotoNaskhArabic-Regular.ttf"),
+        "/usr/share/fonts/truetype/noto/NotoNaskhArabic-Regular.ttf",
+        "/usr/share/fonts/truetype/noto/NotoSansArabic-Regular.ttf",
+        os.path.join(BASE_DIR, "static", "fonts", "DroidSansArabic.ttf"),
+        "/usr/share/fonts/google-droid/DroidSansArabic.ttf",
+    ):
+        if os.path.exists(path):
+            try:
+                pdfmetrics.registerFont(TTFont("Arabic", path))
+                # نسخة عريضة إن توفّرت، وإلا نعيد استخدام العادي
+                bold = path.replace("-Regular", "-Bold").replace("DejaVuSans.ttf",
+                                                                 "DejaVuSans-Bold.ttf")
+                try:
+                    if os.path.exists(bold):
+                        pdfmetrics.registerFont(TTFont("Arabic-Bold", bold))
+                    else:
+                        pdfmetrics.registerFont(TTFont("Arabic-Bold", path))
+                except Exception:
+                    pass
+                _PDF_AR_FONT = "Arabic"
+                app.logger.info("PDF Arabic font registered: %s", path)
+                return _PDF_AR_FONT
+            except Exception as e:
+                app.logger.warning("font register failed %s: %s", path, e)
+                continue
+
+    app.logger.warning("No Arabic-capable TTF found — Arabic will render as boxes.")
+    _PDF_AR_FONT = "Helvetica"
+    return _PDF_AR_FONT
+
+
+def pdf_ar(text):
+    """يشكّل النص العربي ويعكسه ليُعرض صحيحاً في ReportLab (RTL).
+
+    النص الخالي من العربية يُعاد كما هو دون تكلفة.
+    """
+    t = "" if text is None else str(text)
+    if not any("\u0600" <= c <= "\u06FF" for c in t):
+        return t
+    try:
+        from arabic_reshaper import reshape
+        from bidi.algorithm import get_display
+        return get_display(reshape(t))
+    except Exception:
+        try:
+            from bidi.algorithm import get_display
+            return get_display(t)
+        except Exception:
+            return t
+
+
+
 def _parse_date(s, default=None):
     s = (s or "").strip()
     if not s:
@@ -7310,14 +9562,35 @@ def hse_officer_required(f):
         u = cur_user()
         if not u:
             return redirect(url_for("login"))
-        if u.role != "safety_officer":
-            flash("هذه الصفحة خاصة بضباط السلامة فقط.", "danger")
+        if u.role not in ("safety_officer", "safety_supervisor", "safety_manager",
+                          "admin", "super_admin"):
+            flash("This page is for safety officers only.", "danger")
             return redirect(url_for("index"))
         return f(*args, **kwargs)
     return inner
 
 
 HSE_SUPERVISOR_CODE = os.environ.get("HSE_SUPERVISOR_CODE", "39468")
+
+
+def is_safety_manager(u):
+    if not u or not getattr(u, "is_active", False):
+        return False
+    return getattr(u, "role", None) in ("safety_manager", "super_admin", "admin")
+
+
+def safety_manager_required(f):
+    @wraps(f)
+    def inner(*args, **kwargs):
+        u = cur_user()
+        if not u:
+            return redirect(url_for("login"))
+        if not is_safety_manager(u):
+            flash("Access restricted to Safety Managers.", "danger")
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return inner
+
 
 def hse_supervisor_required(f):
     @wraps(f)
@@ -7326,7 +9599,7 @@ def hse_supervisor_required(f):
         if not u:
             return redirect(url_for("login"))
         if not is_hse_supervisor(u):
-            flash("هذه الصفحة للمشرفين فقط.", "danger")
+            flash("This page is for supervisors only.", "danger")
             return redirect(url_for("index"))
         return f(*args, **kwargs)
     return inner
@@ -7447,6 +9720,19 @@ class HseSupervisorAccess(db.Model):
     granted_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
 
 
+class UserLocation(db.Model):
+    """موقع المستخدم اليومي — يُحدَّث يدوياً من التطبيق أو الموقع"""
+    __tablename__ = "user_location"
+    id         = db.Column(db.Integer, primary_key=True)
+    user_id    = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False, unique=True)
+    pkg        = db.Column(db.Integer)           # 2 أو 3
+    unit       = db.Column(db.String(20))        # مثال: "320", "500"
+    area_text  = db.Column(db.String(100))       # مثال: "str3000", "sub station"
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    company_id = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    user       = db.relationship("User", backref=db.backref("location", uselist=False))
+
+
 # ── Phase 2 Models ────────────────────────────────────────────────────
 
 class HsePtw(db.Model):
@@ -7524,9 +9810,16 @@ class HseInspection(db.Model):
 
 
 def is_hse_supervisor(u):
-    """صحيح إذا كان المستخدم لديه صلاحية HSE supervisor"""
+    """صحيح إذا كان المستخدم لديه صلاحية HSE supervisor.
+
+    السيفتي مانجر أعلى من السيفتي سوبرفايزر تنظيمياً، فيرث صلاحياته
+    (عرض تقارير وتفاصيل الضباط). كذلك الأدمن وسوبر أدمن.
+    """
     if not u or not getattr(u, "is_active", False):
         return False
+    if getattr(u, "role", None) in ("safety_supervisor", "safety_manager",
+                                    "admin", "super_admin"):
+        return True
     if getattr(u, "supervisor_code", None) == HSE_SUPERVISOR_CODE:
         return True
     return HseSupervisorAccess.query.filter_by(user_id=u.id).first() is not None
@@ -7540,7 +9833,11 @@ def inject_hse_flag():
         flag = is_hse_supervisor(u)
     except Exception:
         flag = False
-    return {"g_is_hse_supervisor": flag}
+    try:
+        mgr_flag = is_safety_manager(u)
+    except Exception:
+        mgr_flag = False
+    return {"g_is_hse_supervisor": flag, "g_is_safety_manager": mgr_flag}
 
 
 # ── HSE Helpers ──────────────────────────────────────────────────────
@@ -7626,49 +9923,6 @@ def hse_employee_lookup():
     return jsonify({"found": False})
 
 
-# ── Admin: HSE Supervisor Access ─────────────────────────────────────
-
-@app.route("/admin/hse-access", methods=["GET", "POST"])
-@login_required
-@admin_required
-def admin_hse_access():
-    if request.method == "POST":
-        action = request.form.get("action")
-        code   = (request.form.get("code") or "").strip()
-        user_id = request.form.get("user_id", type=int)
-
-        if action == "add" and code:
-            target = User.query.filter_by(supervisor_code=code, is_active=True).first()
-            if not target:
-                flash("User not found or inactive.", "warning")
-            elif target.supervisor_code == HSE_SUPERVISOR_CODE:
-                flash("Primary supervisor — always has access.", "info")
-            elif HseSupervisorAccess.query.filter_by(user_id=target.id).first():
-                flash(f"{target.name} already has access.", "info")
-            else:
-                db.session.add(HseSupervisorAccess(
-                    user_id=target.id, granted_by=cur_user().id))
-                db.session.commit()
-                flash(f"Access granted to {target.name}.", "success")
-
-        elif action == "remove" and user_id:
-            acc = HseSupervisorAccess.query.filter_by(user_id=user_id).first()
-            if acc:
-                name = db.session.get(User, user_id).name if db.session.get(User, user_id) else "?"
-                db.session.delete(acc)
-                db.session.commit()
-                flash(f"Access removed from {name}.", "success")
-
-        return redirect(url_for("admin_hse_access"))
-
-    primary = User.query.filter_by(supervisor_code=HSE_SUPERVISOR_CODE, is_active=True).first()
-    access_list = (db.session.query(HseSupervisorAccess, User)
-                   .join(User, HseSupervisorAccess.user_id == User.id)
-                   .all())
-    return render_template("admin_hse_access.html",
-                           primary=primary, access_list=access_list)
-
-
 # ── HSE: Daily Check-in ───────────────────────────────────────────────
 
 @app.route("/hse/checkin", methods=["GET", "POST"])
@@ -7677,6 +9931,35 @@ def admin_hse_access():
 def hse_checkin():
     u = cur_user()
     today = datetime.now(RIYADH_TZ).date()
+
+    # safety_officer: location IS the check-in — redirect to location page
+    if u.role == "safety_officer":
+        return redirect(url_for("user_location_page"))
+
+    # safety_supervisor / safety_manager: show all officers' locations today
+    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
+        officers = _get_safety_officers(u)
+        officer_ids = [o.id for o in officers]
+        locs = {l.user_id: l for l in
+                UserLocation.query.filter(UserLocation.user_id.in_(officer_ids)).all()}
+        rows = []
+        for o in officers:
+            loc = locs.get(o.id)
+            present = False
+            loc_text = None
+            if loc and loc.updated_at:
+                lu = (loc.updated_at.replace(tzinfo=None) if loc.updated_at.tzinfo is None
+                      else loc.updated_at.astimezone(RIYADH_TZ).replace(tzinfo=None))
+                present = lu.date() == today
+                if present:
+                    parts = ([f"PKG{loc.pkg}"] if loc.pkg else []) + \
+                            ([f"Unit {loc.unit}"] if loc.unit else []) + \
+                            ([loc.area_text] if loc.area_text else [])
+                    loc_text = " · ".join(parts)
+            rows.append({"officer": o, "present": present, "location": loc_text})
+        return render_template("hse_checkin_supervisor.html",
+                               rows=rows, today=today)
+
     existing = HseCheckin.query.filter_by(officer_id=u.id, date=today).first()
     locations = _hse_locations()
 
@@ -7731,7 +10014,11 @@ def hse_observations():
     u = cur_user()
     status_filter = request.args.get("status", "open")
     page = request.args.get("page", 1, type=int)
-    q = HseObservation.query.filter_by(officer_id=u.id)
+    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
+        officer_ids = [o.id for o in _get_safety_officers(u)]
+        q = HseObservation.query.filter(HseObservation.officer_id.in_(officer_ids))
+    else:
+        q = HseObservation.query.filter_by(officer_id=u.id)
     if status_filter in ("open", "closed"):
         q = q.filter_by(status=status_filter)
     pagination = q.order_by(HseObservation.date.desc()).paginate(page=page, per_page=15, error_out=False)
@@ -7740,6 +10027,151 @@ def hse_observations():
     return render_template("hse_observations.html",
                            obs=obs, obs_photos=obs_photos, status_filter=status_filter,
                            pagination=pagination)
+
+
+@app.route("/hse/observation/<int:obs_id>/view", methods=["GET"])
+@login_required
+def hse_observation_view(obs_id):
+    u = cur_user()
+    obs = HseObservation.query.get_or_404(obs_id)
+    # officer sees own obs; supervisor/manager sees company obs
+    if not (
+        obs.officer_id == u.id
+        or is_hse_supervisor(u)
+        or is_safety_manager(u)
+        or getattr(u, "role", "") in ("admin", "super_admin")
+    ):
+        flash("Access denied.", "danger")
+        return redirect(url_for("index"))
+    photos = list(obs.photos)
+    cas    = HseCorrectiveAction.query.filter_by(observation_id=obs.id).all()
+    officer = User.query.get(obs.officer_id)
+    return render_template_string("""
+{% extends "base.html" %}
+{% block title %}Observation #{{ obs.id }}{% endblock %}
+{% block content %}
+<style>
+.obs-view-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;
+  padding:22px 24px;max-width:820px;margin:0 auto}
+.obs-meta-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+  gap:12px;margin:16px 0 20px}
+.obs-meta-item .label{font-size:11px;font-weight:700;text-transform:uppercase;
+  color:#64748b;margin-bottom:3px}
+.obs-meta-item .val{font-size:13px;font-weight:600;color:#0f172a}
+.risk-H{background:#fee2e2;color:#b91c1c;padding:2px 10px;border-radius:6px;
+  font-size:12px;font-weight:700}
+.risk-M{background:#fef3c7;color:#92400e;padding:2px 10px;border-radius:6px;
+  font-size:12px;font-weight:700}
+.risk-L{background:#dcfce7;color:#166534;padding:2px 10px;border-radius:6px;
+  font-size:12px;font-weight:700}
+.photo-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:10px}
+.photo-thumb{border-radius:8px;object-fit:cover;border:1px solid #e2e8f0;
+  cursor:pointer;transition:transform .15s}
+.photo-thumb:hover{transform:scale(1.04)}
+.ca-row{background:#f8fafc;border-radius:8px;padding:10px 14px;margin-bottom:8px;
+  border-left:3px solid #f59e0b}
+.ca-row.done{border-color:#22c55e}
+</style>
+
+<div class="obs-view-card">
+  <div style="display:flex;align-items:flex-start;justify-content:space-between;
+              flex-wrap:wrap;gap:10px;margin-bottom:4px">
+    <h2 style="margin:0;font-size:18px">
+      Observation #{{ obs.id }}
+      <span class="risk-{{ obs.risk_level }}">{{ obs.risk_level }}-Risk</span>
+    </h2>
+    <div style="display:flex;gap:8px">
+      <a href="{{ url_for('hse_observations') }}" class="btn" style="font-size:12px">← Back</a>
+      {% if obs.status == 'open' and obs.officer_id == g.user.id %}
+      <a href="{{ url_for('hse_observation_close', obs_id=obs.id) }}"
+         class="btn" style="background:#dc2626;color:#fff;font-size:12px">Close Obs</a>
+      {% endif %}
+    </div>
+  </div>
+  <div style="font-size:12px;color:#64748b;margin-bottom:16px">
+    {% if obs.status == 'open' %}
+      <span style="background:#fef3c7;color:#92400e;padding:1px 10px;border-radius:10px;
+                   font-size:11px;font-weight:700">Open</span>
+    {% else %}
+      <span style="background:#dcfce7;color:#166534;padding:1px 10px;border-radius:10px;
+                   font-size:11px;font-weight:700">Closed</span>
+    {% endif %}
+    &nbsp;{{ obs.date.strftime('%d %b %Y') if obs.date else '—' }}
+    {% if officer %} &nbsp;·&nbsp; {{ officer.name }}{% endif %}
+  </div>
+
+  <div class="obs-meta-grid">
+    <div class="obs-meta-item">
+      <div class="label">Location</div>
+      <div class="val">{{ obs.location or '—' }}</div>
+    </div>
+    <div class="obs-meta-item">
+      <div class="label">Type</div>
+      <div class="val">{{ obs.obs_type or '—' }}</div>
+    </div>
+    <div class="obs-meta-item">
+      <div class="label">Category</div>
+      <div class="val">{{ obs.category or '—' }}</div>
+    </div>
+    <div class="obs-meta-item">
+      <div class="label">Risk Level</div>
+      <div class="val"><span class="risk-{{ obs.risk_level }}">{{ obs.risk_level }}</span></div>
+    </div>
+  </div>
+
+  {% if obs.description %}
+  <div style="margin-bottom:14px">
+    <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;
+                margin-bottom:4px">Description</div>
+    <div style="font-size:13px;line-height:1.6;color:#1e293b">{{ obs.description }}</div>
+  </div>
+  {% endif %}
+
+  {% if obs.action_taken %}
+  <div style="margin-bottom:14px">
+    <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;
+                margin-bottom:4px">Immediate Action Taken</div>
+    <div style="font-size:13px;line-height:1.6;color:#1e293b">{{ obs.action_taken }}</div>
+  </div>
+  {% endif %}
+
+  {% if photos %}
+  <div style="margin-bottom:16px">
+    <div style="font-size:11px;font-weight:700;color:#64748b;text-transform:uppercase;
+                margin-bottom:8px">Photos</div>
+    <div class="photo-row">
+      {% for ph in photos %}
+      <a href="{{ url_for('hse_photo', filename=ph.photo_path) }}" target="_blank">
+        <img src="{{ url_for('hse_photo', filename=ph.photo_path) }}"
+             class="photo-thumb" width="120" height="90"
+             title="{{ ph.photo_type }}" alt="{{ ph.photo_type }}">
+      </a>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if cas %}
+  <div style="border-top:1px solid #e2e8f0;padding-top:14px;margin-top:4px">
+    <div style="font-size:12px;font-weight:700;color:#0f172a;margin-bottom:10px">
+      Corrective Actions ({{ cas|length }})
+    </div>
+    {% for ca in cas %}
+    <div class="ca-row {{ 'done' if ca.status == 'completed' }}">
+      <div style="font-weight:600;font-size:13px">{{ ca.action_required }}</div>
+      <div style="font-size:11px;color:#64748b;margin-top:3px">
+        Due: {{ ca.due_date.strftime('%d %b %Y') if ca.due_date else '—' }}
+        {% if ca.assigned_to %} · {{ ca.assigned_to }}{% endif %}
+        · Status: <strong>{{ ca.status }}</strong>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}
+""", obs=obs, photos=photos, cas=cas, officer=officer)
 
 
 @app.route("/hse/observation/new", methods=["GET", "POST"])
@@ -7877,13 +10309,80 @@ def hse_jso_new():
 
 # ── HSE: TBT ──────────────────────────────────────────────────────────
 
+# ── SGL — Safety Green Light (عرض) ───────────────────────────────
+
+@app.route("/hse/sgl", methods=["GET"])
+@login_required
+@hse_officer_required
+def hse_sgl_view():
+    """صفحة عرض جلسات الـ SGL — تصفية بالتاريخ والضابط، مع الحضور والتوقيع."""
+    u = cur_user()
+
+    d_from = _safe_date(request.args.get("from"))
+    d_to   = _safe_date(request.args.get("to"))
+    today  = datetime.now(RIYADH_TZ).date()
+    if not d_to:
+        d_to = today
+    if not d_from:
+        d_from = d_to - timedelta(days=13)
+
+    officer_id = request.args.get("officer_id", type=int)
+
+    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
+        officers = _get_safety_officers(u)
+    else:
+        officers = [u]
+    officer_ids = [o.id for o in officers]
+
+    q = HseTbt.query.filter(HseTbt.officer_id.in_(officer_ids),
+                            HseTbt.date >= d_from, HseTbt.date <= d_to)
+    if officer_id and officer_id in officer_ids:
+        q = q.filter(HseTbt.officer_id == officer_id)
+    sessions = q.order_by(HseTbt.date.desc(), HseTbt.id.desc()).all()
+
+    # الحضور دفعة واحدة
+    ids = [t.id for t in sessions]
+    att_map = {}
+    if ids:
+        for a in HseTbtAttendance.query.filter(HseTbtAttendance.tbt_id.in_(ids)).all():
+            att_map.setdefault(a.tbt_id, []).append(a)
+
+    off_map = {o.id: (o.name or o.supervisor_code) for o in officers}
+
+    # مشرفو الموظفين الحاضرين — قد لا يكونون ضمن قائمة الضباط
+    sup_ids = {t.supervisor_id for t in sessions if t.supervisor_id}
+    sup_map = ({x.id: (x.name or x.supervisor_code)
+                for x in User.query.filter(User.id.in_(list(sup_ids))).all()}
+               if sup_ids else {})
+
+    # تجميع حسب اليوم
+    by_day = {}
+    for t in sessions:
+        by_day.setdefault(t.date, []).append(t)
+    days = sorted(by_day.keys(), reverse=True)
+
+    total_att = sum(len(att_map.get(t.id, [])) for t in sessions)
+
+    return render_template("hse_sgl.html",
+                           days=days, by_day=by_day, att_map=att_map,
+                           off_map=off_map, sup_map=sup_map, officers=officers,
+                           officer_id=officer_id,
+                           d_from=d_from, d_to=d_to, today=today,
+                           total_sessions=len(sessions), total_att=total_att)
+
+
 @app.route("/hse/tbt", methods=["GET"])
 @login_required
 @hse_officer_required
 def hse_tbt_list():
     u = cur_user()
     page = request.args.get("page", 1, type=int)
-    pagination = (HseTbt.query.filter_by(officer_id=u.id)
+    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
+        officer_ids = [o.id for o in _get_safety_officers(u)]
+        base_q = HseTbt.query.filter(HseTbt.officer_id.in_(officer_ids))
+    else:
+        base_q = HseTbt.query.filter_by(officer_id=u.id)
+    pagination = (base_q
                   .order_by(HseTbt.date.desc())
                   .paginate(page=page, per_page=15, error_out=False))
     tbts = pagination.items
@@ -7939,7 +10438,7 @@ def hse_tbt_new():
                 db.session.add(HseTbtAttendance(tbt_id=tbt.id, emp_number=num, emp_name=name))
 
         db.session.commit()
-        flash("TBT session saved.", "success")
+        flash("SGL session saved.", "success")
         return redirect(url_for("hse_tbt_list"))
 
     return render_template("hse_tbt_new.html",
@@ -8129,7 +10628,7 @@ def hse_dashboard():
         ci  = ci_map.get(oid, 0)
         ptw = ptw_map.get(oid, 0)
         insp = insp_map.get(oid, 0)
-        score = round(ci*1 + obs*2 + tbt*3 + nm*5 + bbs*0.1 + insp*2 + ptw*1, 1)
+        score = round(obs*2 + tbt*3 + ptw*1, 1)
         weekly[oid] = {
             "obs": obs, "jso": jso, "tbt": tbt, "nm": nm, "bbs": bbs,
             "total": obs + jso + tbt + nm,
@@ -8200,7 +10699,117 @@ def hse_dashboard():
     inactive_officers = [o for o in officers if o.id not in today_checkins
                          and weekly[o.id]["total"] == 0]
 
-    # Flash alerts for dashboard visitor
+    # ── Welfare summary for dashboard ─────────────────────────────────
+    wlf_officers_q = User.query.filter_by(role="welfare_officer", is_active=True)
+    if _cid:
+        wlf_officers_q = wlf_officers_q.filter(User.company_id == _cid)
+    wlf_officers = wlf_officers_q.all()
+    wlf_oids = [o.id for o in wlf_officers]
+
+    # Level work submitted today per officer
+    wlf_rounds_today = {}
+    if wlf_oids:
+        for oid, cnt in (db.session.query(WlfLevelWork.officer_id, func.count())
+                         .filter(WlfLevelWork.officer_id.in_(wlf_oids),
+                                 WlfLevelWork.date == today)
+                         .group_by(WlfLevelWork.officer_id).all()):
+            wlf_rounds_today[oid] = cnt
+
+    wlf_score_today = {}
+
+    # Open Critical/High findings per officer
+    wlf_crit_open = {}
+    if wlf_oids:
+        for oid, cnt in (db.session.query(WlfFinding.officer_id, func.count())
+                         .filter(WlfFinding.officer_id.in_(wlf_oids),
+                                 WlfFinding.status == "open",
+                                 WlfFinding.severity.in_(["Critical", "High"]))
+                         .group_by(WlfFinding.officer_id).all()):
+            wlf_crit_open[oid] = cnt
+
+    # Complaints this week per officer
+    wlf_complaints_week = {}
+    if wlf_oids:
+        for oid, cnt in (db.session.query(WlfComplaint.officer_id, func.count())
+                         .filter(WlfComplaint.officer_id.in_(wlf_oids),
+                                 WlfComplaint.date.between(week_start, today))
+                         .group_by(WlfComplaint.officer_id).all()):
+            wlf_complaints_week[oid] = cnt
+
+    # Current level per officer
+    wlf_level = {}
+    if wlf_oids:
+        for p in WlfProgress.query.filter(WlfProgress.officer_id.in_(wlf_oids)).all():
+            wlf_level[p.officer_id] = p
+
+    # Weekly level work count per officer
+    wlf_rounds_week = {}
+    if wlf_oids:
+        for oid, cnt in (db.session.query(WlfLevelWork.officer_id, func.count())
+                         .filter(WlfLevelWork.officer_id.in_(wlf_oids),
+                                 WlfLevelWork.date.between(week_start, today))
+                         .group_by(WlfLevelWork.officer_id).all()):
+            wlf_rounds_week[oid] = cnt
+
+    wlf_avg_score_week = {}
+
+    # Weekly new findings per officer
+    wlf_finds_week = {}
+    if wlf_oids:
+        for oid, cnt in (db.session.query(WlfFinding.officer_id, func.count())
+                         .filter(WlfFinding.officer_id.in_(wlf_oids),
+                                 WlfFinding.date.between(week_start, today))
+                         .group_by(WlfFinding.officer_id).all()):
+            wlf_finds_week[oid] = cnt
+
+    # Weekly closed findings per officer
+    wlf_closed_week = {}
+    if wlf_oids:
+        for oid, cnt in (db.session.query(WlfFinding.officer_id, func.count())
+                         .filter(WlfFinding.officer_id.in_(wlf_oids),
+                                 WlfFinding.status == "closed",
+                                 WlfFinding.date.between(week_start, today))
+                         .group_by(WlfFinding.officer_id).all()):
+            wlf_closed_week[oid] = cnt
+
+    # Aggregate KPIs
+    wlf_total_rounds_today = sum(wlf_rounds_today.values())
+    wlf_total_crit_open    = sum(wlf_crit_open.values())
+    wlf_total_complaints_week = sum(wlf_complaints_week.values())
+
+    # Build per-officer welfare rows
+    wlf_rows = []
+    for o in wlf_officers:
+        oid = o.id
+        lvl_p = wlf_level.get(oid)
+        done_idx = -1
+        if lvl_p and lvl_p.status in ("active", "pending_gate", "completed"):
+            try:
+                done_idx = WLF_LEVEL_CODES.index(lvl_p.level_code)
+            except (ValueError, AttributeError):
+                done_idx = -1
+        rw  = wlf_rounds_week.get(oid, 0)
+        fc  = wlf_closed_week.get(oid, 0)
+        co  = wlf_crit_open.get(oid, 0)
+        cmp = wlf_complaints_week.get(oid, 0)
+        # Points: 3 per round + 2 per closed finding − 1 per open critical/high
+        pts = rw * 3 + fc * 2 - co
+        wlf_rows.append({
+            "u":            o,
+            "rounds_today": wlf_rounds_today.get(oid, 0),
+            "rounds_week":  rw,
+            "avg_score":    wlf_avg_score_week.get(oid),
+            "finds_week":   wlf_finds_week.get(oid, 0),
+            "closed_week":  fc,
+            "crit_open":    co,
+            "complaints":   cmp,
+            "level_no":     done_idx + 1,
+            "level_total":  len(WLF_LEVEL_CODES),
+            "points":       pts,
+        })
+    wlf_max_points = max((r["points"] for r in wlf_rows), default=1) or 1
+
+    # ── Flash alerts for dashboard visitor ────────────────────────────
     if overdue_ca:
         flash(f"⚠ {len(overdue_ca)} Corrective Action(s) are overdue — please follow up.", "warning")
     if ptw_expiring:
@@ -8209,12 +10818,19 @@ def hse_dashboard():
         names = ", ".join(o.name for o in inactive_officers[:3])
         extra = f" (+{len(inactive_officers)-3} more)" if len(inactive_officers) > 3 else ""
         flash(f"🔴 No activity today: {names}{extra}", "warning")
+    if wlf_total_crit_open:
+        flash(f"{wlf_total_crit_open} Critical/High welfare finding(s) still open.", "warning")
 
     return render_template("hse_dashboard.html",
                            officers=officers, today=today, week_start=week_start,
                            today_checkins=today_checkins, weekly=weekly,
                            high_risk=high_risk, officer_map=officer_map,
                            total_obs_week=total_obs_week, total_jso_week=total_jso_week,
+                           wlf_rows=wlf_rows, wlf_max_points=wlf_max_points,
+                           wlf_total_rounds_today=wlf_total_rounds_today,
+                           wlf_total_crit_open=wlf_total_crit_open,
+                           wlf_total_complaints_week=wlf_total_complaints_week,
+                           wlf_officers_count=len(wlf_officers),
                            total_tbt_week=total_tbt_week, total_nm_week=total_nm_week,
                            total_bbs_week=total_bbs_week,
                            obs_unsafe_act=obs_unsafe_act, obs_unsafe_cond=obs_unsafe_cond,
@@ -8280,9 +10896,12 @@ def hse_officer_detail(officer_id):
     tbt_attendees = {t.id: list(t.attendance) for t in tbts}
 
     # Phase 2 data
-    ptw_records = apply_dates(
-        HsePtw.query.filter_by(officer_id=officer_id), HsePtw.week_start
-    ).order_by(HsePtw.week_start.desc()).all()
+    ptw_q = HsePtw.query.filter_by(officer_id=officer_id)
+    if date_from:
+        ptw_q = ptw_q.filter(HsePtw.week_end >= date_from)
+    if date_to:
+        ptw_q = ptw_q.filter(HsePtw.week_start <= date_to)
+    ptw_records = ptw_q.order_by(HsePtw.week_start.desc()).all()
 
     mp_records = apply_dates(
         HseManpower.query.filter_by(officer_id=officer_id), HseManpower.date
@@ -8418,7 +11037,7 @@ def hse_tbt_edit(tbt_id):
             if num and name:
                 db.session.add(HseTbtAttendance(tbt_id=tbt.id, emp_number=num, emp_name=name))
         db.session.commit()
-        flash("TBT session updated.", "success")
+        flash("SGL session updated.", "success")
         return redirect(url_for("hse_tbt_list"))
     sup_code_val = ""
     if tbt.supervisor_id:
@@ -8438,8 +11057,81 @@ def hse_tbt_delete(tbt_id):
     HseTbtAttendance.query.filter_by(tbt_id=tbt.id).delete()
     db.session.delete(tbt)
     db.session.commit()
-    flash("TBT session deleted.", "success")
+    flash("SGL session deleted.", "success")
     return redirect(url_for("hse_tbt_list"))
+
+
+# ── User Location Web Page ─────────────────────────────────────────────
+@app.route("/location", methods=["GET"])
+@login_required
+def user_location_page():
+    u = cur_user()
+
+    # Safety officer in PTW training mode → redirect to training
+    if u.role == "safety_officer" and getattr(u, "ptw_training_active", False):
+        return redirect(url_for("ptw_training_home"))
+
+    # Admin/super_admin: show all employees' locations, no registration
+    if u.role in ("admin", "super_admin"):
+        cutoff = datetime.utcnow() - timedelta(hours=24)
+        rows = (db.session.query(User, UserLocation)
+                .join(UserLocation, User.id == UserLocation.user_id)
+                .filter(User.company_id == u.company_id)
+                .filter(User.is_active == True)
+                .filter(User.role.in_(["supervisor", "site_supervisor", "safety_officer"]))
+                .filter(UserLocation.updated_at >= cutoff).all())
+        all_locations = [{"user_id": usr.id, "name": usr.name, "role": usr.role,
+                           "supervisor_code": usr.supervisor_code,
+                           "pkg": loc.pkg, "unit": loc.unit, "area_text": loc.area_text or "",
+                           "updated_at": loc.updated_at.isoformat() if loc.updated_at else ""}
+                          for usr, loc in rows]
+        all_locations.sort(key=lambda x: (x["role"], x["pkg"] or 0, x["unit"] or ""))
+        return render_template("user_location.html", all_locations=all_locations)
+
+    my_loc = UserLocation.query.filter_by(user_id=u.id).first()
+    # nearest persons
+    nearest = []
+    if my_loc:
+        if u.role == "safety_officer":
+            target_roles = ["supervisor", "site_supervisor"]
+        else:
+            target_roles = ["safety_officer"]
+        cutoff = datetime.utcnow() - timedelta(hours=24)
+        candidates = (db.session.query(User, UserLocation)
+                      .join(UserLocation, User.id == UserLocation.user_id)
+                      .filter(User.role.in_(target_roles))
+                      .filter(User.company_id == u.company_id)
+                      .filter(User.is_active == True)
+                      .filter(UserLocation.updated_at >= cutoff).all())
+        for c, cloc in candidates:
+            if cloc.pkg == my_loc.pkg and cloc.unit == my_loc.unit:
+                score = 0
+            elif cloc.pkg == my_loc.pkg:
+                score = 1
+            else:
+                score = 2
+            nearest.append({"user_id": c.id, "name": c.name,
+                             "role": c.role, "supervisor_code": c.supervisor_code,
+                             "pkg": cloc.pkg, "unit": cloc.unit,
+                             "area_text": cloc.area_text or "",
+                             "proximity": score})
+        nearest.sort(key=lambda x: (x["proximity"], x["name"]))
+    # supervisors list for site_supervisor
+    supervisors = []
+    if u.role == "site_supervisor":
+        sups = (db.session.query(User, UserLocation)
+                .join(UserLocation, User.id == UserLocation.user_id)
+                .filter(User.role == "supervisor")
+                .filter(User.company_id == u.company_id)
+                .filter(User.is_active == True).all())
+        supervisors = [{"user_id": s.id, "name": s.name,
+                         "supervisor_code": s.supervisor_code,
+                         "pkg": loc.pkg, "unit": loc.unit,
+                         "area_text": loc.area_text or ""}
+                        for s, loc in sups]
+        supervisors.sort(key=lambda x: (x["pkg"] or 0, x["unit"] or ""))
+    return render_template("user_location.html",
+                           my_location=my_loc, nearest=nearest, supervisors=supervisors)
 
 
 @app.route("/hse/nearmiss/<int:nm_id>/edit", methods=["GET", "POST"])
@@ -8552,7 +11244,7 @@ def hse_officer_detail_excel(officer_id):
                  o.description or "", o.action_taken or "") for o in observations])
     make_sheet("JSO Closures", ["Date", "JSO #", "Location", "Action Taken"],
                [(j.date.isoformat(), j.jso_number, j.location or "", j.action_taken or "") for j in jsos])
-    make_sheet("TBTs", ["Date", "Topic", "Location", "Attendees"],
+    make_sheet("SGL", ["Date", "Topic", "Location", "Attendees"],
                [(t.date.isoformat(), t.topic or "", t.location or "",
                  _excel_att_map.get(t.id, 0)) for t in tbts])
     make_sheet("Near Misses", ["Date", "Location", "Description", "Cause", "Action", "Reported To"],
@@ -8642,7 +11334,7 @@ def hse_officer_detail_pdf(officer_id):
         build_table(["Date", "JSO #", "Action Taken"],
                     [(j.date.isoformat(), j.jso_number, (j.action_taken or "")[:80]) for j in jsos],
                     [22*mm, 30*mm, W-52*mm]),
-        Paragraph(f"TBTs ({len(tbts)})", h2),
+        Paragraph(f"SGL Sessions ({len(tbts)})", h2),
         build_table(["Date", "Topic", "Location", "Attendees"],
                     [(t.date.isoformat(), (t.topic or "")[:40], t.location or "", str(_pdf_att_map.get(t.id, 0))) for t in tbts],
                     [22*mm, 60*mm, 60*mm, W-142*mm]),
@@ -8665,100 +11357,346 @@ def hse_officer_detail_pdf(officer_id):
     return resp
 
 
-@app.get("/api/hse/officer/<int:officer_id>/pdf")
-@api_hse_supervisor_required
-def api_hse_officer_pdf(officer_id):
-    """PDF officer report — Bearer token auth for iOS."""
+@app.get("/hse/dashboard/daily-observations")
+@login_required
+@hse_supervisor_required
+def hse_daily_observations_picker():
+    """Date picker page before generating the PDF."""
+    today = datetime.now(RIYADH_TZ).date()
+    return render_template_string("""
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:480px;margin:40px auto">
+  <a href="{{ url_for('hse_dashboard') }}" class="btn" style="margin-bottom:16px;display:inline-block">← Dashboard</a>
+  <div class="card">
+    <h2 style="margin-top:0">Daily Observations Report</h2>
+    <p style="color:var(--muted);font-size:14px">Select a date to generate a PDF report of all safety officer observations.</p>
+    <form method="get" action="{{ url_for('hse_daily_observations_pdf') }}" style="display:flex;flex-direction:column;gap:14px">
+      <label style="font-weight:600;font-size:14px">
+        Date
+        <input type="date" name="date" value="{{ today }}"
+               style="display:block;width:100%;margin-top:4px;padding:8px;border:1px solid var(--border);border-radius:6px;font-size:14px">
+      </label>
+      <button type="submit" class="btn btn-primary" style="padding:10px;font-size:15px">
+        Generate PDF
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+""", today=today)
+
+
+@app.get("/hse/dashboard/daily-observations/pdf")
+@login_required
+@hse_supervisor_required
+def hse_daily_observations_pdf():
+    """PDF — landscape table matching the standard HSE observation sheet + inline photos."""
     import io
     from flask import make_response
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib import colors
     from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.platypus import (
+        SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image as RLImage,
+    )
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-    officer = User.query.filter_by(id=officer_id, role="safety_officer").first_or_404()
-    date_from = _safe_date(freq.args.get("from"))
-    date_to   = _safe_date(freq.args.get("to"))
-    checkins, observations, jsos, tbts, nearmisses, bbs_list = _collect_officer_data(officer_id, date_from, date_to)
-    _att_ids = [t.id for t in tbts]
-    _att_map = dict(
-        db.session.query(HseTbtAttendance.tbt_id, func.count())
-        .filter(HseTbtAttendance.tbt_id.in_(_att_ids))
-        .group_by(HseTbtAttendance.tbt_id).all()
-    ) if _att_ids else {}
+    target_date = _safe_date(request.args.get("date")) or datetime.now(RIYADH_TZ).date()
+    _cid = cid()
 
+    obs_q = (HseObservation.query
+             .filter(HseObservation.date == target_date)
+             .order_by(HseObservation.officer_id, HseObservation.id))
+    if _cid:
+        obs_q = obs_q.filter(HseObservation.company_id == _cid)
+    observations = obs_q.all()
+
+    officer_ids = list({o.officer_id for o in observations})
+    officers = {u.id: u for u in User.query.filter(User.id.in_(officer_ids)).all()} if officer_ids else {}
+
+    # ── Page setup (landscape A4) ─────────────────────────────────────
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4,
-                            leftMargin=12*mm, rightMargin=12*mm,
-                            topMargin=14*mm, bottomMargin=14*mm)
-    styles = getSampleStyleSheet()
-    h1  = ParagraphStyle("h1",  parent=styles["Heading1"], fontSize=14, spaceAfter=2)
-    sub = ParagraphStyle("sub", parent=styles["Normal"],   fontSize=9,  spaceAfter=10,
-                         textColor=colors.HexColor("#6B7280"))
-    h2  = ParagraphStyle("h2",  parent=styles["Heading2"], fontSize=11, spaceBefore=10, spaceAfter=4)
-    hdr_fill = colors.HexColor("#0F172A")
-    alt_fill = colors.HexColor("#F9FAFB")
+    PAGE = landscape(A4)          # 297 × 210 mm
+    LM = RM = 10*mm
+    TM = BM = 10*mm
+    W = PAGE[0] - LM - RM         # ≈ 277 mm usable
 
-    def _tbl(header, rows, col_widths):
-        data = [header] + (rows if rows else [["—"] * len(header)])
-        t = Table(data, colWidths=col_widths, repeatRows=1)
-        style = TableStyle([
-            ("BACKGROUND",  (0,0), (-1,0), hdr_fill),
-            ("TEXTCOLOR",   (0,0), (-1,0), colors.white),
-            ("FONTSIZE",    (0,0), (-1,0), 9),
-            ("FONTSIZE",    (0,1), (-1,-1), 8),
-            ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, alt_fill]),
-            ("GRID",        (0,0), (-1,-1), 0.4, colors.HexColor("#E5E7EB")),
-            ("LEFTPADDING",  (0,0), (-1,-1), 5),
-            ("RIGHTPADDING", (0,0), (-1,-1), 5),
-            ("TOPPADDING",   (0,0), (-1,-1), 3),
-            ("BOTTOMPADDING",(0,0), (-1,-1), 3),
-        ])
-        t.setStyle(style)
+    doc = SimpleDocTemplate(buf, pagesize=PAGE,
+                            leftMargin=LM, rightMargin=RM,
+                            topMargin=TM, bottomMargin=BM)
+    styles = getSampleStyleSheet()
+
+    # خط يدعم العربية — بدونه تظهر الأسماء العربية كمربعات فارغة
+    _AR = pdf_arabic_font()
+    _AR_B = "Arabic-Bold" if _AR == "Arabic" else "Helvetica-Bold"
+
+    def _ps(name, size=7.5, leading=10, bold=False, color=None, align=0):
+        return ParagraphStyle(name, parent=styles["Normal"],
+                              fontSize=size, leading=leading,
+                              fontName=(_AR_B if bold else _AR),
+                              textColor=color or colors.black, alignment=align)
+
+    title_s = _ps("dopt", 13, 16, bold=True)
+    sub_s   = _ps("dops",  8, 11, color=colors.HexColor("#6B7280"))
+    cell_s  = _ps("dopc",  7.5, 10)
+    cap_s   = _ps("docc",  6.5,  8, color=colors.HexColor("#555555"), align=1)
+
+    HDR_BG  = colors.HexColor("#1E293B")
+    ALT_BG  = colors.HexColor("#F8FAFC")
+    BDR     = colors.HexColor("#CBD5E1")
+    R_HIGH  = colors.HexColor("#FCA5A5")
+    R_MED   = colors.HexColor("#FDE68A")
+    R_LOW   = colors.HexColor("#86EFAC")
+
+    TYPE_MAP = {"unsafe_act": "Unsafe Act", "unsafe_condition": "Unsafe Condition", "positive": "Positive"}
+
+    # ── Column widths (total = W) ──────────────────────────────────────
+    # SN | Date | Observed By | ID | Location | Type | Category | Risk |
+    # Observation Description | Immediate Action Taken | Photos
+    C = [8, 18, 30, 18, 28, 24, 24, 10, 48, 38, 31]   # mm
+    assert abs(sum(C) - W/mm) < 2, f"cols={sum(C)} W={W/mm:.1f}"
+    col_w = [c*mm for c in C]
+
+    HEADERS = ["SN", "Date", "Observed By", "ID", "Location",
+               "Type", "Category", "Risk",
+               "Observation Description", "Immediate Action Taken", "Photos"]
+
+    # thumbnail size — fits inside the Photos column
+    PH_W = 28*mm
+    PH_H = 20*mm
+
+    def _load_photos(obs):
+        """Return list of (RLImage, label) for an observation."""
+        result = []
+        for ph in obs.photos:
+            ph_path = os.path.join(HSE_UPLOAD_DIR, ph.photo_path)
+            if not os.path.isfile(ph_path):
+                continue
+            try:
+                result.append((
+                    RLImage(ph_path, width=PH_W, height=PH_H, kind="proportional"),
+                    ph.photo_type.title()
+                ))
+            except Exception:
+                continue
+        return result
+
+    def _photo_cell(photo_list):
+        """Stack thumbnails + labels into a single table cell."""
+        if not photo_list:
+            return ""
+        rows = []
+        for img, lbl in photo_list:
+            rows.append([img])
+            rows.append([Paragraph(lbl, cap_s)])
+        t = Table(rows, colWidths=[PH_W])
+        t.setStyle(TableStyle([
+            ("ALIGN",  (0,0),(-1,-1), "CENTER"),
+            ("VALIGN", (0,0),(-1,-1), "MIDDLE"),
+            ("TOPPADDING",   (0,0),(-1,-1), 1),
+            ("BOTTOMPADDING",(0,0),(-1,-1), 1),
+        ]))
         return t
 
-    content = [
-        Paragraph(f"HSE Officer Report — {officer.name}", h1),
-        Paragraph(f"Period: {date_from or 'All time'} → {date_to or 'Today'}", sub),
-        Spacer(1, 4*mm),
-        Paragraph("Check-in History", h2),
-        _tbl(["Date","Location","Time"],
-             [[str(c.date), c.location or "—", str(c.created_at)[:10]] for c in checkins],
-             [40*mm, 80*mm, 40*mm]),
-        Spacer(1, 4*mm),
-        Paragraph("Observations", h2),
-        _tbl(["Date","Type","Category","Risk","Status"],
-             [[str(o.date), o.obs_type or "—", o.category or "—", o.risk_level or "—", o.status]
-              for o in observations],
-             [28*mm, 32*mm, 36*mm, 20*mm, 24*mm]),
-        Spacer(1, 4*mm),
-        Paragraph("TBT Sessions", h2),
-        _tbl(["Date","Topic","Location","Attendees"],
-             [[str(t.date), (t.topic or "—")[:40], t.location or "—",
-               str(_att_map.get(t.id, 0))] for t in tbts],
-             [25*mm, 70*mm, 45*mm, 20*mm]),
-        Spacer(1, 4*mm),
-        Paragraph("Near Miss", h2),
-        _tbl(["Date","Location","Description"],
-             [[str(n.date), n.location or "—", (n.description or "—")[:60]] for n in nearmisses],
-             [25*mm, 40*mm, 95*mm]),
+    # ── Build table rows ───────────────────────────────────────────────
+    tbl_data = [HEADERS]
+    risk_row_styles = []   # collect per-row Risk cell colour
+
+    for i, obs in enumerate(observations, 1):
+        off   = officers.get(obs.officer_id)
+        name  = off.name if off else f"#{obs.officer_id}"
+        code  = off.supervisor_code if off else "—"
+        rval  = obs.risk_level or ""
+        rlabel = {"H": "H", "M": "M", "L": "L"}.get(rval, "—")
+        rcol   = {"H": R_HIGH, "M": R_MED, "L": R_LOW}.get(rval)
+
+        if rcol:
+            risk_row_styles.append(("BACKGROUND", (7, i), (7, i), rcol))
+
+        photo_list = _load_photos(obs)
+
+        tbl_data.append([
+            str(i),
+            obs.date.strftime("%Y-%m-%d"),
+            Paragraph(pdf_ar(name), cell_s),
+            code,
+            Paragraph(pdf_ar(obs.location or "—"), cell_s),
+            TYPE_MAP.get(obs.obs_type, obs.obs_type),
+            Paragraph(pdf_ar(obs.category or "—"), cell_s),
+            rlabel,
+            Paragraph(pdf_ar(obs.description or "—"), cell_s),
+            Paragraph(pdf_ar(obs.action_taken or "—"), cell_s),
+            _photo_cell(photo_list),
+        ])
+
+    tbl = Table(tbl_data, colWidths=col_w, repeatRows=1)
+    base_style = [
+        ("BACKGROUND",    (0,0),  (-1,0),  HDR_BG),
+        ("TEXTCOLOR",     (0,0),  (-1,0),  colors.white),
+        ("FONTNAME",      (0,0),  (-1,0),  "Helvetica-Bold"),
+        ("FONTSIZE",      (0,0),  (-1,-1), 7.5),
+        ("ALIGN",         (0,0),  (0,-1),  "CENTER"),   # SN
+        ("ALIGN",         (1,0),  (1,-1),  "CENTER"),   # Date
+        ("ALIGN",         (7,0),  (7,-1),  "CENTER"),   # Risk
+        ("ALIGN",         (10,0), (10,-1), "CENTER"),   # Photos
+        ("VALIGN",        (0,0),  (-1,-1), "TOP"),
+        ("ROWBACKGROUNDS",(0,1),  (-1,-1), [colors.white, ALT_BG]),
+        ("GRID",          (0,0),  (-1,-1), 0.35, BDR),
+        ("TOPPADDING",    (0,0),  (-1,-1), 3),
+        ("BOTTOMPADDING", (0,0),  (-1,-1), 3),
+        ("LEFTPADDING",   (0,0),  (-1,-1), 3),
+        ("RIGHTPADDING",  (0,0),  (-1,-1), 3),
+    ] + risk_row_styles
+
+    tbl.setStyle(TableStyle(base_style))
+
+    # ── SGL section (Safety Green Light — formerly TBT) ──────────
+    # يُدرج فوق جدول الملاحظات. إن لم يسجّل أحد SGL اليوم، يُحذف القسم
+    # بالكامل ويبقى التقرير ملاحظاتٍ فقط — بلا عنوان فارغ أو جدول خالٍ.
+    sgl_q = HseTbt.query.filter(HseTbt.date == target_date)
+    if _cid:
+        sgl_q = sgl_q.filter(HseTbt.company_id == _cid)
+    sgls = sgl_q.order_by(HseTbt.id.asc()).all()
+
+    sgl_flow = []
+    if sgls:
+        sgl_officer_ids = list({t.officer_id for t in sgls})
+        sgl_officers = ({x.id: x for x in User.query.filter(User.id.in_(sgl_officer_ids)).all()}
+                        if sgl_officer_ids else {})
+
+        # مشرفو الموظفين الحاضرين
+        sgl_sup_ids = list({t.supervisor_id for t in sgls if t.supervisor_id})
+        sgl_sups = ({x.id: (x.name or x.supervisor_code)
+                     for x in User.query.filter(User.id.in_(sgl_sup_ids)).all()}
+                    if sgl_sup_ids else {})
+
+        # الحضور دفعة واحدة
+        sgl_ids = [t.id for t in sgls]
+        att_rows = (HseTbtAttendance.query
+                    .filter(HseTbtAttendance.tbt_id.in_(sgl_ids)).all()) if sgl_ids else []
+        att_by_tbt = {}
+        for a in att_rows:
+            att_by_tbt.setdefault(a.tbt_id, []).append(a)
+
+        # SN | Topic | Location | Conducted By | Supervisor | Att. | Attendees | Signature
+        SGL_C = [8, 36, 32, 30, 30, 12, 74, 55]      # mm — مجموعها يساوي W
+        _diff = (W/mm) - sum(SGL_C)
+        SGL_C[6] += _diff                            # اضبط عمود الأسماء ليطابق العرض
+        sgl_w = [c*mm for c in SGL_C]
+
+        sgl_rows = [[Paragraph(h, _ps("sh", 7.5, 10, bold=True, color=colors.white))
+                     for h in ["SN", "Topic", "Location", "Conducted By", "Supervisor",
+                               "Att.", "Attendees", "Signature"]]]
+
+        for i, t in enumerate(sgls, 1):
+            off = sgl_officers.get(t.officer_id)
+            att = att_by_tbt.get(t.id, [])
+            # الأسماء في عمودين متجاورين — أسهل قراءة من سطر طويل
+            labels = [
+                (f"{a.emp_name or ''} ({a.emp_number})" if a.emp_number else (a.emp_name or "—"))
+                for a in att
+            ]
+            if labels:
+                half = (len(labels) + 1) // 2
+                left_col, right_col = labels[:half], labels[half:]
+                n_rows = max(len(left_col), len(right_col))
+                pair_rows = []
+                for r in range(n_rows):
+                    lft = f"{r+1}. {left_col[r]}" if r < len(left_col) else ""
+                    rgt = (f"{half + r + 1}. {right_col[r]}"
+                           if r < len(right_col) else "")
+                    pair_rows.append([Paragraph(pdf_ar(lft), cell_s),
+                                      Paragraph(pdf_ar(rgt), cell_s)])
+                half_w = (SGL_C[6] * mm) / 2.0
+                names_cell = Table(pair_rows, colWidths=[half_w, half_w])
+                names_cell.setStyle(TableStyle([
+                    ("VALIGN",       (0,0), (-1,-1), "TOP"),
+                    ("LEFTPADDING",  (0,0), (-1,-1), 1),
+                    ("RIGHTPADDING", (0,0), (-1,-1), 1),
+                    ("TOPPADDING",   (0,0), (-1,-1), 0.5),
+                    ("BOTTOMPADDING",(0,0), (-1,-1), 0.5),
+                ]))
+            else:
+                names_cell = Paragraph("—", cell_s)
+
+            sign_cell = ""
+            if t.sign_photo_path:
+                sp = os.path.join(HSE_UPLOAD_DIR, t.sign_photo_path)
+                if os.path.isfile(sp):
+                    try:
+                        sign_cell = RLImage(sp, width=52*mm, height=26*mm, kind="proportional")
+                    except Exception:
+                        sign_cell = ""
+
+            sgl_rows.append([
+                Paragraph(str(i), cell_s),
+                Paragraph(pdf_ar(t.topic or "—"), cell_s),
+                Paragraph(pdf_ar(t.location or "—"), cell_s),
+                Paragraph(pdf_ar((off.name or off.supervisor_code) if off else "—"), cell_s),
+                Paragraph(pdf_ar(sgl_sups.get(t.supervisor_id, "—")), cell_s),
+                Paragraph(str(len(att)), cell_s),
+                names_cell,
+                sign_cell,
+            ])
+
+        sgl_tbl = Table(sgl_rows, colWidths=sgl_w, repeatRows=1)
+        sgl_tbl.setStyle(TableStyle([
+            ("BACKGROUND",   (0,0), (-1,0), HDR_BG),
+            ("TEXTCOLOR",    (0,0), (-1,0), colors.white),
+            ("GRID",         (0,0), (-1,-1), 0.4, BDR),
+            ("VALIGN",       (0,0), (-1,-1), "MIDDLE"),
+            ("ALIGN",        (0,1), (0,-1), "CENTER"),
+            ("ALIGN",        (5,1), (5,-1), "CENTER"),
+            ("ALIGN",        (7,1), (7,-1), "CENTER"),
+            ("LEFTPADDING",  (0,0), (-1,-1), 3),
+            ("RIGHTPADDING", (0,0), (-1,-1), 3),
+            ("TOPPADDING",   (0,0), (-1,-1), 3),
+            ("BOTTOMPADDING",(0,0), (-1,-1), 3),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, ALT_BG]),
+        ]))
+
+        total_att = sum(len(att_by_tbt.get(t.id, [])) for t in sgls)
+        sgl_flow = [
+            Paragraph("SGL — Safety Green Light", _ps("sgt", 10.5, 13, bold=True)),
+            Paragraph(f"Sessions: {len(sgls)}  ·  Total attendance: {total_att}", sub_s),
+            Spacer(1, 2*mm),
+            sgl_tbl,
+            Spacer(1, 6*mm),
+        ]
+
+    story = [
+        Paragraph("Daily HSE Report", title_s),
+        Paragraph(
+            f"Date: {target_date.strftime('%d %b %Y')}  ·  "
+            f"Observations: {len(observations)}  ·  "
+            f"SGL: {len(sgls)}  ·  "
+            f"Generated: {datetime.now(RIYADH_TZ).strftime('%d %b %Y  %H:%M')}",
+            sub_s
+        ),
+        Spacer(1, 3*mm),
+    ] + sgl_flow + [
+        Paragraph("Observations", _ps("obt", 10.5, 13, bold=True)),
+        Spacer(1, 2*mm),
+        tbl,
     ]
-    doc.build(content)
+
+    doc.build(story)
     buf.seek(0)
+    fname = f"observations_{target_date.isoformat()}.pdf"
     resp = make_response(buf.read())
     resp.headers["Content-Type"] = "application/pdf"
-    resp.headers["Content-Disposition"] = f"attachment; filename=officer_{officer_id}_report.pdf"
+    resp.headers["Content-Disposition"] = f"inline; filename={fname}"
     return resp
 
 
 # ===================== HSE Monthly Report =====================
 
-def _hse_monthly_report_data(year, month):
+def _hse_monthly_report_data(year, month, company_id=None):
     from calendar import monthrange
     first_day = date(year, month, 1)
     last_day  = date(year, month, monthrange(year, month)[1])
-    return _hse_weekly_report_data(first_day, last_day)
+    return _hse_weekly_report_data(first_day, last_day, company_id=company_id)
 
 
 @app.route("/hse/reports/monthly", methods=["GET"])
@@ -8782,7 +11720,7 @@ def hse_report_monthly():
     from calendar import monthrange, month_name as _mn
     first_day = date(year, month, 1)
     last_day  = date(year, month, monthrange(year, month)[1])
-    rows = _hse_monthly_report_data(year, month)
+    rows = _hse_monthly_report_data(year, month, company_id=cid())
     from datetime import datetime as _dt
     return render_template("hse_report_monthly.html",
                            rows=rows, year=year, month=month,
@@ -8806,7 +11744,7 @@ def hse_report_monthly_excel():
     except (TypeError, ValueError):
         return redirect(url_for("hse_report_monthly_picker"))
 
-    rows = _hse_monthly_report_data(year, month)
+    rows = _hse_monthly_report_data(year, month, company_id=cid())
     wb = openpyxl.Workbook(); ws = wb.active
     ws.title = f"{year}-{month:02d}"
     thin = Side(style="thin", color="D1D5DB")
@@ -8814,8 +11752,8 @@ def hse_report_monthly_excel():
     hfill = PatternFill("solid", fgColor="0F172A")
     hfont = Font(color="FFFFFF", bold=True)
     headers = ["Officer","Days Check-in","Obs Total","Unsafe Act","Unsafe Cond","Positive",
-               "High Risk","Open Obs","JSO","TBTs","TBT Attend.","Near Miss","BBS Cards",
-               "PTW","Man Power","Insp Score %","Open CAs","Score"]
+               "High Risk","Open Obs","JSO","SGL","SGL Attend.",
+               "PTW","Open CAs","Score"]
     for ci, h in enumerate(headers, 1):
         c = ws.cell(row=1, column=ci, value=h)
         c.fill = hfill; c.font = hfont
@@ -8824,13 +11762,12 @@ def hse_report_monthly_excel():
         vals = [r["officer_name"], r["checkin_days"], r["obs_total"],
                 r["obs_unsafe_act"], r["obs_unsafe_cond"], r["obs_positive"],
                 r["obs_high"], r["obs_open"], r["jso"], r["tbt"],
-                r["tbt_attendees"], r["nm"], r["bbs"],
-                r.get("ptw", 0), r.get("mp_total", 0),
-                r.get("avg_insp"), r.get("ca_open", 0), r.get("score", 0)]
+                r["tbt_attendees"],
+                r.get("ptw", 0), r.get("ca_open", 0), r.get("score", 0)]
         for ci, v in enumerate(vals, 1):
             c = ws.cell(row=ri, column=ci, value=v)
             c.border = bdr; c.alignment = Alignment(vertical="center")
-    for ci, w in enumerate([24,14,10,11,12,10,11,10,9,8,13,12,11,8,11,12,10,8], 1):
+    for ci, w in enumerate([24,14,10,11,12,10,11,10,9,8,13,11,10,8], 1):
         ws.column_dimensions[openpyxl.utils.get_column_letter(ci)].width = w
     ws.freeze_panes = "A2"
     buf = io.BytesIO(); wb.save(buf); buf.seek(0)
@@ -8861,7 +11798,7 @@ def hse_report_monthly_pdf():
     except (TypeError, ValueError):
         return redirect(url_for("hse_report_monthly_picker"))
 
-    rows = _hse_monthly_report_data(year, month)
+    rows = _hse_monthly_report_data(year, month, company_id=cid())
     first_day = date(year, month, 1)
     last_day  = date(year, month, monthrange(year, month)[1])
 
@@ -8879,20 +11816,19 @@ def hse_report_monthly_pdf():
         Spacer(1, 4*mm),
     ]
     col_headers = ["Officer","Days\nCheck-in","Obs\nTotal","Unsafe\nAct","Unsafe\nCond",
-                   "Positive","High\nRisk","Open","JSO","TBTs","TBT\nAttend.","Near\nMiss","BBS",
-                   "PTW","Man\nPower","Insp\n%","Open\nCAs","Score"]
+                   "Positive","High\nRisk","Open","JSO","SGL","SGL\nAttend.",
+                   "PTW","Open\nCAs","Score"]
     data = [col_headers] + [
         [r["officer_name"], str(r["checkin_days"]), str(r["obs_total"]),
          str(r["obs_unsafe_act"]), str(r["obs_unsafe_cond"]), str(r["obs_positive"]),
          str(r["obs_high"]), str(r["obs_open"]), str(r["jso"]),
-         str(r["tbt"]), str(r["tbt_attendees"]), str(r["nm"]), str(r["bbs"]),
-         str(r.get("ptw", 0)), str(r.get("mp_total", 0)),
-         f"{r['avg_insp']}%" if r.get("avg_insp") is not None else "—",
+         str(r["tbt"]), str(r["tbt_attendees"]),
+         str(r.get("ptw", 0)),
          str(r.get("ca_open", 0)), str(r.get("score", 0))]
         for r in rows
     ]
-    col_widths = [44*mm,14*mm,12*mm,12*mm,12*mm,12*mm,12*mm,10*mm,10*mm,10*mm,14*mm,12*mm,10*mm,
-                  10*mm,12*mm,10*mm,10*mm,10*mm]
+    col_widths = [44*mm,14*mm,12*mm,12*mm,12*mm,12*mm,12*mm,10*mm,10*mm,10*mm,14*mm,
+                  10*mm,10*mm,10*mm]
     t = Table(data, colWidths=col_widths, repeatRows=1)
     t.setStyle(TableStyle([
         ("BACKGROUND", (0,0),(-1,0), colors.HexColor("#0F172A")),
@@ -8915,106 +11851,292 @@ def hse_report_monthly_pdf():
     return resp
 
 
+# ===================== Safety Manager Dashboard =====================
+
+@app.route("/safety-manager/dashboard", methods=["GET"])
+@login_required
+@safety_manager_required
+def safety_manager_dashboard():
+    import json as _json
+    from calendar import monthrange
+
+    today        = datetime.now(RIYADH_TZ).date()
+    period       = request.args.get("period", "week")
+    week_offset  = int(request.args.get("week_offset", 0))
+    _cid         = cid()
+
+    # ── Date range ──────────────────────────────────────────────────────
+    if period == "month":
+        first_day  = date(today.year, today.month, 1)
+        last_day   = today
+        period_lbl = today.strftime("%B %Y")
+        week_offset = 0  # not used for month
+        # previous month
+        if today.month == 1:
+            pm_first = date(today.year - 1, 12, 1)
+            pm_last  = date(today.year - 1, 12, monthrange(today.year - 1, 12)[1])
+        else:
+            pm_first = date(today.year, today.month - 1, 1)
+            pm_last  = date(today.year, today.month - 1,
+                            monthrange(today.year, today.month - 1)[1])
+        prev_rows = _hse_weekly_report_data(pm_first, pm_last, company_id=_cid)
+    else:  # week (default)
+        # week_offset: 0=current week, -1=last week, -2=two weeks ago …
+        days_since_sun = today.isoweekday() % 7
+        this_sun   = today - timedelta(days=days_since_sun)
+        first_day  = this_sun + timedelta(weeks=week_offset)
+        # last_day = end of that week (Saturday) or today if it's the current week
+        raw_last   = first_day + timedelta(days=6)
+        last_day   = min(raw_last, today)
+        period_lbl = f"{first_day.strftime('%d %b')} – {last_day.strftime('%d %b %Y')}"
+        prev_first = first_day - timedelta(days=7)
+        prev_last  = first_day - timedelta(days=1)
+        prev_rows  = _hse_weekly_report_data(prev_first, prev_last, company_id=_cid)
+
+    # ── Current period data ─────────────────────────────────────────────
+    rows = _hse_weekly_report_data(first_day, last_day, company_id=_cid)
+
+    # Attach trend (score delta vs previous period)
+    prev_score_map = {r["officer_id"]: r["score"] for r in prev_rows}
+    for r in rows:
+        prev = prev_score_map.get(r["officer_id"], 0)
+        r["prev_score"] = prev
+        r["trend"]      = round(r["score"] - prev, 1)
+
+    rows.sort(key=lambda r: r["score"], reverse=True)
+
+    # ── Team KPIs ───────────────────────────────────────────────────────
+    total_officers   = len(rows)
+    avg_score        = round(sum(r["score"] for r in rows) / total_officers, 1) if total_officers else 0
+    total_obs        = sum(r["obs_total"]   for r in rows)
+    total_tbt        = sum(r["tbt"]         for r in rows)
+    total_nm         = sum(r["nm"]          for r in rows)
+    total_ua         = sum(r["obs_unsafe_act"]  for r in rows)
+    total_uc         = sum(r["obs_unsafe_cond"] for r in rows)
+    total_pos        = sum(r["obs_positive"]    for r in rows)
+    active_officers  = sum(1 for r in rows if r["checkin_days"] > 0)
+    inactive_officers = [r for r in rows if r["checkin_days"] == 0]
+
+    # compliance = officers who checked in / total
+    compliance_pct = round(active_officers / total_officers * 100) if total_officers else 0
+
+    # ── High-risk open observations ─────────────────────────────────────
+    hr_q = HseObservation.query.filter_by(status="open", risk_level="H")
+    if _cid:
+        hr_q = hr_q.filter(HseObservation.company_id == _cid)
+    high_risk_open = hr_q.order_by(HseObservation.date.asc()).limit(15).all()
+
+    # officer name map for alerts
+    oid_name = {r["officer_id"]: r["officer_name"] for r in rows}
+
+    # ── Overdue corrective actions ───────────────────────────────────────
+    ca_q = HseCorrectiveAction.query.filter(
+        HseCorrectiveAction.status != "completed",
+        HseCorrectiveAction.due_date < today
+    )
+    if _cid:
+        ca_q = ca_q.filter(HseCorrectiveAction.company_id == _cid)
+    ca_overdue = ca_q.order_by(HseCorrectiveAction.due_date.asc()).limit(10).all()
+
+    # ── 6-week team score trend (for chart) ─────────────────────────────
+    weekly_labels, weekly_avg = [], []
+    for i in range(5, -1, -1):
+        dsun  = today.isoweekday() % 7
+        ws_i  = today - timedelta(days=dsun + i * 7)
+        we_i  = ws_i + timedelta(days=4)
+        wr    = _hse_weekly_report_data(ws_i, we_i, company_id=_cid)
+        wavg  = round(sum(x["score"] for x in wr) / len(wr), 1) if wr else 0
+        weekly_labels.append(ws_i.strftime("%d %b"))
+        weekly_avg.append(wavg)
+
+    # ── Per-officer 6-week scores (top 5 for chart) ──────────────────────
+    top5 = rows[:5]
+    officer_trend_data = []
+    for r in top5:
+        oid   = r["officer_id"]
+        pts   = []
+        for i in range(5, -1, -1):
+            dsun = today.isoweekday() % 7
+            ws_i = today - timedelta(days=dsun + i * 7)
+            we_i = ws_i + timedelta(days=4)
+            s    = _hse_officer_score(oid, ws_i, we_i)
+            pts.append(s)
+        officer_trend_data.append({"name": r["officer_name"], "data": pts})
+
+    # ── Welfare summary ────────────────────────────────────────────────
+    wlf_officers_q = User.query.filter_by(role="welfare_officer", is_active=True)
+    if _cid:
+        wlf_officers_q = wlf_officers_q.filter(User.company_id == _cid)
+    wlf_officers = wlf_officers_q.order_by(User.name).all()
+    wlf_rows = []
+    for o in wlf_officers:
+        d = _wlf_monthly_card_data(o, first_day, last_day)
+        wlf_rows.append({
+            "officer_id":   o.id,
+            "officer_name": o.name,
+            "rounds":       d["rounds"],
+            "avg_score":    d["avg_score"],
+            "finds_closed": d["finds_closed"],
+            "finds_open":   d["finds_open"],
+            "complaints":   d["complaints"],
+            "zero":         d["rounds"] == 0,
+        })
+    wlf_rows.sort(key=lambda r: r["rounds"], reverse=True)
+
+    return render_template(
+        "safety_manager_dashboard.html",
+        today=today, period=period, period_lbl=period_lbl,
+        week_offset=week_offset,
+        first_day=first_day, last_day=last_day,
+        rows=rows,
+        wlf_rows=wlf_rows,
+        total_officers=total_officers,
+        active_officers=active_officers,
+        inactive_officers=inactive_officers,
+        compliance_pct=compliance_pct,
+        avg_score=avg_score,
+        total_obs=total_obs,
+        total_tbt=total_tbt,
+        total_nm=total_nm,
+        total_ua=total_ua,
+        total_uc=total_uc,
+        total_pos=total_pos,
+        high_risk_open=high_risk_open,
+        oid_name=oid_name,
+        ca_overdue=ca_overdue,
+        weekly_labels=_json.dumps(weekly_labels),
+        weekly_avg=_json.dumps(weekly_avg),
+        officer_trend_data=_json.dumps(officer_trend_data),
+    )
+
+
 # ===================== HSE Reports =====================
 
-def _hse_weekly_report_data(ws, we):
-    """Returns list of dicts, one per safety officer, for the given week."""
-    officers = User.query.filter_by(role="safety_officer", is_active=True).order_by(User.name).all()
+def _hse_weekly_report_data(ws, we, company_id=None):
+    """Returns list of dicts, one per safety officer — uses batch GROUP BY queries."""
+    officers_q = User.query.filter_by(role="safety_officer", is_active=True)
+    if company_id:
+        officers_q = officers_q.filter(User.company_id == company_id)
+    officers = officers_q.order_by(User.name).all()
+    if not officers:
+        return []
+    oids = [o.id for o in officers]
+
+    # ── batch queries (one per metric) ─────────────────────────────────
+    ci_map = dict(db.session.query(HseCheckin.officer_id, func.count())
+                  .filter(HseCheckin.officer_id.in_(oids), HseCheckin.date.between(ws, we))
+                  .group_by(HseCheckin.officer_id).all())
+
+    # observations: load once, aggregate in Python
+    obs_rows = (db.session.query(HseObservation.officer_id, HseObservation.obs_type,
+                                  HseObservation.risk_level, HseObservation.status)
+                .filter(HseObservation.officer_id.in_(oids), HseObservation.date.between(ws, we))
+                .all())
+    from collections import defaultdict
+    obs_data = defaultdict(lambda: {"total":0,"unsafe_act":0,"unsafe_cond":0,
+                                     "positive":0,"high":0,"open":0})
+    for oid, otype, risk, status in obs_rows:
+        d = obs_data[oid]
+        d["total"] += 1
+        if otype == "unsafe_act":      d["unsafe_act"] += 1
+        elif otype == "unsafe_condition": d["unsafe_cond"] += 1
+        elif otype == "positive":      d["positive"] += 1
+        if risk == "H":   d["high"] += 1
+        if status == "open": d["open"] += 1
+
+    jso_map = dict(db.session.query(HseJsoClosure.officer_id, func.count())
+                   .filter(HseJsoClosure.officer_id.in_(oids), HseJsoClosure.date.between(ws, we))
+                   .group_by(HseJsoClosure.officer_id).all())
+
+    tbt_map = dict(db.session.query(HseTbt.officer_id, func.count())
+                   .filter(HseTbt.officer_id.in_(oids), HseTbt.date.between(ws, we))
+                   .group_by(HseTbt.officer_id).all())
+
+    # tbt_attendees: join TBT with attendance, sum per officer
+    tbt_att_map = dict(
+        db.session.query(HseTbt.officer_id, func.count(HseTbtAttendance.id))
+        .join(HseTbtAttendance, HseTbt.id == HseTbtAttendance.tbt_id)
+        .filter(HseTbt.officer_id.in_(oids), HseTbt.date.between(ws, we))
+        .group_by(HseTbt.officer_id).all()
+    )
+
+    nm_map = dict(db.session.query(HseNearMiss.officer_id, func.count())
+                  .filter(HseNearMiss.officer_id.in_(oids), HseNearMiss.date.between(ws, we))
+                  .group_by(HseNearMiss.officer_id).all())
+
+    bbs_map = dict(db.session.query(HseBbs.officer_id,
+                                     func.coalesce(func.sum(HseBbs.card_count), 0))
+                   .filter(HseBbs.officer_id.in_(oids), HseBbs.date.between(ws, we))
+                   .group_by(HseBbs.officer_id).all())
+
+    ptw_map = dict(db.session.query(HsePtw.officer_id, func.count())
+                   .filter(HsePtw.officer_id.in_(oids),
+                           HsePtw.week_start <= we, HsePtw.week_end >= ws)
+                   .group_by(HsePtw.officer_id).all())
+
+    mp_map = dict(db.session.query(HseManpower.officer_id,
+                                    func.coalesce(func.sum(HseManpower.total_count), 0))
+                  .filter(HseManpower.officer_id.in_(oids), HseManpower.date.between(ws, we))
+                  .group_by(HseManpower.officer_id).all())
+
+    # inspection avg per officer
+    insp_rows = (db.session.query(HseInspection.officer_id,
+                                   func.avg(HseInspection.overall_score))
+                 .filter(HseInspection.officer_id.in_(oids),
+                         HseInspection.date.between(ws, we),
+                         HseInspection.overall_score.isnot(None))
+                 .group_by(HseInspection.officer_id).all())
+    insp_map = {oid: round(float(avg), 1) for oid, avg in insp_rows if avg is not None}
+
+    # inspection count (needed for score)
+    insp_cnt_map = dict(db.session.query(HseInspection.officer_id, func.count())
+                        .filter(HseInspection.officer_id.in_(oids),
+                                HseInspection.date.between(ws, we))
+                        .group_by(HseInspection.officer_id).all())
+
+    # open corrective actions per officer (via join)
+    ca_map = dict(
+        db.session.query(HseObservation.officer_id, func.count(HseCorrectiveAction.id))
+        .join(HseCorrectiveAction, HseCorrectiveAction.observation_id == HseObservation.id)
+        .filter(HseObservation.officer_id.in_(oids),
+                HseCorrectiveAction.status != "completed")
+        .group_by(HseObservation.officer_id).all()
+    )
+
     rows = []
     for o in officers:
-        checkin_days = HseCheckin.query.filter(
-            HseCheckin.officer_id == o.id,
-            HseCheckin.date.between(ws, we)
-        ).count()
-
-        obs_all = HseObservation.query.filter(
-            HseObservation.officer_id == o.id,
-            HseObservation.date.between(ws, we)
-        ).all()
-        obs_total     = len(obs_all)
-        obs_unsafe_act  = sum(1 for x in obs_all if x.obs_type == "unsafe_act")
-        obs_unsafe_cond = sum(1 for x in obs_all if x.obs_type == "unsafe_condition")
-        obs_positive    = sum(1 for x in obs_all if x.obs_type == "positive")
-        obs_high        = sum(1 for x in obs_all if x.risk_level == "H")
-        obs_open        = sum(1 for x in obs_all if x.status == "open")
-
-        jso_cnt = HseJsoClosure.query.filter(
-            HseJsoClosure.officer_id == o.id,
-            HseJsoClosure.date.between(ws, we)
-        ).count()
-
-        tbts = HseTbt.query.filter(
-            HseTbt.officer_id == o.id,
-            HseTbt.date.between(ws, we)
-        ).all()
-        tbt_cnt = len(tbts)
-        tbt_attendees = sum(
-            db.session.query(func.count(HseTbtAttendance.id)).filter_by(tbt_id=t.id).scalar() or 0
-            for t in tbts
-        )
-
-        nm_cnt = HseNearMiss.query.filter(
-            HseNearMiss.officer_id == o.id,
-            HseNearMiss.date.between(ws, we)
-        ).count()
-
-        bbs_cards = db.session.query(
-            func.coalesce(func.sum(HseBbs.card_count), 0)
-        ).filter(
-            HseBbs.officer_id == o.id,
-            HseBbs.date.between(ws, we)
-        ).scalar() or 0
-
-        ptw_cnt = HsePtw.query.filter(
-            HsePtw.officer_id == o.id,
-            HsePtw.week_start <= we,
-            HsePtw.week_end   >= ws,
-        ).count()
-
-        mp_total = db.session.query(
-            func.coalesce(func.sum(HseManpower.total_count), 0)
-        ).filter(
-            HseManpower.officer_id == o.id,
-            HseManpower.date.between(ws, we)
-        ).scalar() or 0
-
-        insp_list = HseInspection.query.filter(
-            HseInspection.officer_id == o.id,
-            HseInspection.date.between(ws, we)
-        ).all()
-        insp_scores = [i.overall_score for i in insp_list if i.overall_score is not None]
-        avg_insp = round(sum(insp_scores) / len(insp_scores), 1) if insp_scores else None
-
-        ca_open = HseCorrectiveAction.query.join(
-            HseObservation, HseCorrectiveAction.observation_id == HseObservation.id
-        ).filter(
-            HseObservation.officer_id == o.id,
-            HseCorrectiveAction.status != "completed"
-        ).count()
-
-        score = _hse_officer_score(o.id, ws, we)
-
+        oid = o.id
+        obs  = obs_data[oid]
+        ci_w   = ci_map.get(oid, 0)
+        obs_t  = obs["total"]
+        tbt_w  = tbt_map.get(oid, 0)
+        nm_w   = nm_map.get(oid, 0)
+        bbs_w  = int(bbs_map.get(oid, 0))
+        insp_w = insp_cnt_map.get(oid, 0)
+        ptw_w  = ptw_map.get(oid, 0)
+        score  = round(ci_w*1 + obs_t*2 + tbt_w*3 + ptw_w*1, 1)
         rows.append({
-            "officer_id":     o.id,
-            "officer_name":   o.name,
-            "checkin_days":   checkin_days,
-            "obs_total":      obs_total,
-            "obs_unsafe_act": obs_unsafe_act,
-            "obs_unsafe_cond": obs_unsafe_cond,
-            "obs_positive":   obs_positive,
-            "obs_high":       obs_high,
-            "obs_open":       obs_open,
-            "jso":            jso_cnt,
-            "tbt":            tbt_cnt,
-            "tbt_attendees":  int(tbt_attendees),
-            "nm":             nm_cnt,
-            "bbs":            int(bbs_cards),
-            "ptw":            ptw_cnt,
-            "mp_total":       int(mp_total),
-            "avg_insp":       avg_insp,
-            "ca_open":        ca_open,
-            "score":          score,
-            "total_activity": obs_total + jso_cnt + tbt_cnt + nm_cnt,
+            "officer_id":      oid,
+            "officer_name":    o.name,
+            "checkin_days":    ci_w,
+            "obs_total":       obs_t,
+            "obs_unsafe_act":  obs["unsafe_act"],
+            "obs_unsafe_cond": obs["unsafe_cond"],
+            "obs_positive":    obs["positive"],
+            "obs_high":        obs["high"],
+            "obs_open":        obs["open"],
+            "jso":             jso_map.get(oid, 0),
+            "tbt":             tbt_w,
+            "tbt_attendees":   tbt_att_map.get(oid, 0),
+            "nm":              nm_w,
+            "bbs":             bbs_w,
+            "ptw":             ptw_w,
+            "mp_total":        int(mp_map.get(oid, 0)),
+            "avg_insp":        insp_map.get(oid),
+            "ca_open":         ca_map.get(oid, 0),
+            "score":           score,
+            "total_activity":  obs_t + jso_map.get(oid, 0) + tbt_w + nm_w,
+            "is_trainee":      bool(getattr(o, "ptw_training_active", False)),
         })
     return rows
 
@@ -9037,7 +12159,7 @@ def hse_report_weekly():
     if not ws:
         return redirect(url_for("hse_report_picker"))
     we = ws + timedelta(days=4)          # Sun → Thu
-    rows = _hse_weekly_report_data(ws, we)
+    rows = _hse_weekly_report_data(ws, we, company_id=cid())
     from datetime import datetime as _dt
     return render_template("hse_report_weekly.html",
                            rows=rows, ws=ws, we=we,
@@ -9070,7 +12192,7 @@ def _hse_officer_score(officer_id, week_start, week_end):
                                        HseInspection.date.between(week_start, week_end)).count()
     ptw  = HsePtw.query.filter(HsePtw.officer_id == officer_id,
                                  HsePtw.week_start == week_start).count()
-    return round(ci*1 + obs*2 + tbt*3 + nm*5 + bbs*0.1 + insp*2 + ptw*1, 1)
+    return round(ci*1 + obs*2 + tbt*3 + ptw*1, 1)
 
 
 # ── PTW ──────────────────────────────────────────────────────────────
@@ -9093,7 +12215,7 @@ def hse_ptw():
         attached_to   = request.form.get("attached_to_id") or None
 
         if not permit_number or not permit_type:
-            flash("رقم البيرمت والنوع مطلوبان.", "danger")
+            flash("Permit number and type are required.", "danger")
             return redirect(url_for("hse_ptw"))
 
         p = HsePtw(
@@ -9105,7 +12227,7 @@ def hse_ptw():
         )
         db.session.add(p)
         db.session.commit()
-        flash("تم حفظ البيرمت.", "success")
+        flash("Permit saved.", "success")
         return redirect(url_for("hse_ptw"))
 
     ptw_list = HsePtw.query.filter_by(officer_id=u.id).order_by(HsePtw.week_start.desc()).all()
@@ -9143,7 +12265,7 @@ def hse_ptw_renew(ptw_id):
     p.week_end   = we
     p.status     = "active"
     db.session.commit()
-    flash("تم تجديد البيرمت للأسبوع الحالي.", "success")
+    flash("Permit renewed for the current week.", "success")
     return redirect(url_for("hse_ptw"))
 
 
@@ -9203,7 +12325,7 @@ def hse_manpower():
                                notes=notes)
             db.session.add(rec)
         db.session.commit()
-        flash("تم حفظ Man Power.", "success")
+        flash("Man Power saved.", "success")
         return redirect(url_for("hse_manpower"))
 
     history = (HseManpower.query.filter_by(officer_id=u.id)
@@ -9250,7 +12372,7 @@ def hse_inspection():
                                  overall_score=score, notes=notes)
             db.session.add(rec)
         db.session.commit()
-        flash(f"تم حفظ الـ Checklist — النتيجة: {score}%", "success")
+        flash(f"Checklist saved — score: {score}%", "success")
         return redirect(url_for("hse_inspection"))
 
     import json as _json
@@ -9283,7 +12405,7 @@ def hse_corrective_add():
     action_required = (request.form.get("action_required") or "").strip()
 
     if not obs_id or not due_date or not action_required:
-        flash("جميع الحقول مطلوبة.", "danger")
+        flash("All fields are required.", "danger")
         return redirect(url_for("hse_dashboard"))
 
     u = cur_user()
@@ -9309,7 +12431,7 @@ def hse_corrective_add():
               f"تم فتح CA على ملاحظتك — مطلوب: {action_required[:80]}"),
         daemon=True,
     ).start()
-    flash("تم إضافة الإجراء التصحيحي.", "success")
+    flash("Corrective action added.", "success")
     return redirect(url_for("hse_dashboard"))
 
 
@@ -9326,8 +12448,254 @@ def hse_corrective_update(ca_id):
             ca.completed_at     = datetime.now(RIYADH_TZ).date()
             ca.completion_notes = (request.form.get("completion_notes") or "").strip()
         db.session.commit()
-        flash("تم تحديث الإجراء.", "success")
+        flash("Action updated.", "success")
     return redirect(url_for("hse_dashboard"))
+
+# ── Officer: My Corrective Actions ───────────────────────────────────
+
+@app.get("/hse/my-ca")
+@login_required
+@hse_officer_required
+def hse_my_ca():
+    u    = cur_user()
+    today = datetime.now(RIYADH_TZ).date()
+    cas  = (HseCorrectiveAction.query
+            .join(HseObservation, HseCorrectiveAction.observation_id == HseObservation.id)
+            .filter(HseObservation.officer_id == u.id)
+            .order_by(HseCorrectiveAction.due_date.asc())
+            .all())
+    open_cas     = [c for c in cas if c.status != "completed"]
+    closed_cas   = [c for c in cas if c.status == "completed"]
+    overdue_cas  = [c for c in open_cas if c.due_date < today]
+    return render_template("hse_my_ca.html",
+                           open_cas=open_cas, closed_cas=closed_cas,
+                           overdue_cas=overdue_cas, today=today)
+
+
+# ── Charts API ────────────────────────────────────────────────────────
+
+@app.get("/api/hse/charts")
+@login_required
+@hse_supervisor_required
+def hse_charts_data():
+    import json as _json
+    _cid = cid()
+    today = datetime.now(RIYADH_TZ).date()
+
+    # آخر 4 أسابيع
+    weeks = []
+    for i in range(3, -1, -1):
+        days_since_sun = today.isoweekday() % 7
+        ws = today - timedelta(days=days_since_sun + i * 7)
+        we = ws + timedelta(days=4)
+        weeks.append((ws, we))
+
+    obs_trend = {"labels": [], "unsafe_act": [], "unsafe_cond": [], "positive": []}
+    for ws, we in weeks:
+        obs_trend["labels"].append(ws.strftime("%d %b"))
+        q = HseObservation.query.filter(HseObservation.date.between(ws, we))
+        if _cid: q = q.filter(HseObservation.company_id == _cid)
+        obs_trend["unsafe_act"].append(q.filter_by(obs_type="unsafe_act").count())
+        obs_trend["unsafe_cond"].append(q.filter_by(obs_type="unsafe_condition").count())
+        obs_trend["positive"].append(q.filter_by(obs_type="positive").count())
+
+    # Category distribution this month
+    first_of_month = today.replace(day=1)
+    cat_q = db.session.query(HseObservation.category, func.count(HseObservation.id))\
+              .filter(HseObservation.date >= first_of_month)
+    if _cid: cat_q = cat_q.filter(HseObservation.company_id == _cid)
+    cat_data = {r[0] or "Other": r[1] for r in cat_q.group_by(HseObservation.category).all()}
+
+    # Officer scores this week
+    days_since_sun = today.isoweekday() % 7
+    ws_cur = today - timedelta(days=days_since_sun)
+    we_cur = ws_cur + timedelta(days=4)
+    officers_q = User.query.filter_by(role="safety_officer", is_active=True)
+    if _cid: officers_q = officers_q.filter(User.company_id == _cid)
+    officers = officers_q.all()
+    if officers:
+        _score_rows = _hse_weekly_report_data(ws_cur, we_cur, company_id=_cid)
+        _score_lookup = {r["officer_id"]: r["score"] for r in _score_rows}
+        officer_scores = {
+            "labels": [o.name for o in officers],
+            "scores": [_score_lookup.get(o.id, 0.0) for o in officers],
+        }
+    else:
+        officer_scores = {"labels": [], "scores": []}
+
+    # Man power last 7 days
+    mp_data = {"labels": [], "counts": []}
+    for i in range(6, -1, -1):
+        d = today - timedelta(days=i)
+        mp_data["labels"].append(d.strftime("%a %d"))
+        total_q = db.session.query(func.coalesce(func.sum(HseManpower.total_count), 0))\
+                    .filter(HseManpower.date == d)
+        if _cid: total_q = total_q.filter(HseManpower.company_id == _cid)
+        mp_data["counts"].append(int(total_q.scalar() or 0))
+
+    return __import__("flask").jsonify({
+        "obs_trend": obs_trend,
+        "cat_data": cat_data,
+        "officer_scores": officer_scores,
+        "mp_data": mp_data,
+    })
+
+
+@app.get("/hse/reports/weekly/excel")
+@login_required
+@hse_supervisor_required
+def hse_report_weekly_excel():
+    import io, openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from flask import make_response
+
+    ws_date = _safe_date(request.args.get("week_start"))
+    if not ws_date:
+        return redirect(url_for("hse_report_picker"))
+    we_date = ws_date + timedelta(days=4)
+    rows = _hse_weekly_report_data(ws_date, we_date, company_id=cid())
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "HSE Weekly"
+
+    headers = ["Officer", "Check-in Days",
+               "Obs Total", "Unsafe Act", "Unsafe Cond", "Positive", "High-Risk", "Open",
+               "JSO Closures", "SGL", "SGL Attendees"]
+    hfill = PatternFill("solid", fgColor="0F172A")
+    hfont = Font(color="FFFFFF", bold=True)
+    thin  = Side(style="thin", color="D1D5DB")
+    bdr   = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    for ci, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=ci, value=h)
+        c.fill = hfill; c.font = hfont
+        c.alignment = Alignment(horizontal="center"); c.border = bdr
+
+    for ri, r in enumerate(rows, 2):
+        vals = [r["officer_name"], r["checkin_days"],
+                r["obs_total"], r["obs_unsafe_act"], r["obs_unsafe_cond"],
+                r["obs_positive"], r["obs_high"], r["obs_open"],
+                r["jso"], r["tbt"], r["tbt_attendees"]]
+        zero_fill = PatternFill("solid", fgColor="FEF2F2") if r["total_activity"] == 0 else None
+        for ci, v in enumerate(vals, 1):
+            c = ws.cell(row=ri, column=ci, value=v)
+            c.border = bdr
+            c.alignment = Alignment(vertical="center")
+            if zero_fill:
+                c.fill = zero_fill
+
+    widths = [24, 14, 10, 11, 12, 10, 11, 8, 13, 8, 14]
+    for ci, w in enumerate(widths, 1):
+        ws.column_dimensions[openpyxl.utils.get_column_letter(ci)].width = w
+    ws.row_dimensions[1].height = 20
+    ws.freeze_panes = "A2"
+
+    buf = io.BytesIO()
+    wb.save(buf); buf.seek(0)
+    fname = f"hse_weekly_{ws_date.isoformat()}.xlsx"
+    resp = make_response(buf.read())
+    resp.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    resp.headers["Content-Disposition"] = f"attachment; filename={fname}"
+    return resp
+
+
+@app.get("/hse/reports/weekly/pdf")
+@login_required
+@hse_supervisor_required
+def hse_report_weekly_pdf():
+    import io
+    from flask import make_response
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+    ws_date = _safe_date(request.args.get("week_start"))
+    if not ws_date:
+        return redirect(url_for("hse_report_picker"))
+    we_date = ws_date + timedelta(days=4)
+    rows = _hse_weekly_report_data(ws_date, we_date, company_id=cid())
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+                            leftMargin=10*mm, rightMargin=10*mm,
+                            topMargin=12*mm, bottomMargin=12*mm)
+    styles = getSampleStyleSheet()
+    title_s = ParagraphStyle("t", parent=styles["Heading1"], fontSize=13, spaceAfter=3)
+    sub_s   = ParagraphStyle("s", parent=styles["Normal"],   fontSize=9,  spaceAfter=8, textColor=colors.HexColor("#6B7280"))
+
+    story = [
+        Paragraph("HSE Weekly Report", title_s),
+        Paragraph(f"Week: {ws_date.strftime('%d %b %Y')} — {we_date.strftime('%d %b %Y')}", sub_s),
+        Spacer(1, 4*mm),
+    ]
+
+    col_headers = ["Officer", "Days\nChecked In",
+                   "Obs\nTotal", "Unsafe\nAct", "Unsafe\nCond", "Positive", "High\nRisk", "Open",
+                   "JSO", "SGL", "SGL\nAttend."]
+    data = [col_headers]
+    for r in rows:
+        data.append([
+            r["officer_name"], str(r["checkin_days"]),
+            str(r["obs_total"]), str(r["obs_unsafe_act"]), str(r["obs_unsafe_cond"]),
+            str(r["obs_positive"]), str(r["obs_high"]), str(r["obs_open"]),
+            str(r["jso"]), str(r["tbt"]), str(r["tbt_attendees"]),
+        ])
+
+    col_widths = [50*mm, 16*mm, 14*mm, 14*mm, 14*mm, 14*mm, 14*mm, 12*mm,
+                  14*mm, 12*mm, 16*mm]
+    t = Table(data, colWidths=col_widths, repeatRows=1)
+    style = TableStyle([
+        ("BACKGROUND",  (0,0), (-1,0), colors.HexColor("#0F172A")),
+        ("TEXTCOLOR",   (0,0), (-1,0), colors.white),
+        ("FONTSIZE",    (0,0), (-1,0), 8),
+        ("FONTSIZE",    (0,1), (-1,-1), 8),
+        ("ALIGN",       (1,0), (-1,-1), "CENTER"),
+        ("VALIGN",      (0,0), (-1,-1), "MIDDLE"),
+        ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#F9FAFB")]),
+        ("GRID",        (0,0), (-1,-1), 0.4, colors.HexColor("#E5E7EB")),
+        ("TOPPADDING",  (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING",(0,0), (-1,-1), 4),
+    ])
+    for ri, r in enumerate(rows, 1):
+        if r["total_activity"] == 0:
+            style.add("BACKGROUND", (0, ri), (-1, ri), colors.HexColor("#FEF2F2"))
+    t.setStyle(style)
+    story.append(t)
+
+    doc.build(story)
+    buf.seek(0)
+    fname = f"hse_weekly_{ws_date.isoformat()}.pdf"
+    resp = make_response(buf.read())
+    resp.headers["Content-Type"] = "application/pdf"
+    resp.headers["Content-Disposition"] = f"attachment; filename={fname}"
+    return resp
+
+
+# ===================== HSE Mobile API =====================
+
+def api_hse_officer_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        u = get_api_user()
+        if not u or not u.is_active or u.role not in ("safety_officer", "safety_supervisor",
+                                                       "safety_manager", "admin", "super_admin"):
+            return jsonify({"error": "Forbidden"}), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+def api_hse_supervisor_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        u = get_api_user()
+        if not u or not u.is_active or not is_hse_supervisor(u):
+            return jsonify({"error": "Forbidden"}), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+
 
 
 # ── API: Corrective Action (iOS) ──────────────────────────────────────
@@ -9394,244 +12762,90 @@ def api_hse_corrective_action_update(ca_id):
     return jsonify({"ok": True})
 
 
-# ── Officer: My Corrective Actions ───────────────────────────────────
-
-@app.get("/hse/my-ca")
-@login_required
-@hse_officer_required
-def hse_my_ca():
-    u    = cur_user()
-    today = datetime.now(RIYADH_TZ).date()
-    cas  = (HseCorrectiveAction.query
-            .join(HseObservation, HseCorrectiveAction.observation_id == HseObservation.id)
-            .filter(HseObservation.officer_id == u.id)
-            .order_by(HseCorrectiveAction.due_date.asc())
-            .all())
-    open_cas     = [c for c in cas if c.status != "completed"]
-    closed_cas   = [c for c in cas if c.status == "completed"]
-    overdue_cas  = [c for c in open_cas if c.due_date < today]
-    return render_template("hse_my_ca.html",
-                           open_cas=open_cas, closed_cas=closed_cas,
-                           overdue_cas=overdue_cas, today=today)
-
-
-# ── Charts API ────────────────────────────────────────────────────────
-
-@app.get("/api/hse/charts")
-@login_required
-@hse_supervisor_required
-def hse_charts_data():
-    import json as _json
-    _cid = cid()
-    today = datetime.now(RIYADH_TZ).date()
-
-    # آخر 4 أسابيع
-    weeks = []
-    for i in range(3, -1, -1):
-        days_since_sun = today.isoweekday() % 7
-        ws = today - timedelta(days=days_since_sun + i * 7)
-        we = ws + timedelta(days=4)
-        weeks.append((ws, we))
-
-    obs_trend = {"labels": [], "unsafe_act": [], "unsafe_cond": [], "positive": []}
-    for ws, we in weeks:
-        obs_trend["labels"].append(ws.strftime("%d %b"))
-        q = HseObservation.query.filter(HseObservation.date.between(ws, we))
-        if _cid: q = q.filter(HseObservation.company_id == _cid)
-        obs_trend["unsafe_act"].append(q.filter_by(obs_type="unsafe_act").count())
-        obs_trend["unsafe_cond"].append(q.filter_by(obs_type="unsafe_condition").count())
-        obs_trend["positive"].append(q.filter_by(obs_type="positive").count())
-
-    # Category distribution this month
-    first_of_month = today.replace(day=1)
-    cat_q = db.session.query(HseObservation.category, func.count(HseObservation.id))\
-              .filter(HseObservation.date >= first_of_month)
-    if _cid: cat_q = cat_q.filter(HseObservation.company_id == _cid)
-    cat_data = {r[0] or "Other": r[1] for r in cat_q.group_by(HseObservation.category).all()}
-
-    # Officer scores this week
-    days_since_sun = today.isoweekday() % 7
-    ws_cur = today - timedelta(days=days_since_sun)
-    we_cur = ws_cur + timedelta(days=4)
-    officers_q = User.query.filter_by(role="safety_officer", is_active=True)
-    if _cid: officers_q = officers_q.filter(User.company_id == _cid)
-    officers = officers_q.all()
-    officer_scores = {
-        "labels":  [o.name for o in officers],
-        "scores":  [_hse_officer_score(o.id, ws_cur, we_cur) for o in officers],
-    }
-
-    # Man power last 7 days
-    mp_data = {"labels": [], "counts": []}
-    for i in range(6, -1, -1):
-        d = today - timedelta(days=i)
-        mp_data["labels"].append(d.strftime("%a %d"))
-        total_q = db.session.query(func.coalesce(func.sum(HseManpower.total_count), 0))\
-                    .filter(HseManpower.date == d)
-        if _cid: total_q = total_q.filter(HseManpower.company_id == _cid)
-        mp_data["counts"].append(int(total_q.scalar() or 0))
-
-    return __import__("flask").jsonify({
-        "obs_trend": obs_trend,
-        "cat_data": cat_data,
-        "officer_scores": officer_scores,
-        "mp_data": mp_data,
-    })
-
-
-@app.get("/hse/reports/weekly/excel")
-@login_required
-@hse_supervisor_required
-def hse_report_weekly_excel():
-    import io, openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    from flask import make_response
-
-    ws_date = _safe_date(request.args.get("week_start"))
-    if not ws_date:
-        return redirect(url_for("hse_report_picker"))
-    we_date = ws_date + timedelta(days=4)
-    rows = _hse_weekly_report_data(ws_date, we_date)
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "HSE Weekly"
-
-    headers = ["Officer", "Check-in Days",
-               "Obs Total", "Unsafe Act", "Unsafe Cond", "Positive", "High-Risk", "Open",
-               "JSO Closures", "TBTs", "TBT Attendees", "Near Misses", "BBS Cards"]
-    hfill = PatternFill("solid", fgColor="0F172A")
-    hfont = Font(color="FFFFFF", bold=True)
-    thin  = Side(style="thin", color="D1D5DB")
-    bdr   = Border(left=thin, right=thin, top=thin, bottom=thin)
-
-    for ci, h in enumerate(headers, 1):
-        c = ws.cell(row=1, column=ci, value=h)
-        c.fill = hfill; c.font = hfont
-        c.alignment = Alignment(horizontal="center"); c.border = bdr
-
-    for ri, r in enumerate(rows, 2):
-        vals = [r["officer_name"], r["checkin_days"],
-                r["obs_total"], r["obs_unsafe_act"], r["obs_unsafe_cond"],
-                r["obs_positive"], r["obs_high"], r["obs_open"],
-                r["jso"], r["tbt"], r["tbt_attendees"], r["nm"], r["bbs"]]
-        zero_fill = PatternFill("solid", fgColor="FEF2F2") if r["total_activity"] == 0 else None
-        for ci, v in enumerate(vals, 1):
-            c = ws.cell(row=ri, column=ci, value=v)
-            c.border = bdr
-            c.alignment = Alignment(vertical="center")
-            if zero_fill:
-                c.fill = zero_fill
-
-    widths = [24, 14, 10, 11, 12, 10, 11, 8, 13, 8, 14, 13, 11]
-    for ci, w in enumerate(widths, 1):
-        ws.column_dimensions[openpyxl.utils.get_column_letter(ci)].width = w
-    ws.row_dimensions[1].height = 20
-    ws.freeze_panes = "A2"
-
-    buf = io.BytesIO()
-    wb.save(buf); buf.seek(0)
-    fname = f"hse_weekly_{ws_date.isoformat()}.xlsx"
-    resp = make_response(buf.read())
-    resp.headers["Content-Type"] = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-    resp.headers["Content-Disposition"] = f"attachment; filename={fname}"
-    return resp
-
-
-@app.get("/hse/reports/weekly/pdf")
-@login_required
-@hse_supervisor_required
-def hse_report_weekly_pdf():
+@app.get("/api/hse/officer/<int:officer_id>/pdf")
+@api_hse_supervisor_required
+def api_hse_officer_pdf(officer_id):
+    """PDF officer report via Bearer token (iOS)."""
     import io
     from flask import make_response
-    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.pagesizes import A4
     from reportlab.lib import colors
     from reportlab.lib.units import mm
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 
-    ws_date = _safe_date(request.args.get("week_start"))
-    if not ws_date:
-        return redirect(url_for("hse_report_picker"))
-    we_date = ws_date + timedelta(days=4)
-    rows = _hse_weekly_report_data(ws_date, we_date)
+    officer = User.query.filter_by(id=officer_id, role="safety_officer").first_or_404()
+    date_from = _safe_date(freq.args.get("from"))
+    date_to   = _safe_date(freq.args.get("to"))
+    checkins, observations, jsos, tbts, nearmisses, bbs_list = _collect_officer_data(officer_id, date_from, date_to)
+    _att_ids = [t.id for t in tbts]
+    _att_map = dict(
+        db.session.query(HseTbtAttendance.tbt_id, func.count())
+        .filter(HseTbtAttendance.tbt_id.in_(_att_ids))
+        .group_by(HseTbtAttendance.tbt_id).all()
+    ) if _att_ids else {}
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
-                            leftMargin=10*mm, rightMargin=10*mm,
-                            topMargin=12*mm, bottomMargin=12*mm)
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            leftMargin=12*mm, rightMargin=12*mm,
+                            topMargin=14*mm, bottomMargin=14*mm)
     styles = getSampleStyleSheet()
-    title_s = ParagraphStyle("t", parent=styles["Heading1"], fontSize=13, spaceAfter=3)
-    sub_s   = ParagraphStyle("s", parent=styles["Normal"],   fontSize=9,  spaceAfter=8, textColor=colors.HexColor("#6B7280"))
+    h1  = ParagraphStyle("h1",  parent=styles["Heading1"], fontSize=14, spaceAfter=2)
+    sub = ParagraphStyle("sub", parent=styles["Normal"],   fontSize=9,  spaceAfter=10,
+                         textColor=colors.HexColor("#6B7280"))
+    h2  = ParagraphStyle("h2",  parent=styles["Heading2"], fontSize=11, spaceBefore=10, spaceAfter=4)
+    hdr_fill = colors.HexColor("#0F172A")
+    alt_fill = colors.HexColor("#F9FAFB")
 
-    story = [
-        Paragraph("HSE Weekly Report", title_s),
-        Paragraph(f"Week: {ws_date.strftime('%d %b %Y')} — {we_date.strftime('%d %b %Y')}", sub_s),
+    def _tbl(header, rows, col_widths):
+        data = [header] + (rows if rows else [["-"] * len(header)])
+        t = Table(data, colWidths=col_widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ("BACKGROUND",  (0,0), (-1,0), hdr_fill),
+            ("TEXTCOLOR",   (0,0), (-1,0), colors.white),
+            ("FONTSIZE",    (0,0), (-1,0), 9),
+            ("FONTSIZE",    (0,1), (-1,-1), 8),
+            ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, alt_fill]),
+            ("GRID",        (0,0), (-1,-1), 0.4, colors.HexColor("#E5E7EB")),
+            ("LEFTPADDING",  (0,0), (-1,-1), 5),
+            ("RIGHTPADDING", (0,0), (-1,-1), 5),
+            ("TOPPADDING",   (0,0), (-1,-1), 3),
+            ("BOTTOMPADDING",(0,0), (-1,-1), 3),
+        ]))
+        return t
+
+    content = [
+        Paragraph("HSE Officer Report - " + officer.name, h1),
+        Paragraph("Period: " + str(date_from or "All time") + " to " + str(date_to or "Today"), sub),
         Spacer(1, 4*mm),
+        Paragraph("Check-in History", h2),
+        _tbl(["Date","Location","Time"],
+             [[str(c.date), c.location or "-", str(c.created_at)[:10]] for c in checkins],
+             [40*mm, 80*mm, 40*mm]),
+        Spacer(1, 4*mm),
+        Paragraph("Observations", h2),
+        _tbl(["Date","Type","Category","Risk","Status"],
+             [[str(o.date), o.obs_type or "-", o.category or "-", o.risk_level or "-", o.status]
+              for o in observations],
+             [28*mm, 32*mm, 36*mm, 20*mm, 24*mm]),
+        Spacer(1, 4*mm),
+        Paragraph("SGL Sessions", h2),
+        _tbl(["Date","Topic","Location","Attendees"],
+             [[str(t.date), (t.topic or "-")[:40], t.location or "-",
+               str(_att_map.get(t.id, 0))] for t in tbts],
+             [25*mm, 70*mm, 45*mm, 20*mm]),
+        Spacer(1, 4*mm),
+        Paragraph("Near Miss", h2),
+        _tbl(["Date","Location","Description"],
+             [[str(n.date), n.location or "-", (n.description or "-")[:60]] for n in nearmisses],
+             [25*mm, 40*mm, 95*mm]),
     ]
-
-    col_headers = ["Officer", "Days\nChecked In",
-                   "Obs\nTotal", "Unsafe\nAct", "Unsafe\nCond", "Positive", "High\nRisk", "Open",
-                   "JSO", "TBTs", "TBT\nAttend.", "Near\nMiss", "BBS\nCards"]
-    data = [col_headers]
-    for r in rows:
-        data.append([
-            r["officer_name"], str(r["checkin_days"]),
-            str(r["obs_total"]), str(r["obs_unsafe_act"]), str(r["obs_unsafe_cond"]),
-            str(r["obs_positive"]), str(r["obs_high"]), str(r["obs_open"]),
-            str(r["jso"]), str(r["tbt"]), str(r["tbt_attendees"]),
-            str(r["nm"]), str(r["bbs"]),
-        ])
-
-    col_widths = [50*mm, 16*mm, 14*mm, 14*mm, 14*mm, 14*mm, 14*mm, 12*mm,
-                  14*mm, 12*mm, 16*mm, 14*mm, 14*mm]
-    t = Table(data, colWidths=col_widths, repeatRows=1)
-    style = TableStyle([
-        ("BACKGROUND",  (0,0), (-1,0), colors.HexColor("#0F172A")),
-        ("TEXTCOLOR",   (0,0), (-1,0), colors.white),
-        ("FONTSIZE",    (0,0), (-1,0), 8),
-        ("FONTSIZE",    (0,1), (-1,-1), 8),
-        ("ALIGN",       (1,0), (-1,-1), "CENTER"),
-        ("VALIGN",      (0,0), (-1,-1), "MIDDLE"),
-        ("ROWBACKGROUNDS", (0,1), (-1,-1), [colors.white, colors.HexColor("#F9FAFB")]),
-        ("GRID",        (0,0), (-1,-1), 0.4, colors.HexColor("#E5E7EB")),
-        ("TOPPADDING",  (0,0), (-1,-1), 4),
-        ("BOTTOMPADDING",(0,0), (-1,-1), 4),
-    ])
-    for ri, r in enumerate(rows, 1):
-        if r["total_activity"] == 0:
-            style.add("BACKGROUND", (0, ri), (-1, ri), colors.HexColor("#FEF2F2"))
-    t.setStyle(style)
-    story.append(t)
-
-    doc.build(story)
+    doc.build(content)
     buf.seek(0)
-    fname = f"hse_weekly_{ws_date.isoformat()}.pdf"
     resp = make_response(buf.read())
     resp.headers["Content-Type"] = "application/pdf"
-    resp.headers["Content-Disposition"] = f"attachment; filename={fname}"
+    resp.headers["Content-Disposition"] = f"attachment; filename=officer_{officer_id}_report.pdf"
     return resp
-
-
-# ===================== HSE Mobile API =====================
-
-def api_hse_officer_required(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        u = get_api_user()
-        if not u or not u.is_active or u.role != "safety_officer":
-            return jsonify({"error": "Forbidden"}), 403
-        return f(*args, **kwargs)
-    return wrapper
-
-def api_hse_supervisor_required(f):
-    @wraps(f)
-    def wrapper(*args, **kwargs):
-        u = get_api_user()
-        if not u or not u.is_active or not is_hse_supervisor(u):
-            return jsonify({"error": "Forbidden"}), 403
-        return f(*args, **kwargs)
-    return wrapper
 
 
 # ── API: Weekly Report JSON (for iOS) ────────────────────────────────
@@ -9644,10 +12858,11 @@ def api_hse_report_weekly():
         days_since_sunday = today.isoweekday() % 7
         ws = today - timedelta(days=days_since_sunday)
     we = ws + timedelta(days=6)
-    rows = _hse_weekly_report_data(ws, we)
+    _company = get_api_user().company_id
+    rows = _hse_weekly_report_data(ws, we, company_id=_company)
     prev_ws = ws - timedelta(days=7)
     prev_we = prev_ws + timedelta(days=6)
-    prev_rows = _hse_weekly_report_data(prev_ws, prev_we)
+    prev_rows = _hse_weekly_report_data(prev_ws, prev_we, company_id=_company)
     return jsonify({"week_start": ws.isoformat(), "week_end": we.isoformat(),
                     "rows": rows, "prev_rows": prev_rows})
 
@@ -9662,9 +12877,10 @@ def api_hse_report_monthly_api():
         month = int(freq.args.get("month", today.month))
     except (TypeError, ValueError):
         year, month = today.year, today.month
-    rows = _hse_monthly_report_data(year, month)
+    _company = get_api_user().company_id
+    rows = _hse_monthly_report_data(year, month, company_id=_company)
     prev_year, prev_month = (year - 1, 12) if month == 1 else (year, month - 1)
-    prev_rows = _hse_monthly_report_data(prev_year, prev_month)
+    prev_rows = _hse_monthly_report_data(prev_year, prev_month, company_id=_company)
     return jsonify({"year": year, "month": month, "rows": rows, "prev_rows": prev_rows})
 
 
@@ -9710,16 +12926,27 @@ def api_hse_observations():
     u = get_api_user()
     page = int(freq.args.get("page", 1))
     status = freq.args.get("status", "")
-    q = HseObservation.query.filter_by(officer_id=u.id)
+    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
+        officer_ids = [o.id for o in _get_safety_officers(u)]
+        q = HseObservation.query.filter(HseObservation.officer_id.in_(officer_ids))
+    else:
+        q = HseObservation.query.filter_by(officer_id=u.id)
     if status in ("open", "closed"):
         q = q.filter_by(status=status)
     pg = q.order_by(HseObservation.date.desc()).paginate(page=page, per_page=15, error_out=False)
+    officer_cache = {}
+    def _officer_name(oid):
+        if oid not in officer_cache:
+            off = db.session.get(User, oid)
+            officer_cache[oid] = off.name if off else ""
+        return officer_cache[oid]
     items = [{"id": o.id, "date": o.date.isoformat(), "location": o.location or "",
               "obs_type": o.obs_type or "", "category": o.category or "",
               "risk_level": o.risk_level or "", "description": o.description or "",
               "action_taken": o.action_taken or "", "status": o.status,
               "closed_at": o.closed_at.isoformat() if o.closed_at else None,
-              "closure_action": o.closure_action or ""} for o in pg.items]
+              "closure_action": o.closure_action or "",
+              "officer_name": _officer_name(o.officer_id)} for o in pg.items]
     return jsonify({"items": items, "page": pg.page, "pages": pg.pages, "total": pg.total})
 
 @app.route("/api/hse/observation", methods=["POST"])
@@ -9749,6 +12976,28 @@ def api_hse_observation_create():
         _notify_hse_supervisors("⚠ High-Risk Observation",
                                 f"{u.name}: {category or 'No category'} at {location}")
     return jsonify({"ok": True, "id": o.id})
+
+@app.route("/api/hse/observation/<int:obs_id>", methods=["GET"])
+@api_login_required
+def api_hse_observation_get(obs_id):
+    u = get_api_user()
+    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
+        officer_ids = [o.id for o in _get_safety_officers(u)]
+        obs = HseObservation.query.filter(HseObservation.id == obs_id,
+                                          HseObservation.officer_id.in_(officer_ids)).first_or_404()
+    else:
+        obs = HseObservation.query.filter_by(id=obs_id, officer_id=u.id).first_or_404()
+    photos = [{"path": p.path, "photo_type": p.photo_type or "before"} for p in obs.photos]
+    return jsonify({
+        "id": obs.id, "date": obs.date.isoformat(), "location": obs.location or "",
+        "obs_type": obs.obs_type or "", "category": obs.category or "",
+        "risk_level": obs.risk_level or "", "description": obs.description or "",
+        "action_taken": obs.action_taken or "", "status": obs.status,
+        "closed_at": obs.closed_at.isoformat() if obs.closed_at else None,
+        "closure_action": obs.closure_action or "",
+        "photos": photos
+    })
+
 
 @app.route("/api/hse/observation/<int:obs_id>/close", methods=["POST"])
 @api_hse_officer_required
@@ -9814,10 +13063,21 @@ def api_hse_observation_delete_api(obs_id):
 def api_hse_jso_list():
     u = get_api_user()
     page = int(freq.args.get("page", 1))
-    pg = HseJsoClosure.query.filter_by(officer_id=u.id)\
-        .order_by(HseJsoClosure.date.desc()).paginate(page=page, per_page=15, error_out=False)
+    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
+        officer_ids = [o.id for o in _get_safety_officers(u)]
+        base_q = HseJsoClosure.query.filter(HseJsoClosure.officer_id.in_(officer_ids))
+    else:
+        base_q = HseJsoClosure.query.filter_by(officer_id=u.id)
+    pg = base_q.order_by(HseJsoClosure.date.desc()).paginate(page=page, per_page=15, error_out=False)
+    off_map = {}
+    def _off(oid):
+        if oid not in off_map:
+            obj = db.session.get(User, oid)
+            off_map[oid] = obj.name if obj else ""
+        return off_map[oid]
     items = [{"id": j.id, "date": j.date.isoformat(), "jso_number": j.jso_number,
-              "location": j.location or "", "action_taken": j.action_taken or ""} for j in pg.items]
+              "location": j.location or "", "action_taken": j.action_taken or "",
+              "officer_name": _off(j.officer_id)} for j in pg.items]
     return jsonify({"items": items, "page": pg.page, "pages": pg.pages, "total": pg.total})
 
 @app.route("/api/hse/jso", methods=["POST"])
@@ -9884,8 +13144,18 @@ def api_hse_jso_delete_api(jso_id):
 def api_hse_tbt_list():
     u = get_api_user()
     page = int(freq.args.get("page", 1))
-    pg = HseTbt.query.filter_by(officer_id=u.id)\
-        .order_by(HseTbt.date.desc()).paginate(page=page, per_page=15, error_out=False)
+    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
+        officer_ids = [o.id for o in _get_safety_officers(u)]
+        base_q = HseTbt.query.filter(HseTbt.officer_id.in_(officer_ids))
+    else:
+        base_q = HseTbt.query.filter_by(officer_id=u.id)
+    pg = base_q.order_by(HseTbt.date.desc()).paginate(page=page, per_page=15, error_out=False)
+    officer_cache = {}
+    def _officer_name(oid):
+        if oid not in officer_cache:
+            off = db.session.get(User, oid)
+            officer_cache[oid] = off.name if off else ""
+        return officer_cache[oid]
     items = []
     for t in pg.items:
         att = HseTbtAttendance.query.filter_by(tbt_id=t.id).all()
@@ -9893,6 +13163,8 @@ def api_hse_tbt_list():
         items.append({"id": t.id, "date": t.date.isoformat(), "topic": t.topic or "",
                       "location": t.location or "", "attendee_count": len(att),
                       "supervisor_name": sup.name if sup else "",
+                      "supervisor_role": sup.role if sup else "",
+                      "officer_name": _officer_name(t.officer_id),
                       "attendees": [{"emp_number": a.emp_number, "emp_name": a.emp_name} for a in att]})
     return jsonify({"items": items, "page": pg.page, "pages": pg.pages, "total": pg.total})
 
@@ -9980,17 +13252,185 @@ def api_hse_tbt_delete_api(tbt_id):
     db.session.commit()
     return jsonify({"ok": True})
 
+# ── Supervisor Employees for TBT ───────────────────────
+@app.route("/api/hse/tbt/supervisor-employees", methods=["GET"])
+def api_tbt_supervisor_employees():
+    u = get_api_user() or cur_user()
+    if not u or not u.is_active:
+        return jsonify({"error": "Unauthorized"}), 401
+    if u.role not in ("safety_officer", "safety_supervisor", "admin", "super_admin"):
+        return jsonify({"error": "Forbidden"}), 403
+    sup_code = freq.args.get("supervisor_code", "").strip()
+    if not sup_code:
+        return jsonify({"error": "missing supervisor_code"}), 400
+    sup = User.query.filter_by(supervisor_code=sup_code, is_active=True).first()
+    if not sup:
+        return jsonify({"error": "not_found"}), 404
+    emps = Employee.query.filter_by(user_id=sup.id, is_active=True).filter(
+        Employee.status != "resigned").all()
+    return jsonify({"supervisor": {"id": sup.id, "name": sup.name},
+                    "employees": [{"emp_number": e.emp_number, "name": e.name,
+                                   "department": e.department} for e in emps]})
+
+
+# ── User Location ───────────────────────────────────────
+@app.route("/api/location", methods=["POST"])
+def api_location_save():
+    u = get_api_user() or cur_user()
+    if not u: return jsonify(error="Unauthorized"), 401
+    body = freq.get_json() or {}
+    pkg = body.get("pkg")
+    unit = str(body.get("unit", "")).strip()
+    area_text = str(body.get("area_text", "")).strip()
+    if not pkg or not unit:
+        return jsonify(error="pkg and unit required"), 400
+    loc = UserLocation.query.filter_by(user_id=u.id).first()
+    if not loc:
+        loc = UserLocation(user_id=u.id, company_id=u.company_id)
+        db.session.add(loc)
+    loc.pkg = int(pkg)
+    loc.unit = unit
+    loc.area_text = area_text
+    loc.updated_at = datetime.utcnow()
+
+    # Safety officers: auto-create HseCheckin so reports/dashboards keep working
+    if getattr(u, "role", None) == "safety_officer":
+        today_local = datetime.now(RIYADH_TZ).date()
+        loc_text = f"PKG{pkg} Unit{unit}"
+        if area_text:
+            loc_text += f" - {area_text}"
+        existing_ci = HseCheckin.query.filter_by(officer_id=u.id, date=today_local).first()
+        if existing_ci:
+            existing_ci.location = loc_text
+        else:
+            db.session.add(HseCheckin(officer_id=u.id, date=today_local,
+                                      location=loc_text, company_id=u.company_id))
+
+    db.session.commit()
+    return jsonify(ok=True)
+
+
+@app.route("/api/location/me", methods=["GET"])
+def api_location_me():
+    u = get_api_user() or cur_user()
+    if not u: return jsonify(error="Unauthorized"), 401
+    loc = UserLocation.query.filter_by(user_id=u.id).first()
+    if not loc:
+        return jsonify(location=None)
+    return jsonify(location={
+        "pkg": loc.pkg, "unit": loc.unit,
+        "area_text": loc.area_text,
+        "updated_at": loc.updated_at.isoformat() if loc.updated_at else None
+    })
+
+
+@app.route("/api/location/nearest", methods=["GET"])
+def api_location_nearest():
+    u = get_api_user() or cur_user()
+    if not u: return jsonify(error="Unauthorized"), 401
+    my_loc = UserLocation.query.filter_by(user_id=u.id).first()
+    if not my_loc:
+        return jsonify(error="no_location"), 400
+    # السيفتي يرى المشرفين — المشرف يرى السيفتي
+    if u.role == "safety_officer":
+        target_roles = ["supervisor", "site_supervisor", "safety_supervisor"]
+    elif u.role in ["supervisor", "site_supervisor", "safety_supervisor", "admin"]:
+        target_roles = ["safety_officer"]
+    else:
+        return jsonify(nearest=[])
+    cutoff = datetime.utcnow() - timedelta(hours=24)
+    candidates = (db.session.query(User, UserLocation)
+                  .join(UserLocation, User.id == UserLocation.user_id)
+                  .filter(User.role.in_(target_roles))
+                  .filter(User.company_id == u.company_id)
+                  .filter(User.is_active == True)
+                  .filter(UserLocation.updated_at >= cutoff)
+                  .all())
+    results = []
+    for c, cloc in candidates:
+        if cloc.pkg == my_loc.pkg and cloc.unit == my_loc.unit:
+            score = 0
+        elif cloc.pkg == my_loc.pkg:
+            score = 1
+        else:
+            score = 2
+        results.append({
+            "user_id": c.id, "name": c.name, "role": c.role,
+            "supervisor_code": c.supervisor_code,
+            "pkg": cloc.pkg, "unit": cloc.unit, "area_text": cloc.area_text,
+            "updated_at": cloc.updated_at.isoformat(),
+            "proximity": score
+        })
+    results.sort(key=lambda x: (x["proximity"], x["name"]))
+    return jsonify(nearest=results[:10])
+
+
+@app.route("/api/location/all", methods=["GET"])
+def api_location_all():
+    u = get_api_user() or cur_user()
+    if not u: return jsonify(error="Unauthorized"), 401
+    if u.role not in ("admin", "super_admin"):
+        return jsonify(error="forbidden"), 403
+    cutoff = datetime.utcnow() - timedelta(hours=24)
+    rows = (db.session.query(User, UserLocation)
+            .join(UserLocation, User.id == UserLocation.user_id)
+            .filter(User.company_id == u.company_id)
+            .filter(User.is_active == True)
+            .filter(User.role.in_(["supervisor", "site_supervisor", "safety_officer"]))
+            .filter(UserLocation.updated_at >= cutoff)
+            .all())
+    result = [{"user_id": usr.id, "name": usr.name, "role": usr.role,
+               "supervisor_code": usr.supervisor_code,
+               "pkg": loc.pkg, "unit": loc.unit, "area_text": loc.area_text or "",
+               "updated_at": loc.updated_at.isoformat() if loc.updated_at else ""}
+              for usr, loc in rows]
+    result.sort(key=lambda x: (x["role"], x["pkg"] or 0, x["unit"] or ""))
+    return jsonify(result)
+
+
+@app.route("/api/location/my-supervisors", methods=["GET"])
+def api_location_my_supervisors():
+    u = get_api_user() or cur_user()
+    if not u: return jsonify(error="Unauthorized"), 401
+    if u.role not in ["site_supervisor", "admin", "super_admin"]:
+        return jsonify(error="forbidden"), 403
+    sups = (db.session.query(User, UserLocation)
+            .join(UserLocation, User.id == UserLocation.user_id)
+            .filter(User.role == "supervisor")
+            .filter(User.company_id == u.company_id)
+            .filter(User.is_active == True)
+            .all())
+    result = [{"user_id": s.id, "name": s.name,
+               "supervisor_code": s.supervisor_code,
+               "pkg": loc.pkg, "unit": loc.unit, "area_text": loc.area_text,
+               "updated_at": loc.updated_at.isoformat() if loc.updated_at else None}
+              for s, loc in sups]
+    result.sort(key=lambda x: (x["pkg"] or 0, x["unit"] or ""))
+    return jsonify(supervisors=result)
+
+
 # ── Near Miss ──────────────────────────────────────────
 @app.route("/api/hse/nearmiss", methods=["GET"])
 @api_hse_officer_required
 def api_hse_nearmiss_list():
     u = get_api_user()
     page = int(freq.args.get("page", 1))
-    pg = HseNearMiss.query.filter_by(officer_id=u.id)\
-        .order_by(HseNearMiss.date.desc()).paginate(page=page, per_page=15, error_out=False)
+    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
+        officer_ids = [o.id for o in _get_safety_officers(u)]
+        q = HseNearMiss.query.filter(HseNearMiss.officer_id.in_(officer_ids))
+    else:
+        q = HseNearMiss.query.filter_by(officer_id=u.id)
+    pg = q.order_by(HseNearMiss.date.desc()).paginate(page=page, per_page=15, error_out=False)
+    officer_cache = {}
+    def _off(oid):
+        if oid not in officer_cache:
+            off = db.session.get(User, oid)
+            officer_cache[oid] = off.name if off else ""
+        return officer_cache[oid]
     items = [{"id": nm.id, "date": nm.date.isoformat(), "location": nm.location or "",
               "description": nm.description or "", "immediate_cause": nm.immediate_cause or "",
-              "action_taken": nm.action_taken or "", "reported_to": nm.reported_to or ""} for nm in pg.items]
+              "action_taken": nm.action_taken or "", "reported_to": nm.reported_to or "",
+              "officer_name": _off(nm.officer_id)} for nm in pg.items]
     return jsonify({"items": items, "page": pg.page, "pages": pg.pages, "total": pg.total})
 
 @app.route("/api/hse/nearmiss", methods=["POST"])
@@ -10069,9 +13509,23 @@ def api_hse_bbs_today():
 @api_hse_officer_required
 def api_hse_bbs_list():
     u = get_api_user()
-    recs = HseBbs.query.filter_by(officer_id=u.id).order_by(HseBbs.date.desc()).limit(30).all()
+    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
+        officer_ids = [o.id for o in _get_safety_officers(u)]
+        q = HseBbs.query.filter(HseBbs.officer_id.in_(officer_ids))
+        limit = 100
+    else:
+        q = HseBbs.query.filter_by(officer_id=u.id)
+        limit = 30
+    recs = q.order_by(HseBbs.date.desc()).limit(limit).all()
+    off_map = {}
+    def _off(oid):
+        if oid not in off_map:
+            obj = db.session.get(User, oid)
+            off_map[oid] = obj.name if obj else ""
+        return off_map[oid]
     return jsonify([{"id": r.id, "date": r.date.isoformat(),
-                     "card_count": r.card_count, "notes": r.notes or ""} for r in recs])
+                     "card_count": r.card_count, "notes": r.notes or "",
+                     "officer_name": _off(r.officer_id)} for r in recs])
 
 @app.route("/api/hse/bbs", methods=["POST"])
 @api_hse_officer_required
@@ -10128,38 +13582,68 @@ def api_hse_employee_lookup():
 @app.route("/api/hse/dashboard", methods=["GET"])
 @api_hse_supervisor_required
 def api_hse_dashboard():
+    u = get_api_user()
+    company = u.company_id
     today = datetime.now(RIYADH_TZ).date()
     days_since_sunday = today.isoweekday() % 7
     week_start = today - timedelta(days=days_since_sunday)
-    officers = User.query.filter(User.role == "safety_officer",
-                                 User.is_active == True).all()
+
+    officers_q = User.query.filter_by(role="safety_officer", is_active=True)
+    if company:
+        officers_q = officers_q.filter_by(company_id=company)
+    officers = officers_q.all()
+    officer_ids = [o.id for o in officers]
+
+    # batch all aggregate queries — one query per metric instead of N per officer
+    def _grp(col, date_col):
+        return dict(db.session.query(col, func.count())
+                    .filter(col.in_(officer_ids), date_col.between(week_start, today))
+                    .group_by(col).all())
+
+    ci_map  = {r.officer_id: r for r in
+               HseCheckin.query.filter(HseCheckin.officer_id.in_(officer_ids),
+                                       HseCheckin.date == today).all()}
+    obs_map = _grp(HseObservation.officer_id, HseObservation.date)
+    jso_map = _grp(HseJsoClosure.officer_id, HseJsoClosure.date)
+    tbt_map = _grp(HseTbt.officer_id, HseTbt.date)
+    nm_map  = _grp(HseNearMiss.officer_id, HseNearMiss.date)
+    bbs_map = dict(
+        db.session.query(HseBbs.officer_id,
+                         func.coalesce(func.sum(HseBbs.card_count), 0))
+        .filter(HseBbs.officer_id.in_(officer_ids),
+                HseBbs.date.between(week_start, today))
+        .group_by(HseBbs.officer_id).all()
+    )
+
     data = []
     for o in officers:
-        ci = HseCheckin.query.filter_by(officer_id=o.id, date=today).first()
-        obs_w = HseObservation.query.filter(HseObservation.officer_id == o.id,
-                                            HseObservation.date >= week_start).count()
-        jso_w = HseJsoClosure.query.filter(HseJsoClosure.officer_id == o.id,
-                                           HseJsoClosure.date >= week_start).count()
-        tbt_w = HseTbt.query.filter(HseTbt.officer_id == o.id,
-                                    HseTbt.date >= week_start).count()
-        nm_w  = HseNearMiss.query.filter(HseNearMiss.officer_id == o.id,
-                                         HseNearMiss.date >= week_start).count()
-        bbs_w = db.session.query(db.func.sum(HseBbs.card_count)).filter(
-            HseBbs.officer_id == o.id, HseBbs.date >= week_start).scalar() or 0
+        ci = ci_map.get(o.id)
+        obs_w = obs_map.get(o.id, 0)
+        jso_w = jso_map.get(o.id, 0)
+        tbt_w = tbt_map.get(o.id, 0)
+        nm_w  = nm_map.get(o.id, 0)
+        bbs_w = int(bbs_map.get(o.id, 0))
         data.append({"id": o.id, "name": o.name, "checked_in": ci is not None,
                      "location": ci.location if ci else None,
                      "obs_week": obs_w, "jso_week": jso_w, "tbt_week": tbt_w,
-                     "nm_week": nm_w, "bbs_week": int(bbs_w),
+                     "nm_week": nm_w, "bbs_week": bbs_w,
                      "total_week": obs_w + jso_w + tbt_w + nm_w})
-    high_risk = HseObservation.query.filter_by(status="open", risk_level="H")\
-        .order_by(HseObservation.date).all()
+
+    # high-risk open observations scoped to this company's officers
+    high_risk = HseObservation.query.filter(
+        HseObservation.status == "open",
+        HseObservation.risk_level == "H",
+        HseObservation.officer_id.in_(officer_ids)
+    ).order_by(HseObservation.date).all()
+    off_map = {o.id: o for o in officers}
     hr_items = []
-    for o in high_risk:
-        off = db.session.get(User, o.officer_id)
-        hr_items.append({"id": o.id, "date": o.date.isoformat(),
-                         "officer": off.name if off else "?",
-                         "category": o.category or "", "location": o.location or "",
-                         "description": o.description or ""})
+    for obs in high_risk:
+        off_obj = off_map.get(obs.officer_id)
+        hr_items.append({"id": obs.id, "date": obs.date.isoformat(),
+                         "officer": off_obj.name if off_obj else "?",
+                         "category": obs.category or "", "location": obs.location or "",
+                         "description": obs.description or ""})
+
     return jsonify({"today": today.isoformat(), "week_start": week_start.isoformat(),
                     "officers": data, "high_risk_open": hr_items})
 
@@ -10174,9 +13658,12 @@ def api_hse_photo_serve(filename):
 @app.route("/api/hse/officer/<int:officer_id>/detail", methods=["GET"])
 @api_hse_supervisor_required
 def api_hse_officer_detail(officer_id):
+    u = get_api_user()
     days = min(int(freq.args.get("days", 30)), 180)
-    officer = User.query.filter_by(id=officer_id, role="safety_officer",
-                                   is_active=True).first_or_404()
+    q = User.query.filter_by(id=officer_id, role="safety_officer", is_active=True)
+    if u.company_id:
+        q = q.filter_by(company_id=u.company_id)
+    officer = q.first_or_404()
     today = datetime.now(RIYADH_TZ).date()
     since = today - timedelta(days=days)
     ci = HseCheckin.query.filter_by(officer_id=officer_id, date=today).first()
@@ -10255,11 +13742,19 @@ def api_hse_officer_detail(officer_id):
 @api_hse_officer_required
 def api_hse_ptw_list():
     u = get_api_user()
-    ptw_list = (HsePtw.query
-                .filter_by(officer_id=u.id)
-                .order_by(HsePtw.week_start.desc())
-                .limit(50).all())
     today = datetime.now(RIYADH_TZ).date()
+    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
+        officer_ids = [o.id for o in _get_safety_officers(u)]
+        q = HsePtw.query.filter(HsePtw.officer_id.in_(officer_ids))
+    else:
+        q = HsePtw.query.filter_by(officer_id=u.id)
+    ptw_list = q.order_by(HsePtw.week_start.desc()).limit(50).all()
+    officer_cache = {}
+    def _off(oid):
+        if oid not in officer_cache:
+            off = db.session.get(User, oid)
+            officer_cache[oid] = off.name if off else ""
+        return officer_cache[oid]
     return jsonify([{
         "id": p.id,
         "permit_number": p.permit_number,
@@ -10271,6 +13766,7 @@ def api_hse_ptw_list():
         "status": p.status,
         "attached_to_id": p.attached_to_id,
         "expired": p.week_end < today,
+        "officer_name": _off(p.officer_id),
     } for p in ptw_list])
 
 
@@ -10374,14 +13870,27 @@ def api_hse_manpower_save():
 def api_hse_manpower_history():
     u = get_api_user()
     import json as _json
-    recs = (HseManpower.query.filter_by(officer_id=u.id)
-            .order_by(HseManpower.date.desc()).limit(14).all())
+    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
+        officer_ids = [o.id for o in _get_safety_officers(u)]
+        q = HseManpower.query.filter(HseManpower.officer_id.in_(officer_ids))
+        limit = 50
+    else:
+        q = HseManpower.query.filter_by(officer_id=u.id)
+        limit = 14
+    recs = q.order_by(HseManpower.date.desc()).limit(limit).all()
+    off_map = {}
+    def _off(oid):
+        if oid not in off_map:
+            obj = db.session.get(User, oid)
+            off_map[oid] = obj.name if obj else ""
+        return off_map[oid]
     return jsonify([{
         "id": r.id, "date": r.date.isoformat(),
         "location": r.location or "",
         "total_count": r.total_count,
         "breakdown": _json.loads(r.breakdown) if r.breakdown else {},
         "notes": r.notes or "",
+        "officer_name": _off(r.officer_id),
     } for r in recs])
 
 
@@ -10440,14 +13949,26 @@ def api_hse_inspection_save():
 @api_hse_officer_required
 def api_hse_inspection_history():
     u = get_api_user()
-    import json as _json
-    recs = (HseInspection.query.filter_by(officer_id=u.id)
-            .order_by(HseInspection.date.desc()).limit(10).all())
+    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
+        officer_ids = [o.id for o in _get_safety_officers(u)]
+        q = HseInspection.query.filter(HseInspection.officer_id.in_(officer_ids))
+        limit = 50
+    else:
+        q = HseInspection.query.filter_by(officer_id=u.id)
+        limit = 10
+    recs = q.order_by(HseInspection.date.desc()).limit(limit).all()
+    off_map = {}
+    def _off(oid):
+        if oid not in off_map:
+            obj = db.session.get(User, oid)
+            off_map[oid] = obj.name if obj else ""
+        return off_map[oid]
     return jsonify([{
         "id": r.id, "date": r.date.isoformat(),
         "location": r.location or "",
         "overall_score": r.overall_score,
         "notes": r.notes or "",
+        "officer_name": _off(r.officer_id),
     } for r in recs])
 
 
@@ -10475,13 +13996,3321 @@ def api_hse_my_ca():
     } for c in cas])
 
 
+
+
+# ===================== Welfare & Wellbeing Module =====================
+# Self-contained. Does not modify or read any HSE table.
+# All tables prefixed wlf_ ; all routes prefixed /welfare/ ; role: welfare_officer
+# ----------------------------------------------------------------------
+
+import json as _wlf_json
+
+WLF_LOCATIONS = [
+    {"code": "340",       "label": "Unit 340",           "type": "unit"},
+    {"code": "350",       "label": "Unit 350",           "type": "unit"},
+    {"code": "360",       "label": "Unit 360",           "type": "unit"},
+    {"code": "370",       "label": "Unit 370",           "type": "unit"},
+    {"code": "380",       "label": "Unit 380",           "type": "unit"},
+    {"code": "422",       "label": "Unit 422",           "type": "unit"},
+    {"code": "TCF",       "label": "TCF",                "type": "tcf"},
+    {"code": "MESS-SITE", "label": "Mess Hall - Site",   "type": "mess"},
+    {"code": "MESS-TCF",  "label": "Mess Hall - TCF",    "type": "mess"},
+    {"code": "CLINIC",    "label": "Clinic / First Aid", "type": "clinic"},
+    {"code": "BUS",       "label": "Bus Pickup Points",  "type": "transport"},
+    {"code": "PRAYER",    "label": "Prayer Areas",       "type": "prayer"},
+]
+WLF_LOC_BY_CODE = {l["code"]: l for l in WLF_LOCATIONS}
+WLF_UNITS = [l["code"] for l in WLF_LOCATIONS if l["type"] == "unit"]
+
+WLF_SEVERITY = ["Critical", "High", "Medium", "Low"]
+WLF_LOCKED_SEVERITY = ("Critical", "High")   # trainee may not close these
+
+WLF_FLAGS = [("green", "🟢 Green"), ("yellow", "🟡 Yellow"),
+             ("orange", "🟠 Orange"), ("red", "🔴 Red")]
+
+WLF_ITEMS = [
+    {"key": "water",   "title": "M1: Drinking Water & Rest Areas",  "kind": "stations"},
+    {"key": "shelter", "title": "M1b: Shaded Rest Areas",           "kind": "shelters"},
+    {"key": "camp",    "title": "M2: Camp Management",              "kind": "simple"},
+    {"key": "heat",    "title": "M3: Heat Stress Management",       "kind": "heat"},
+    {"key": "medical", "title": "M4: Medical Welfare",              "kind": "simple"},
+    {"key": "docs",    "title": "M5: Documentation",                "kind": "simple"},
+]
+
+# Seasonal item appended to WLF_ITEMS dynamically by _wlf_items()
+WLF_SEASONAL_ITEM = {
+    "summer": {"key": "summer", "title": "Summer / Heat Readiness", "kind": "simple"},
+    "winter": {"key": "winter", "title": "Winter / Rain Readiness", "kind": "simple"},
+}
+
+
+def _wlf_season():
+    """Returns 'summer' or 'winter' from WlfSetting, defaults to 'summer'."""
+    try:
+        _c = cid()
+        q = WlfSetting.query.filter_by(key="season")
+        if _c:
+            q = q.filter(WlfSetting.company_id == _c)
+        s = q.first()
+        if s and s.value in ("summer", "winter"):
+            return s.value
+    except Exception:
+        pass
+    return "summer"
+
+
+def _wlf_items():
+    """Core WLF_ITEMS + current seasonal item."""
+    season = _wlf_season()
+    return WLF_ITEMS + [WLF_SEASONAL_ITEM[season]]
+
+# 15-level development path — one level per training chapter (5 modules, CSM Aug 2026)
+WLF_LEVELS = [
+    # ═══ Module 1: Sanitation, Water & Rest Areas ═══
+    {"code": "L1",  "phase": 1, "module": "M1", "chapter": "1.1",
+     "title": "Toilets & Washing Facilities",
+     "ref": "CSM 11.4.D + SAEHC-S-07",
+     "what": "Field: Visit every toilet block and washing facility at camp and site. For each facility: confirm soap is available at every sink, paper is stocked, ventilation is working (no odour build-up), water flows from every tap and flush, and any fault is noted (broken lock, cracked bowl, blocked drain).\nDesk: Enter the inspection for each facility block — location, soap (Y/N), paper (Y/N), ventilation (pass/fail), water (pass/fail), faults found — and raise a Finding for each deficiency.\nAnalysis: Compare facility status over the last 4 inspections. Any block failing soap or paper every time? That is a supply chain problem — escalate to camp management with a frequency note.",
+     "why": "Sanitation directly prevents communicable disease on site. CSM 11.4 mandates maintained, stocked, ventilated facilities as a minimum standard — not a target.",
+     "how": "1. List all toilet blocks and washing stations at your site and camp.\n2. For each block: enter and check every cubicle and sink.\n3. At each sink: soap dispenser full? Paper towel or tissue available?\n4. Ventilation: is there airflow? Noticeable odour? Fan working?\n5. Water: flush each toilet — does it drain fully? Run each tap — consistent flow?\n6. Check doors and locks: does every cubicle close properly?\n7. Note any fault (broken lock, blocked drain, cracked fixture). Photograph.\n——— At your desk ———\n8. Enter for each facility block: soap, paper, ventilation, water, fault list.\n9. Raise a Finding for every missing supply or working fault. Severity: High for no water/drain blockage, Medium for supply gaps.\n——— Trend check ———\n10. Compare to last 4 rounds. Any block consistently failing? Write escalation note: Block B: soap missing in 3 of 4 inspections — recommend direct supply contract.",
+     "right": "Field: 4 blocks inspected. Blocks A, C, D: all items present ✓. Block B: no soap at sinks 2 and 3, vent fan off → Finding F-011 raised (soap, severity Medium) and F-012 (fan, severity High).\nDesk: All 4 blocks logged same day; F-011 and F-012 assigned to camp facilities supervisor.\nAnalysis: Block B soap missing in 3 of 4 rounds — escalation note added to weekly report.",
+     "wrong": "The toilets are generally fine.",
+     "tasks": [{"k": "rounds_submitted", "label": "Sanitation facility inspections logged", "target": 3}]},
+
+    {"code": "L2",  "phase": 1, "module": "M1", "chapter": "1.2",
+     "title": "Drinking Water Stations",
+     "ref": "CSM 11.4.G + SAEHC-01 + GI 151.006",
+     "what": "Field: Count dispensers per unit, pace distance from furthest active worker (must be ≤100 m), test chlorine with kit (0.5–3.0 ppm), photograph any violation.\nDesk: Enter each station into the system — location ID, distance (m), chlorine (ppm), pass/fail — and raise a Finding for every non-compliant station.\nAnalysis: Review the week's chlorine log. Flag any station showing repeated out-of-range readings — these need root-cause action, not repeat findings.",
+     "why": "Shared cups are banned. Chlorine outside 0.5–3.0 ppm renders water non-potable under SAEHC. Distance >100 m means workers skip drinking — a direct heat stress risk.",
+     "how": "1. Walk all active work faces and identify every water dispenser.\n2. For each station: pace the distance from the furthest worker in that unit.\n3. Test chlorine with the kit — record the exact ppm reading.\n4. Photograph the dispenser label and any visible contamination or missing seal.\n——— At your desk ———\n5. Open the system and enter each station: unit, location code, distance (m), chlorine (ppm), pass/fail.\n6. For any fail: raise a Finding — attach the photo, set severity, assign responsible person.\n——— End of week ———\n7. Open the week's chlorine records. List daily readings per station.\n8. Any station with ≥2 low readings this week: write one line in your weekly notes — \"Station WS-07 failed 3 of 5 days — recommend maintenance team check.",
+     "right": "Field: WS-07 sealed, 85 m, chlorine 1.2 ppm ✓ — WS-12 open container, 118 m → Finding F-042 raised with photo.\nDesk: Both stations entered same day; F-042 assigned to catering supervisor, due today.\nAnalysis: WS-12 failed distance in 3 of 4 rounds this week — weekly note added: recommend relocating dispenser.",
+     "wrong": "Checked the water stations — they look fine.",
+     "tasks": [{"k": "rounds_submitted", "label": "Water inspection rounds submitted", "target": 3}]},
+
+    {"code": "L3",  "phase": 1, "module": "M1", "chapter": "1.3",
+     "title": "Shaded Rest Areas",
+     "ref": "CSM 11.4.H + CSM I-13 §13.4.1.A",
+     "what": "Field: Walk each work unit and pace the distance from the furthest active worker to the nearest shade structure. In Cat III/IV heat: verify cooling (A/C or fan) and water available inside the shelter.\nDesk: Log each shelter — location, distance (m), temperature inside (°C), compliance status — and raise a Finding for any >100 m gap.\nAnalysis: If the same unit fails the distance rule in 2+ consecutive rounds, the issue is structural (not enough shelters) — escalate to supervisor, not just another finding.",
+     "why": "Shade is a mandatory requirement, not an amenity. Cat III/IV requires water and cooling within the shade structure — shade alone is not sufficient at those temperatures.",
+     "how": "1. Identify active worker groups per unit.\n2. For the furthest-positioned worker: pace to the nearest shade structure. Record distance in metres.\n3. If Cat III or IV: step inside — confirm A/C or fan is working and water bottles are present.\n4. Photograph any shelter where distance >100 m or Cat III/IV shelter lacks cooling.\n——— At your desk ———\n5. Enter each shelter: unit, shelter ID, distance (m), temp inside (°C), cooling status, water present.\n6. Raise a Finding for every shelter where distance >100 m or Cat III/IV cooling/water missing.\n——— Weekly analysis ———\n7. List units that had shade violations in any round this week.\n8. If 2+ violations from same unit: add escalation note — \"Structural gap at Unit 340 north end — recommend additional shelter, not a disciplinary finding.",
+     "right": "Field: Unit 3000 — 3 shelters, furthest worker 78 m ✓. Unit 340 — nearest shelter 112 m, 4 workers exposed → Finding F-055 raised with photo.\nDesk: Both shelters logged; F-055 assigned to project supervisor, category: infrastructure gap.\nAnalysis: Unit 340 failed shade distance in 3 of 4 rounds — escalation note written for weekly report.",
+     "wrong": "There are shelters in the area.",
+     "tasks": [{"k": "rounds_submitted", "label": "Shade inspection rounds submitted", "target": 3}]},
+
+    # ═══ Module 2: Camp & Accommodation Management ═══
+    {"code": "L4",  "phase": 1, "module": "M2", "chapter": "2.1",
+     "title": "Accommodation Standards",
+     "ref": "CSM 11.2-11.3 + SAES-M-100 + SAEHC-S-07",
+     "what": "Field: Choose 5 rooms at random (different buildings if possible). For each: count occupants, estimate floor area, test A/C operation, check every cabinet and under beds for cooking appliances, confirm emergency exit is unblocked.\nDesk: Enter each room inspection — building, room #, occupant count, A/C status, violations found — and raise a Finding for each violation with photo attached.\nAnalysis: Review the last 4 inspection records. Any room appearing twice with the same issue? Escalate persistent cases to camp management directly.",
+     "why": "Cooking inside rooms is a fire and CO poisoning risk — strictly prohibited. A/C is mandatory 24/7 in summer. Overcrowding (below 4.6 m² per person) violates SAEHC-S-07.",
+     "how": "1. Get the room list from the camp register or select at random.\n2. For each of 5 rooms: count occupants, estimate area from floor plan or rough measure.\n3. Turn A/C on if off — confirm airflow within 2 minutes.\n4. Open every shelf and check under beds for cookers, kettles, rice cookers.\n5. Confirm the emergency exit door opens freely — no padlock, no blocked path.\n6. Photograph any violation before leaving the room.\n——— At your desk ———\n7. Enter each room: building, room #, occupant count, A/C result, appliances found, exit status.\n8. Raise a Finding for every violation (cooking appliance or blocked exit = severity High).\n——— Historical review ———\n9. Open the last 4 room inspection entries. Flag any room appearing in 2+ entries with the same issue.\n10. If same room keeps failing: write escalation note to camp management — do not just open another finding.",
+     "right": "Field: 5 rooms inspected — Room 14 (4 occupants, 22 m², A/C ok, no appliances, exit clear ✓). Room 22: rice cooker found → confiscated, Finding F-031 raised, severity High.\nDesk: All 5 rooms logged same day; F-031 photo attached, assigned to camp supervisor.\nAnalysis: Room 22 appeared in 3 consecutive inspection logs — escalation note written to camp management.",
+     "wrong": "The rooms look clean.",
+     "tasks": [{"k": "rounds_submitted", "label": "Accommodation inspections logged", "target": 2}]},
+
+    {"code": "L5",  "phase": 1, "module": "M2", "chapter": "2.2",
+     "title": "Food & Nutrition",
+     "ref": "CSM 11.2 E,F,G,H + SAEHC Section 07",
+     "what": "Field: Arrive at the kitchen during or just before meal service. Confirm 3 meals per day are scheduled and served. Measure refrigeration temperature (must be 2–4°C), inspect food surfaces and utensils, confirm no cooking appliance vendors inside camp.\nDesk: Enter inspection result — meal schedule (Y/N), fridge temps (°C), surface cleanliness score (1–5), violations — and raise a Finding for any critical failure.\nAnalysis: Plot fridge temperatures across the week. A temperature drifting from 2°C to 6°C over 5 days is equipment failure — flag as a maintenance trend, not a new finding.",
+     "why": "3 balanced meals are mandatory. Refrigeration >4°C puts food safety at risk under SAEHC-07. No cooking appliances or vendors inside camp — fire hazard and prohibited sale.",
+     "how": "1. Check the kitchen meal schedule board: breakfast, lunch, dinner — all three posted?\n2. Open each refrigerator and read the internal thermometer. Record exact temperature in °C.\n3. Inspect prep surfaces and utensils — raw meat cross-contamination risk? Stains?\n4. Walk camp common areas: any mobile vendors selling cooking appliances?\n5. Photograph the fridge thermometer display and any violation.\n——— At your desk ———\n6. Enter: date, meal count (1/2/3), fridge 1 temp, fridge 2 temp, cleanliness score (1–5), violations.\n7. Raise a Finding for temp >4°C, fewer than 3 meals, or uncleaned surfaces.\n——— Weekly trend ———\n8. List fridge temperature readings from all rounds this week.\n9. If temps rising day-by-day (e.g. 2.5 → 3.4 → 4.2°C): equipment is failing — write maintenance request note in weekly report, not just a finding.",
+     "right": "Field: Kitchen inspection 08:45 — 3 meals on board ✓. Fridge 1: 2.8°C ✓, Fridge 2: 4.6°C ✗ → Finding F-018 raised. Surfaces clean.\nDesk: Inspection logged; F-018 assigned to catering company, priority High.\nAnalysis: Fridge 2 above 4°C in 3 of 4 rounds this week — maintenance request added to weekly report.",
+     "wrong": "The kitchen is running.",
+     "tasks": [{"k": "rounds_submitted", "label": "Kitchen inspections logged", "target": 2}]},
+
+    {"code": "L6",  "phase": 1, "module": "M2", "chapter": "2.3",
+     "title": "General Hygiene & Pest Control",
+     "ref": "SAEHC-S-07 + SAES-M-100",
+     "what": "Field: Walk all camp corridors, entrances, bin areas, and outdoor spaces. Count covered bins vs. uncovered/overflowing, note any pest signs (droppings, entry holes, insects), confirm the maintenance contact board is posted with a working number.\nDesk: Enter the hygiene inspection — bin count, pest activity level (none/low/medium/high), maintenance board status — and raise a Finding if overflow is widespread or pest activity is medium/high.\nAnalysis: Compare pest activity levels across the last 4 rounds. An increase from none → low → medium over consecutive rounds is a pest control program failure — escalate with specific recommendation.",
+     "why": "24-hour maintenance is mandatory. Periodic pest control is required by SAEHC. Waste accumulation breeds pests and creates health hazards for all camp residents.",
+     "how": "1. Walk every corridor of every building, checking for waste spillage and uncovered bins.\n2. Count: how many bins are covered and sealed? How many overflowing?\n3. Look for pest signs: droppings, gaps in walls, flying insects near bins.\n4. Find the maintenance contact board — is it posted and current?\n5. Photograph any overflowing bin or pest evidence.\n——— At your desk ———\n6. Enter: date, covered bins (count), uncovered/overflowing (count), pest level (none/low/medium/high), board status.\n7. Raise a Finding if: ≥3 overflowing bins, pest level medium or above, or maintenance board missing.\n——— Weekly trend ———\n8. List pest levels from all rounds this week.\n9. If trend escalates (none → low → medium): pest control schedule is failing — note in weekly report with recommendation: \"Pest control contractor should be on-site this week.",
+     "right": "Field: 2 buildings checked, 12 bins — 10 covered ✓, 2 overflowing at building B entrance → Finding F-027 raised. No pest signs. Maintenance board posted with 0555-1234.\nDesk: Logged same day; F-027 assigned to facility supervisor.\nAnalysis: Pest level none for 4 consecutive rounds — no escalation. Bin overflow at building B for 2nd week — structural fix recommended in weekly report.",
+     "wrong": "The camp looks clean.",
+     "tasks": [{"k": "rounds_submitted", "label": "Hygiene inspection rounds completed", "target": 3}]},
+
+    # ═══ Module 3: Heat Stress Management ═══
+    {"code": "L7",  "phase": 2, "module": "M3", "chapter": "3.1",
+     "title": "Heat Index System",
+     "ref": "CSM I-13 Appendix A (Aug 2026)",
+     "what": "Field: Use calibrated equipment to measure temperature (°C) and humidity (%RH) at start of shift, midday, and whenever conditions change. Calculate Heat Index and determine the category (I–IV) and its required action.\nDesk: Enter each reading into the system — date, time, temperature, humidity, Heat Index value, category, and action required.\nAnalysis: Review the day's readings as a curve. When does the site hit Cat III? How long does it stay in Cat IV? Share the daily profile with your supervisor weekly — it shows whether the midday ban alone is sufficient.",
+     "why": "Cat I (25-29): normal | Cat II (30-38): 50:10 rest ratio | Cat III (39-51): 30:10 | Cat IV (>52): 20:10 + buddy system. The category changes the legal obligation for every supervisor on site.",
+     "how": "1. Take your first reading at start of shift (07:00–08:00).\n2. Record: exact time, temperature (°C), humidity (%RH).\n3. Calculate Heat Index using the formula or the chart.\n4. Determine category: I (HI 25–29), II (30–38), III (39–51), IV (>52).\n5. Note the required action for that category.\n6. Repeat at midday (12:00) and at 14:00 — and any time you notice a significant change.\n——— At your desk ———\n7. Enter each reading: time, temp, humidity, HI value, category.\n8. If category changed during the shift: log each change as a separate entry.\n——— Weekly analysis ———\n9. List all readings from the week. What was the peak category each day?\n10. If Cat IV appeared 3+ days: include in weekly report — \"Peak heat stress reached daily. Recommend reviewing outdoor task scheduling.",
+     "right": "Field: 07:30 — 38°C, 58% → HI 44.1 → Cat III (30:10). 12:00 — 43°C, 65% → HI 54.2 → Cat IV (20:10 + buddy system).\nDesk: Both readings entered same day with categories and required actions noted.\nAnalysis: Cat IV reached 4 of 5 days this week — noted in weekly report with recommendation to limit non-essential outdoor work after 11:00.",
+     "wrong": "It's hot today.",
+     "tasks": [{"k": "rounds_measured", "label": "Heat Index readings logged", "target": 5}]},
+
+    {"code": "L8",  "phase": 2, "module": "M3", "chapter": "3.2",
+     "title": "Work/Rest Schedules & Water",
+     "ref": "CSM I-13 Appendix A + §13.4.2",
+     "what": "Field: Based on today's Heat Index category, physically visit 4+ active work areas. Observe whether supervisors stop work at the correct time. Check that water (1 cup per 15–20 min) is physically present at each work face. In Cat IV: confirm no one is working alone.\nDesk: Log each site observation — site ID, category, rest time compliant (Y/N), delay in minutes, water present, buddy system (Cat IV). Raise a Finding for every violation.\nAnalysis: Which supervisor or area has the most violations this week? A pattern (same area, 3+ times) needs a direct conversation with the foreman, not another finding.",
+     "why": "Category IV: Buddy System mandatory, 2 litres per worker within reach, no solo work — these are not recommendations, they are Aramco requirements with no exceptions.",
+     "how": "1. Check today's Heat Index category before going to the field.\n2. Visit at least 4 active work areas.\n3. At each area: note the time. Wait until the scheduled rest period — does the supervisor stop workers on time?\n4. Check: is there water available within the work area itself — not just at the shelter?\n5. In Cat IV: confirm workers are paired — no one working alone.\n6. Record: site ID, category, actual rest time vs. scheduled, delay (min), water present (Y/N), buddy check.\n7. Photograph any water absence or workers still active during rest.\n——— At your desk ———\n8. Enter all site observations in the system.\n9. Raise a Finding for: rest delay >5 min, no water at work face, or solo work in Cat IV.\n——— Weekly review ———\n10. List violations by site and supervisor. If one appears 3+ times: flag for supervisor to address directly with foreman.",
+     "right": "Field: Cat III (HI 42) — 5 sites visited. Sites 340/350/360: 30:10 respected ✓. Site 370: rest 7 min late → Finding F-044. Site 380: no water at work face → Finding F-045.\nDesk: All 5 sites logged; F-044 and F-045 raised and assigned.\nAnalysis: Site 370 had late rest in 3 of 4 rounds — flagged for supervisor to address directly with foreman.",
+     "wrong": "Workers are resting.",
+     "tasks": [{"k": "rounds_submitted", "label": "Rest schedule verification rounds", "target": 4}]},
+
+    {"code": "L9",  "phase": 2, "module": "M3", "chapter": "3.3",
+     "title": "Midday Work Ban",
+     "ref": "CSM I-13 §13.6 + Saudi Labour Law",
+     "what": "Field: Between 12:00 and 15:00 (active period: June 15–Sep 15), walk every outdoor work area. Record time arrived, location, any workers found outdoors, headcount, and action taken. If you find anyone working: stop it immediately and raise a Finding before leaving that location.\nDesk: Log your midday tour — start time, end time, all areas covered, any violations found.\nAnalysis: Review the week's midday tours. Any contractor appearing more than once? That is a compliance culture problem — include the contractor name in weekly report.",
+     "why": "The ban is mandatory under Saudi Labour Law and Aramco standards. No exceptions exist for schedule pressure or supervisor approval. Violation = immediate finding, severity High.",
+     "how": "1. Start your midday tour between 12:00 and 12:30. Note start time.\n2. Walk every outdoor work area on your route — do not skip any.\n3. If workers found outdoors: stop them immediately. Record: location, number of workers, contractor, supervisor present.\n4. Photograph workers if actively working.\n5. Note end time when you finish the tour.\n——— At your desk ———\n6. Enter midday tour record: start time, end time, areas covered (list all), violations (count + description).\n7. If any violation: raise a Finding immediately — attach photo, severity High, assign to project superintendent.\n——— Weekly pattern ———\n8. List any violations from the week. Which contractor appeared?\n9. If same contractor violated 2+ times: name them in weekly report with escalation recommendation.",
+     "right": "Field: 12:15–13:40 — 8 work areas inspected. Areas 1–7 clear ✓. Area 8 (Block 340): 4 workers found outdoors, contractor TCF → stopped immediately, supervisor notified, Finding F-061 raised with photo.\nDesk: Full tour logged; F-061 submitted with photo, severity High.\nAnalysis: TCF contractor violated midday ban for 2nd week — named in weekly report with escalation recommendation.",
+     "wrong": "I didn't see anyone.",
+     "tasks": [{"k": "rounds_submitted", "label": "Midday ban tours logged", "target": 5}]},
+
+    {"code": "L10", "phase": 2, "module": "M3", "chapter": "3.4",
+     "title": "Acclimatization",
+     "ref": "CSM I-13 §13.4.2.B + §13.2.1.F",
+     "what": "Field: At the start of each shift, get the new-arrival list from each unit supervisor. For each new worker or worker returning from leave: confirm which acclimatization day they are on and verify that their workload matches the allowed percentage (Day 1: 20%, Day 2: 40%, Day 3: 60%, Day 4: 80%, Day 5: 100%).\nDesk: Enter the acclimatization log — worker name, arrival date, day #, target %, workload assessment. Raise a Finding if any new worker is at full load before Day 5.\nAnalysis: At week end, review who cleared acclimatization this week and flag any worker with no status update to the supervisor.",
+     "why": "Day 1: 20% workload, Day 2: 40%… Day 5: 100%. Workers returning from leave restart at Day 1 — prior experience does not override this. Skipping the ramp is a leading cause of heat illness in new arrivals.",
+     "how": "1. At start of shift, get the new-arrivals list from each unit supervisor.\n2. For each new worker: confirm arrival date and calculate today's acclimatization day.\n3. Ask the supervisor: what is this worker doing today? Assess whether work intensity matches the allowed daily percentage.\n4. For workers returning from leave: confirm they restart at Day 1 regardless of experience.\n5. Record: name, arrival date, acclimatization day #, target %, confirmed assignment.\n——— At your desk ———\n6. Enter all acclimatization records for the day.\n7. Raise a Finding for any worker confirmed at full load before Day 5.\n——— End-of-week ———\n8. List all workers who started acclimatization this week. Who cleared Day 5?\n9. Flag any worker still on the list with no update — follow up with supervisor.",
+     "right": "Field: 3 new workers — Hamad (Day 2 → 40% ✓), Mahmoud (Day 1 → 20% ✓), Rida returned from leave → restarted Day 1 ✓.\nDesk: All 3 logged; day/% confirmed with supervisor. No violations found.\nAnalysis: 5 workers cleared acclimatization this week. Worker Khalid (started Mon) on Day 3 — follow-up scheduled for Day 5 clearance.",
+     "wrong": "No new workers.",
+     "tasks": [{"k": "rounds_submitted", "label": "Acclimatization follow-ups logged", "target": 3}]},
+
+    {"code": "L11", "phase": 2, "module": "M3", "chapter": "3.5",
+     "title": "Heat Illness & First Aid",
+     "ref": "CSM I-13 Appendix B",
+     "what": "Field: On every round, watch for any worker showing unusual symptoms. Know the three types: heat cramps (muscle cramps, sweating, alert), heat exhaustion (heavy sweating, pale, weak), heat stroke (hot dry skin, no sweating, confused — 911 emergency). At every shelter: confirm the emergency protocol poster is displayed and legible.\nDesk: Log any suspected case (worker name, symptoms, location, action taken, outcome) and each shelter's poster status. Raise a Finding for any missing poster.\nAnalysis: Track heat illness frequency by week and by heat category. If cases are increasing, include the trend in your weekly report.",
+     "why": "3 severity levels: heat cramps (rest + fluids) → heat exhaustion (medical attention) → heat stroke (911 + cool immediately). Misidentifying a heat stroke as exhaustion costs minutes that determine survival.",
+     "how": "1. During every field visit: observe worker behaviour — anyone moving slowly, sitting alone, confused?\n2. Know the 3 types:\n   — Heat cramps: painful muscle spasms, still sweating → move to shade, rest, fluids\n   — Heat exhaustion: pale, weak, heavy sweating → lie down, cool, fluids, medical attention\n   — Heat stroke: hot dry skin, no sweating, confused → 911 immediately + cool by all means\n3. At each shelter: check if the emergency protocol poster is present and legible.\n4. If you observe a case: stay with the worker, initiate the correct response, call for help.\n——— At your desk ———\n5. Enter any case: date, time, worker name, location, type (cramps/exhaustion/stroke), action taken, outcome.\n6. Enter shelter poster check: location, poster present (Y/N).\n7. Raise a Finding for any missing or illegible poster.\n——— Weekly trend ———\n8. Count total cases this week vs. last week. Were those days Cat III or IV?\n9. If trend is upward: include in weekly report — \"3 heat exhaustion cases this week on Cat III/IV days — recommend hydration reminder at shift start.",
+     "right": "Field: Worker at site 340 — pale, sitting alone, heavy sweating → heat exhaustion protocol initiated: moved to A/C area, fluids given, clinic contacted. 6 shelters checked — 1 poster missing (shelter 3) → Finding F-033.\nDesk: Case logged with full details; F-033 raised for missing poster.\nAnalysis: 2 cases this week vs. 0 last week — both on Cat III days. Noted in weekly report.",
+     "wrong": "The worker is tired from the sun.",
+     "tasks": [{"k": "findings_written", "label": "Heat illness observations documented", "target": 3}]},
+
+    # ═══ Module 4: Medical Welfare ═══
+    {"code": "L12", "phase": 3, "module": "M4", "chapter": "4.1",
+     "title": "First Aid Kit Inspection",
+     "ref": "CSM CSAR Section 9 (Medical Facilities)",
+     "what": "Field: At each work unit's first aid station, open and inspect the kit. Check every item against the standard contents list, verify expiry dates, confirm the responsible person's name and phone number is posted, and confirm at least one HSFA-trained person is on-site.\nDesk: Log the full inspection for each unit — kit completeness (%), expired/missing items, responsible person name, HSFA count. Raise a Finding for any gap.\nAnalysis: Any unit where the kit has been incomplete in 2+ consecutive rounds? The replacement process is broken — escalate to the supply team, not just another finding.",
+     "why": "Separate kits required every >300 m. HSFA-AED mandatory on site. A kit that passes the eye test but has expired epinephrine fails when it matters most.",
+     "how": "1. Visit each unit's first aid station.\n2. Open the kit. Check every item against the standard contents list.\n3. Read every expiry date — remove and note any expired item.\n4. Read the responsible person board: name + phone number posted?\n5. Confirm at least one HSFA-trained person is currently on-site for this unit.\n6. Photograph kit interior.\n——— At your desk ———\n7. Enter for each unit: kit completeness (%), expired items (list), responsible person name and number, HSFA count on-site.\n8. Raise a Finding for: missing mandatory items, expired items, no responsible person posted, zero HSFA-trained on-site.\n——— Trend check ———\n9. Compare this inspection to the previous round for the same unit. Any item missing in both?\n10. If same item missing twice: supply problem — add to weekly report: \"Unit 340 kit missing tourniquet for 2nd consecutive round — procurement action needed.",
+     "right": "Field: Unit 340 — all items present, no expired items, Ahmed (0509-XXXX) posted, 2 HSFA on-site ✓. Unit 360 — tourniquet missing, epinephrine expired → Finding F-029 raised with photo.\nDesk: Both units logged; F-029 assigned to supply supervisor, due today.\nAnalysis: Unit 360 tourniquet was missing last round too — procurement action added to weekly report.",
+     "wrong": "The kit is there.",
+     "tasks": [{"k": "rounds_submitted", "label": "First aid kit inspections logged", "target": 4}]},
+
+    {"code": "L13", "phase": 3, "module": "M4", "chapter": "4.2",
+     "title": "Emergency Numbers & Reporting",
+     "ref": "CSM I-1 + I-2",
+     "what": "Field: Walk to every shelter, unit gate, and muster point on your route. At each: confirm the 911 sign is present and legible. Ask one random worker per unit to verbally name the emergency number and nearest hospital.\nDesk: Log signage status per location and the outcome of each verbal test. Raise a Finding for any missing or damaged sign.\nAnalysis: Are the same locations repeatedly missing signs? This points to a maintenance/accountability gap — include location names in weekly report with a recommendation for permanent mounting.",
+     "why": "When calling 911: exact location + nature of emergency + number of casualties + your name, number, badge. Workers who don't know the number or hospital route cost critical minutes in an emergency.",
+     "how": "1. Walk to each shelter, unit gate, and muster point on your round.\n2. At each: look for the 911 emergency sign — present? Legible? Not torn, faded, or blocked?\n3. Select one worker at random per unit: ask verbally — \"What number do you call in an emergency?\" and \"Where is the nearest medical facility?\"\n4. Record: location, sign status (present/torn/missing), worker test result (pass/fail).\n5. Photograph any torn or missing sign.\n——— At your desk ———\n6. Enter each location: sign status, worker test result, comments.\n7. Raise a Finding for every missing or illegible sign.\n——— Weekly pattern ———\n8. List locations with sign issues this week.\n9. If any location appears in 2+ rounds: add to weekly report — \"Shelter 3 sign torn for 2 consecutive weeks — recommend permanent weatherproof sign.",
+     "right": "Field: 6 locations checked — 5 have clear 911 signs ✓. Shelter 3 sign torn → Finding F-048 raised with photo. Worker verbal test: 4/5 passed; Unit 380 worker gave incorrect number — supervisor notified.\nDesk: All 6 locations logged; F-048 raised and assigned.\nAnalysis: Shelter 3 flagged for 2nd week — weekly report includes recommendation for permanent sign installation.",
+     "wrong": "The numbers are known.",
+     "tasks": [{"k": "findings_written", "label": "Emergency signage violations documented", "target": 2}]},
+
+    # ═══ Module 5: Documentation ═══
+    {"code": "L14", "phase": 4, "module": "M5", "chapter": "5.1",
+     "title": "Full Daily Welfare Tour",
+     "ref": "Aramco General Requirements + GI 151.006",
+     "what": "Field: Conduct a structured tour of ≥3 hours covering all active units — camp and site. Complete all 7 checklist items (water, shade, heat index, work/rest, midday ban, first aid, acclimatization) and photograph every violation.\nDesk: Enter all 7 items in the system before end of shift. Every violation must have a Finding raised same day with a photo attached. Submit the tour record before leaving.\nAnalysis: Review your own weekly tour completion rate. Were all 7 items entered every day? Any item you consistently skip? That blind spot becomes a KPI gap your supervisor will see.",
+     "why": "A complete tour = camp + site + all 7 items entered same day. Submitting 4 of 7 items counts as an incomplete tour in the KPI report — there is no partial credit.",
+     "how": "1. Plan your route before starting — list all units you will cover.\n2. Begin with the Heat Index reading — this sets the work/rest requirement for the day.\n3. Item 1 — Water: dispenser count, distance, chlorine.\n4. Item 2 — Shade: distance check per unit.\n5. Item 3 — Heat Index: record reading if not already done.\n6. Item 4 — Work/rest: verify at 2+ active sites.\n7. Item 5 — Midday (if applicable): confirm no outdoor work 12:00–15:00.\n8. Item 6 — First aid: check 1 kit per unit.\n9. Item 7 — Acclimatization: new worker status.\n10. Record duration: start time to end time. Minimum 3 hours for a valid full tour.\n——— At your desk ———\n11. Enter all 7 items in the system with photos for every finding raised.\n12. Submit tour before end of shift.\n——— Weekly self-review ———\n13. Check your own submission record: how many tours submitted each day? Were all 7 items filled in each time?\n14. If any item consistently missing: identify why and correct the route.",
+     "right": "Field: Tour 07:15–10:40 (205 min) — all 7 items completed across 6 units. 2 violations raised: F-055 (shade distance Unit 340) and F-056 (water station Unit 380).\nDesk: All 7 items entered, 2 findings submitted with photos, tour submitted by 11:00.\nAnalysis: Week review — 5/5 tours submitted, all 7 items complete each day. No gaps.",
+     "wrong": "It was a quiet day, nothing to report.",
+     "tasks": [{"k": "rounds_submitted", "label": "Full daily tours submitted", "target": 10},
+               {"k": "findings_written", "label": "Violations documented with photos", "target": 5}]},
+
+    {"code": "L15", "phase": 4, "module": "M5", "chapter": "5.2",
+     "title": "Training & Monitoring Records",
+     "ref": "CSM I-13 §13.5",
+     "what": "Field: At the start of the week, collect the heat stress training attendance register. Cross-reference with the full worker roster: which workers have not been trained? Walk to their units and confirm the gap with the supervisor in person.\nDesk: Enter training attendance records, flag untrained workers by name, and complete the full weekly report — heat index summary, tour completion rate, findings opened/closed, complaints resolved, training coverage %.\nAnalysis: Calculate training coverage: (trained / total workers) × 100. Track week by week. If coverage is dropping, new workers are arriving faster than training is being delivered — recommend an extra session.",
+     "why": "Mandatory documentation includes: training attendance lists, acclimatization register, incident log, and daily temperature readings. Gaps in any of these are audit findings under GI 151.006.",
+     "how": "1. Retrieve the heat stress training attendance list from the safety team.\n2. Cross-reference with the full worker roster: who is missing?\n3. Walk to those workers' units — confirm with supervisor who has and has not been trained.\n4. Record untrained workers by name and notify the supervisor in writing.\n——— At your desk ———\n5. Enter training attendance: date, course name, attendee names.\n6. Flag untrained workers in the system.\n7. Complete the weekly report:\n   — Heat index summary (peak readings, days at Cat III/IV)\n   — Tour completion rate (X of 5 days, all 7 items)\n   — Findings: opened / closed this week\n   — Complaints: opened / resolved\n   — Acclimatization register summary\n   — Training coverage % (trained ÷ total × 100)\n8. Submit weekly report by end of Thursday.\n——— Trend ———\n9. Compare training coverage % to last week. If dropping: recommend adding a training session in the report.",
+     "right": "Field: Attendance list reviewed — 3 workers not trained (Hamad, Ali, Juan). Supervisors of Units 340/360 notified in person.\nDesk: Training attendance entered for 28 workers; 3 untrained flagged. Weekly report submitted Thursday — coverage 88% (↓ from 95% due to 7 new arrivals). Extra session recommended.\nAnalysis: Coverage trend: 95% → 88% over 2 weeks — recommendation for extra training session included in weekly report.",
+     "wrong": "Weekly report sent.",
+     "tasks": [{"k": "weeks_reported", "label": "Weekly reports submitted", "target": 4},
+               {"k": "complaints", "label": "Complaints documented and followed up", "target": 5}]},
+]
+WLF_LEVEL_BY_CODE = {l["code"]: l for l in WLF_LEVELS}
+WLF_LEVEL_CODES = [l["code"] for l in WLF_LEVELS]
+
+
+# ── Environment Officer: 17-level development path (6 modules, GI 430.001 / GI 2.401 / HAZCOM) ──
+# Module order: EM4 (HAZCOM) → EM2 (Soil/Water) → EM3 (Dust) → EM1 (Waste) → EM5 (Sanitation) → EM6 (Docs)
+ENV_LEVELS = [
+    # ═══ Module 4: Hazardous Materials (HAZCOM) ═══
+    {"code": "E10", "phase": 3, "module": "EM4", "chapter": "4.1",
+     "title": "Identification & Labelling",
+     "ref": "OSHA HAZCOM + GI 430.001 + Aramco Chemical Standard",
+     "what": "Field: Select 5 chemical containers at random across the site. For each: is the original label present and legible? Does the label include product name, hazard pictogram, supplier name, and signal word (Danger/Warning)? Is the container in good condition — no rust, no leak, no illegible label?\nDesk: Log each container inspected — product name, location, label present (Y/N), pictogram (Y/N), signal word (Y/N), container condition (good/damaged). Raise a Finding for each container with a missing or illegible label.\nAnalysis: Which area has the most unlabelled containers? That area needs a HAZCOM refresher — recommend targeted toolbox talk.",
+     "why": "Every chemical container must be identifiable by any worker, visitor, or emergency responder — not just the person who uses it. An unlabelled container is a HAZCOM violation and an emergency response hazard.",
+     "how": "1. Walk chemical storage areas, maintenance bays, and painting/coating areas.\n2. Select 5 containers at random — different types, different locations.\n3. For each: find the label. Read it — product name? Hazard pictogram (skull, flame, exclamation)? Signal word (Danger/Warning)?\n4. Check container condition: rust? Dents? Leaking?\n5. Photograph any missing or damaged label.\n——— At your desk ———\n6. Enter each container: product, location, label OK (Y/N), pictogram (Y/N), signal word (Y/N), condition.\n7. Raise a Finding for: missing label, illegible label, or damaged container with unknown content.\n——— Pattern ———\n8. Which area had the most unlabelled containers this week? Targeted toolbox talk recommendation in weekly report.",
+     "right": "Field: 5 containers — containers 1–4: labels present with hazard symbols ✓. Container 5 (painting area): label completely torn off, content unknown → Finding F-013 (High — unknown content).\nDesk: All 5 logged; F-013 assigned to site chemical supervisor.\nAnalysis: Painting area had 2 unlabelled containers this week — HAZCOM toolbox talk recommended for that area's crew.",
+     "wrong": "Most of the containers have labels.",
+     "tasks": [{"k": "rounds_submitted", "label": "Chemical container inspections", "target": 3}]},
+
+    {"code": "E11", "phase": 3, "module": "EM4", "chapter": "4.2",
+     "title": "SDS / CHB",
+     "ref": "OSHA HAZCOM + Aramco Chemical Standard",
+     "what": "Field: For 3 different chemical products in use today, locate the Safety Data Sheet (SDS). Is it physically available near the chemical (not just in the office)? Is it printed in colour? Is it accessible to the work crew using that chemical?\nDesk: Log each SDS check — product name, SDS found (Y/N), location (work area / office / not found), colour print (Y/N), workers aware of location (Y/N). Raise a Finding for any SDS not found at point of use.\nAnalysis: Which chemicals have the most SDS access gaps? Recommend a laminated SDS station be installed at the work area — a one-time fix beats repeated findings.",
+     "why": "The SDS must be at the point of use — not filed in the site office. Emergency responders and first aiders need it within 30 seconds, not after a 5-minute walk.",
+     "how": "1. Choose 3 chemicals currently in use on site (e.g., diesel, paint thinner, adhesive primer).\n2. Ask the crew using each chemical: \"Where is the safety data sheet for this product?\"\n3. Go to the location they point to — is it there? In colour? Readable?\n4. Time it: if finding the SDS takes more than 30 seconds from the work area — that's a failure.\n5. Photograph the SDS location (or the absence of it).\n——— At your desk ———\n6. Enter each chemical: product, SDS location found, colour (Y/N), time to locate (estimate), workers aware (Y/N).\n7. Raise a Finding for: SDS not at point of use, not in colour, or crew not aware of its location.\n——— Systemic fix ———\n8. If the same area keeps failing SDS availability: recommend a permanent laminated SDS board at that location in the weekly report.",
+     "right": "Field: 3 chemicals checked — diesel SDS at pump station ✓. Paint thinner: SDS in site office only (not at painting area) → Finding F-014. Adhesive primer: SDS present, colour, workers aware ✓.\nDesk: All 3 logged; F-014 assigned to HSE supervisor.\nAnalysis: Painting area SDS gap appeared twice — recommendation for permanent SDS board at painting area added to weekly report.",
+     "wrong": "There's an SDS file in the office.",
+     "tasks": [{"k": "rounds_submitted", "label": "SDS availability checks", "target": 3}]},
+
+    {"code": "E12", "phase": 3, "module": "EM4", "chapter": "4.3",
+     "title": "Safe Storage & Compatibility",
+     "ref": "OSHA HAZCOM + GI 430.001 + Aramco Chemical Standard",
+     "what": "Field: Inspect the chemical storage area. Using the compatibility matrix: confirm oxidisers and flammables are separated, corrosives are not stored above eye level, incompatible pairs are not adjacent. Check that day-use quantities do not exceed a 1-day supply. Confirm the area is ventilated and locked.\nDesk: Log the storage area inspection — location, oxidiser/flammable separation (pass/fail), corrosive storage height (pass/fail), day-use quantity exceeded (Y/N), ventilation (pass/fail), access locked (Y/N). Raise a Finding for any failure.\nAnalysis: Any incompatibility issue appearing in 2+ inspections? The storage layout needs a permanent fix — include in monthly report with a layout recommendation.",
+     "why": "Acetone (flammable) stored next to an oxidiser creates a fire risk that can self-ignite without a spark. Corrosives stored above eye level spill on the face during retrieval. These are not hypothetical — they are documented accident causes.",
+     "how": "1. Enter the chemical storage area.\n2. Identify all chemicals present. Group them mentally: flammables, oxidisers, corrosives, others.\n3. Check separation: oxidisers (hydrogen peroxide, bleach) ← minimum 3m or barrier → flammables (acetone, thinner, diesel).\n4. Corrosives: are they stored at or below waist height? Not on top shelves?\n5. Estimate day-use quantity: is the quantity for one day's work or a week's supply?\n6. Ventilation: any noticeable chemical odour? Exhaust fan working?\n7. Access: door locked when unattended?\n8. Photograph any incompatible pair or excess quantity.\n——— At your desk ———\n9. Enter: separation pass/fail, corrosive height pass/fail, day-use (Y/N), ventilation pass/fail, locked (Y/N).\n10. Raise a Finding for any failure (incompatible pair = severity Critical).\n——— Long-term fix ———\n11. If same incompatibility found in 2+ rounds: include layout recommendation in monthly report.",
+     "right": "Field: Chemical store inspected — flammables and oxidisers separated by 4m barrier ✓. Corrosives on waist-height shelf ✓. Acetone quantity: 25L for one day's painting — acceptable. Vent fan on ✓. Door locked ✓.\nDesk: Inspection logged, all pass.\nAnalysis: Storage area passing for 3 consecutive rounds — noting in monthly report as compliant.",
+     "wrong": "Everything is in the chemical store.",
+     "tasks": [{"k": "rounds_submitted", "label": "Chemical storage inspections", "target": 2}]},
+
+    # ═══ Module 2: Soil & Water Protection ═══
+    {"code": "E4",  "phase": 1, "module": "EM2", "chapter": "2.1",
+     "title": "Excavation Water Management",
+     "ref": "GI 2.401 + Aramco EMP",
+     "what": "Field: Inspect all active excavations with dewatering pumps. Confirm discharge water is directed to an approved settling area — not directly to stormwater drains, soil, or any natural area. Check water colour (turbid = high sediment, abnormal colour = contamination).\nDesk: Log each excavation — location, pump active (Y/N), discharge destination, water colour (clear/turbid/abnormal), compliant (Y/N). Raise a Finding for any direct discharge to soil or stormwater or for abnormal colour.\nAnalysis: Any excavation repeatedly failing? If the same contractor keeps discharging to soil, the issue is behavioural — recommend contractor toolbox talk in weekly report.",
+     "why": "Untreated dewatering discharge to natural areas or stormwater violates Aramco's GI 2.401. Turbid water causes sedimentation. Abnormal colour means chemical contamination — an immediate escalation trigger.",
+     "how": "1. List all active excavations from the project map.\n2. At each: is a pump running? Where is the discharge going?\n3. Trace the discharge line to its end point — is it an approved settling area?\n4. Observe water colour at the discharge point: clear? turbid? unusual colour (blue, grey, oily)?\n5. Photograph the discharge point and water colour.\n——— At your desk ———\n6. Enter each excavation: location, pump, discharge point, water colour, compliant.\n7. Raise a Finding for: discharge to soil/drain, turbid water without settling, or abnormal colour (severity High).\n——— Weekly trend ———\n8. Which excavations failed this week? Same contractor? Note for toolbox talk recommendation.",
+     "right": "Field: 4 active excavations. Ex-1 and Ex-2: discharge to approved settling pond, water clear ✓. Ex-3: discharge directed to open soil → Finding F-006 raised (High). Ex-4: water turbid → noted, settling check initiated.\nDesk: All 4 logged; F-006 assigned to site superintendent.\nAnalysis: Ex-3 contractor failed discharge management for 2nd week — contractor toolbox talk recommended in weekly report.",
+     "wrong": "The pump is running.",
+     "tasks": [{"k": "rounds_submitted", "label": "Excavation water discharge checks", "target": 3}]},
+
+    {"code": "E5",  "phase": 1, "module": "EM2", "chapter": "2.2",
+     "title": "Concrete Areas",
+     "ref": "Aramco EMP + GI 2.401",
+     "what": "Field: Inspect all concrete washout areas. Confirm a designated washout pit exists, is lined (plastic sheeting), is not overflowing, and that no concrete trucks are washing out directly on soil.\nDesk: Log each washout area — location, pit present (Y/N), lined (Y/N), overflow (Y/N), direct discharge to soil (Y/N). Raise a Finding for any missing pit, unlined pit, or direct discharge.\nAnalysis: If the same location keeps lacking a washout pit, the contractor has not complied with their environmental plan — escalate beyond a Finding.",
+     "why": "Concrete washout water has a pH of 11–12 and kills soil biology. GI 2.401 prohibits direct discharge to soil or stormwater. The lining prevents seepage to groundwater.",
+     "how": "1. Identify all areas where concrete is being mixed, poured, or transported.\n2. At each concrete truck unload point: is there a washout pit?\n3. Inspect the pit: plastic lining intact? Level below 75% full?\n4. Walk around the area: any concrete residue or milky water on the soil?\n5. Photograph any missing pit or direct discharge evidence.\n——— At your desk ———\n6. Enter each concrete area: location, pit present, lined, fill level (%), direct discharge evidence.\n7. Raise a Finding for: missing pit, damaged lining, overflow, or concrete residue on soil (all severity High).\n——— Trend ———\n8. Same contractor without a pit in 2+ rounds? Escalate to project superintendent — not just another Finding.",
+     "right": "Field: 3 concrete areas. Areas 1–2: pits lined, at 40% and 55% ✓. Area 3: no washout pit, concrete residue on soil → Finding F-007 (High).\nDesk: All 3 areas logged; F-007 assigned to concrete contractor, due immediately.\nAnalysis: Area 3 (same contractor) has no pit in 2nd inspection — escalation added to weekly report.",
+     "wrong": "The concrete is set.",
+     "tasks": [{"k": "rounds_submitted", "label": "Concrete washout area inspections", "target": 3}]},
+
+    {"code": "E6",  "phase": 2, "module": "EM2", "chapter": "2.3",
+     "title": "Oil Spill Prevention",
+     "ref": "GI 2.401 + Aramco EMP",
+     "what": "Field: Inspect every maintenance area, fuel storage, and refuelling point. For each: drip trays or spill containment pans present and dry? Portable oil-water separators in place where required? No visible leaks under any equipment?\nDesk: Log each area — location, containment present (Y/N), separator in place (Y/N), leaks observed (Y/N), estimated volume if any. Raise a Finding for missing containment or any observed leak.\nAnalysis: Which equipment or area generates the most spill risk? Track across 4 rounds and include in monthly report — a pattern means the equipment needs maintenance, not just a finding.",
+     "why": "Petroleum hydrocarbons contaminate soil and groundwater for years. Aramco GI 2.401 requires all oil-handling areas to have secondary containment. Prevention is far cheaper than remediation.",
+     "how": "1. List all maintenance areas, fuel storage tanks, and refuelling stations.\n2. At each: look under equipment and around the base of storage — any sheen, wet patch, or staining?\n3. Check drip trays: are they in place? Dry? Not overflowing?\n4. Check fuel hose condition: cracking, drips at fittings?\n5. Photograph any oil on soil, wet drip tray, or staining.\n——— At your desk ———\n6. Enter each area: containment present, separator present, leak observed, estimated volume if spilled.\n7. Raise a Finding for: missing containment (High), any oil on soil (Critical — initiate spill response).\n——— Monthly pattern ———\n8. Which area or piece of equipment keeps showing leaks? Schedule maintenance recommendation for monthly report.",
+     "right": "Field: 4 areas inspected. Fuel storage ✓. Maintenance bay: drip tray absent under hydraulic excavator → Finding F-008 (High). Generator: minor oil film on tray — tray not overflowing, recorded.\nDesk: All 4 areas logged; F-008 assigned to mechanical supervisor.\nAnalysis: Hydraulic excavator has had drip tray issues in 3 of 4 rounds — maintenance check recommended in monthly report.",
+     "wrong": "No major spills.",
+     "tasks": [{"k": "rounds_submitted", "label": "Oil spill prevention checks", "target": 3}]},
+
+    {"code": "E7",  "phase": 2, "module": "EM2", "chapter": "2.4",
+     "title": "Spill Response",
+     "ref": "GI 2.401 + Aramco ERP",
+     "what": "Field: Inspect spill response kits at all oil storage and refuelling areas. Confirm absorbent pads, booms, and a labelled disposal bag are present and unused (not depleted). If a spill is found: initiate response immediately — contain, absorb, photograph, report.\nDesk: Log kit inspection for each area — location, kit present (Y/N), contents complete (Y/N), sealed bag for used materials present. Raise a Finding for any incomplete kit. Log any actual spill with full details.\nAnalysis: Any kit being depleted repeatedly? Either spills are happening frequently (prevention issue) or staff are not restocking. Identify which and escalate appropriately.",
+     "why": "Scenario: 2 m² oil patch under a crane. Step 1 — stop the source. Step 2 — deploy boom around perimeter. Step 3 — absorbent pads on the spill. Step 4 — photograph. Step 5 — report to EHS. Step 6 — collect contaminated material in labelled bag. Step 7 — dispose through licensed contractor.",
+     "how": "1. Locate all spill response kits — fuel storage, maintenance bay, generator areas.\n2. Open each kit: absorbent pads (count), boom (present?), labelled disposal bag (sealed and ready?).\n3. Are items still serviceable — not wet, degraded, or already used?\n4. Photograph kit contents.\n5. If you find an active spill: contain first (boom or sand berm), then absorb, then document.\n——— At your desk ———\n6. Enter each kit: location, items present, condition, ready (Y/N).\n7. Raise a Finding for: incomplete kit or depleted items.\n8. If actual spill occurred: log the full incident — location, estimated volume, material, steps taken, photos, disposal method.\n——— Trend ———\n9. Same kit depleted 2+ times? Are spills happening there? Or is the kit not being restocked after drill use? Identify and escalate.",
+     "right": "Field: 3 kits checked — kits A and B complete and sealed ✓. Kit C: pads depleted, no disposal bag → Finding F-009. During round: small hydraulic oil spill (0.5L) at Unit 360 → contained with 2 pads, photographed, reported to EHS, contaminated pad placed in labelled bag.\nDesk: All 3 kits logged; spill incident logged with full details, photos, and disposal record.\nAnalysis: Kit C depleted in 2nd round — usage pattern suggests micro-spills at that location; preventive maintenance check recommended.",
+     "wrong": "I'll deal with it if something happens.",
+     "tasks": [{"k": "rounds_submitted", "label": "Spill kit inspections and any response logs", "target": 3}]},
+
+    # ═══ Module 3: Dust Control & Public Protection ═══
+    {"code": "E8",  "phase": 2, "module": "EM3", "chapter": "3.1",
+     "title": "Dust Control Program",
+     "ref": "Aramco EMP + GI 2.401 §Dust",
+     "what": "Field: Walk active earthworks and haul roads. Is water spraying happening at the required frequency? Are all dump trucks carrying uncovered loads? Check speed limits are being followed at haul roads (>10 km/h causes dust). Observe from a distance — is a visible dust plume leaving the site perimeter?\nDesk: Log each dust observation — location, spraying active (Y/N), trucks covered (Y/N), visible dust plume (Y/N), wind direction. Raise a Finding for any uncovered load, no spraying during earthworks, or dust reaching site perimeter.\nAnalysis: Which areas generate the most dust? Is the problem equipment-related (no water truck) or behavioural (trucks not slowing down)? Track and recommend targeted action.",
+     "why": "Dust crossing the site boundary is a community impact — and a regulatory violation. Aramco's EMP requires active dust suppression during earthworks at all times. Haul roads must be watered, not just earthworks.",
+     "how": "1. Walk active earthworks areas — any visible dust cloud above the work area?\n2. Locate the water truck: is it actively spraying? Or parked?\n3. At haul road entry/exit: watch 5 trucks — any uncovered loads?\n4. Estimate wind direction: is dust blowing toward the site boundary or community?\n5. Photograph any visible dust plume or uncovered load.\n——— At your desk ———\n6. Enter: location, earthworks active (Y/N), spraying active (Y/N), uncovered trucks (count), plume visible (Y/N), wind direction.\n7. Raise a Finding for: no spraying during active earthworks, uncovered loads, or visible plume reaching boundary (High).\n——— Pattern ———\n8. Which area or contractor consistently creates dust? Targeted Finding is more effective than a general note.",
+     "right": "Field: Unit 350 earthworks — water truck spraying ✓. Haul road: 2 of 5 trucks uncovered → Finding F-010. Dust plume reaching site boundary (westward wind) → Finding F-010b (High).\nDesk: Both locations logged; F-010 assigned to transport supervisor, F-010b to project manager.\nAnalysis: Unit 350 boundary dust appeared in 3 rounds on westward wind days — recommend dust barrier installation in weekly report.",
+     "wrong": "There's dust but it's a construction site.",
+     "tasks": [{"k": "rounds_submitted", "label": "Dust control inspections", "target": 4}]},
+
+    {"code": "E9",  "phase": 2, "module": "EM3", "chapter": "3.2",
+     "title": "Public Protection",
+     "ref": "Aramco EMP + GI 2.401 §Community",
+     "what": "Field: Walk the full perimeter fence. Identify any gap, damage, or section where dust, stone debris, or noise could reach the public. At each vulnerable section: is there a secondary barrier or shrouding in place? Is any heavy equipment operating within 50 m of the perimeter without dust/debris screening?\nDesk: Log each perimeter section — location, fence status (intact/damaged/gap), secondary barrier (Y/N), equipment proximity (Y/N). Raise a Finding for any gap or equipment within 50 m without screening.\nAnalysis: Perimeter gaps in the same location 2+ rounds? Maintenance is not responding. Escalate to project management — do not just keep logging the same gap.",
+     "why": "Flying stone chips and concrete debris from construction are a public safety hazard. Dust crossing the perimeter is both a health risk to neighbours and a community relations issue.",
+     "how": "1. Walk the full perimeter fence — all sides, not just the main gate.\n2. Check each section: fence intact? Any gap where a person or debris could pass through?\n3. Note equipment operating near the perimeter — within 50 m?\n4. Is there dust or debris accumulating on the public side of the fence?\n5. Photograph any gap or equipment without screening.\n——— At your desk ———\n6. Enter each perimeter section: status, secondary barrier, closest equipment distance.\n7. Raise a Finding for: fence gap, equipment within 50 m without screening, dust accumulation on public side.\n——— Escalation trigger ———\n8. Same gap in 2+ rounds: escalate directly to project manager with a maintenance deadline request.",
+     "right": "Field: Full perimeter walked — 3 sides intact ✓. North side: 4m fence section collapsed → Finding F-011 (High, immediate). Crane operating 35 m from perimeter without debris screen → Finding F-012.\nDesk: Both findings logged and assigned immediately.\nAnalysis: North fence section repaired after F-011 but recollapsed — escalation to project manager with structural assessment request.",
+     "wrong": "The fence is mostly fine.",
+     "tasks": [{"k": "rounds_submitted", "label": "Perimeter protection inspections", "target": 3}]},
+
+    # ═══ Module 1: Waste Management ═══
+    {"code": "E1",  "phase": 1, "module": "EM1", "chapter": "1.1",
+     "title": "Non-Hazardous Waste",
+     "ref": "GI 430.001 §4 + Aramco Waste Segregation Standard",
+     "what": "Field: Inspect every waste collection point on site. For each: is the bin covered and sealed? Is it clearly labelled (general / recyclable)? Is it being emptied daily — or is there overflow? Check for cross-contamination (hazardous items in general bins).\nDesk: Enter each waste point — location, bin type, cover status (Y/N), labelled (Y/N), overflow (Y/N), cross-contamination (Y/N). Raise a Finding for any overflow, missing cover, or cross-contamination.\nAnalysis: Compare waste point status over 4 inspections. Any location consistently overflowing? The collection frequency is inadequate — escalate to waste contractor with a schedule recommendation.",
+     "why": "Non-hazardous waste that overflows or mixes with hazardous items loses its classification and must be disposed of as hazardous — at significant cost. Daily collection is mandatory.",
+     "how": "1. Walk every waste collection area on your site route.\n2. For each bin: lid on and secured? Labelled with waste type? Filled to what level?\n3. Look inside — any hazardous items (paint cans, oil rags, chemical containers) mixed in?\n4. Photograph any overflow or mislabelled bin.\n——— At your desk ———\n5. Enter each waste point: location, type, cover, label, fill level (%), cross-contamination.\n6. Raise a Finding for: overflow (>80% full), missing cover or label, or hazardous items mixed in.\n——— Weekly trend ———\n7. List overflowing points across the week. Same location each time? Collection schedule is broken — note in weekly report: \"Waste point at area 340 NE overflows 3 of 5 days — recommend twice-daily collection.",
+     "right": "Field: 8 waste points checked. Points 1–6: covered, labelled, <60% full ✓. Point 7: overflowing general waste → Finding F-001. Point 8: paint can in general bin → Finding F-002 (cross-contamination, severity High).\nDesk: All 8 points logged; F-001 assigned to waste contractor, F-002 escalated to HSE supervisor.\nAnalysis: Point 7 overflowed in 4 consecutive rounds — collection frequency note added to weekly report.",
+     "wrong": "There are bins on site.",
+     "tasks": [{"k": "rounds_submitted", "label": "Waste point inspections logged", "target": 3}]},
+
+    {"code": "E2",  "phase": 1, "module": "EM1", "chapter": "1.2",
+     "title": "Hazardous Waste & GI 430.001",
+     "ref": "GI 430.001 §5-6 + Aramco HAZWASTE Standard",
+     "what": "Field: Identify and inspect all hazardous waste accumulation areas (HAAs). For each: confirm dedicated labelled container in place, correct colour coding, waste quantity recorded, no free liquids or leaks, area secured and bunded if required.\nDesk: Enter the HAA inspection — location, waste type, container label, quantity (kg/L), leak status, bunding adequate. Raise a Finding for any missing label, unlabelled container, or free liquid.\nAnalysis: Review HAA quantities over the week. Is accumulation growing faster than disposal? Flag to supervisor before it reaches the 12-month storage limit.",
+     "why": "GI 430.001 requires that every hazardous waste type has a dedicated, labelled, secondary-contained container. Unlabelled or mixed hazardous waste is a regulatory violation and a spill risk.",
+     "how": "1. Locate all HAAs on site from the site waste plan.\n2. At each HAA: confirm dedicated containers exist for each waste type.\n3. Check labels: waste type name, hazard class, generator info — all present and legible?\n4. Inspect for leaks: any free liquid under the container? Bunding dry?\n5. Note approximate quantity in each container (kg or L).\n6. Photograph any unlabelled container, leak, or bunding failure.\n——— At your desk ———\n7. Enter each HAA: waste types, container count, label status, quantity, leak (Y/N), bunding (pass/fail).\n8. Raise a Finding for: missing label, free liquid, bunding failed, or container without secondary containment.\n——— Accumulation trend ———\n9. Compare quantities to last 2 inspections. Growing? Alert supervisor before disposal is overdue.",
+     "right": "Field: 2 HAAs — HAA-A: used oil (clearly labelled, bunded, no leak ✓). HAA-B: container unlabelled, slight oil film under drum → Finding F-003 raised (unlabelled, High) + F-004 (leak, High).\nDesk: Both HAAs logged; F-003 and F-004 raised, assigned to EHS coordinator.\nAnalysis: HAA-A used oil volume increased from 40L to 95L in 2 weeks — disposal request added to weekly report.",
+     "wrong": "There's a hazardous waste area.",
+     "tasks": [{"k": "rounds_submitted", "label": "Hazardous waste area inspections", "target": 3}]},
+
+    {"code": "E3",  "phase": 1, "module": "EM1", "chapter": "1.3",
+     "title": "Waste Management Plan",
+     "ref": "GI 430.001 §3 + Site EMP",
+     "what": "Field: Review the site Waste Management Plan (WMP) document. Then walk the site to check whether practices match the plan — correct collection points, correct bins, segregation applied, contractor following the approved schedule.\nDesk: Enter your WMP compliance review — date reviewed, sections audited, conformance (Y/N per section), deviations found. Raise a Finding for each deviation from the approved plan.\nAnalysis: Track WMP deviations over 4 rounds. Recurring gaps in the same section mean the plan itself needs revision — recommend plan update in your monthly report.",
+     "why": "The WMP is a contractual and regulatory document. Any activity that deviates from it without an approved revision is a non-conformance — not an operational preference.",
+     "how": "1. Retrieve the current site WMP and identify the key requirements: collection points, segregation scheme, contractor schedule, disposal routes.\n2. Walk the site and compare what you see to what the plan says.\n3. Note each section: does field practice match the plan?\n4. Photograph any deviation.\n——— At your desk ———\n5. Enter compliance review: plan version, date, each section assessed, conformance (Y/N), notes.\n6. Raise a Finding for each deviation.\n——— Monthly analysis ———\n7. If the same section deviates repeatedly: the plan may be outdated or unworkable. Recommend a plan revision in the monthly report — do not just keep raising the same Finding.",
+     "right": "Field: WMP reviewed — Collection points ✓, segregation ✓, schedule: contractor 1 day late on special waste pickup → Finding F-005.\nDesk: Compliance review logged; F-005 assigned to contractor coordinator.\nAnalysis: Special waste collection delay appeared in 3 of 4 reviews — WMP revision recommended: change schedule to twice-weekly.",
+     "wrong": "The waste plan is filed.",
+     "tasks": [{"k": "rounds_submitted", "label": "Waste plan compliance reviews", "target": 2}]},
+
+    {"code": "E13", "phase": 3, "module": "EM5", "chapter": "5.1",
+     "title": "Temporary Sanitation",
+     "ref": "SAEHC-S-07 + CSM 11.4.D",
+     "what": "Field: Count all portable toilets on site. Verify the count meets the ratio (1 unit per 20 workers at peak). Inspect each unit: is it emptied? No overflow, no odour indicating neglect? Door lock functional? Hand sanitiser present?\nDesk: Log total worker headcount, total toilet units, ratio (units per worker), any overflow units, any missing sanitiser. Raise a Finding if ratio is below standard or any unit is overflowing.\nAnalysis: Is the ratio consistently inadequate? That means either headcount is growing or units are being removed. Track trend and recommend before a hygiene incident occurs.",
+     "why": "Insufficient sanitation facilities at construction sites is a direct cause of gastrointestinal illness outbreaks. The regulatory minimum (1:20) is a floor — not a target. During peak headcount, the ratio should be checked actively.",
+     "how": "1. Get today's peak headcount from the HSE log or the site supervisor.\n2. Count all portable toilets currently on site — include all locations (work areas and camp).\n3. Calculate ratio: workers ÷ units. If >20 per unit: violation.\n4. Visit each portable unit: open door — does it close and lock? Overflow? Odour?\n5. Check sanitiser: present and not empty?\n6. Photograph any overflowing unit or missing sanitiser.\n——— At your desk ———\n7. Enter: headcount, unit count, ratio, overflow units, sanitiser missing (count). Raise a Finding for ratio >20:1 or any overflow unit.\n——— Trend ———\n8. Is the ratio worsening? Are more workers arriving? Recommend additional units before the ratio is violated — not after.",
+     "right": "Field: 320 workers, 18 units → ratio 17.8:1 ✓. Unit 7: overflowing, lock broken → Finding F-015. Unit 12: no sanitiser → Finding F-016.\nDesk: All logged; both findings raised and assigned to facilities contractor.\nAnalysis: Ratio has been 17:1 for 3 rounds — adequate, but monitoring for new arrivals.",
+     "wrong": "There are toilets on site.",
+     "tasks": [{"k": "rounds_submitted", "label": "Sanitation unit inspections", "target": 3}]},
+
+    {"code": "E14", "phase": 3, "module": "EM5", "chapter": "5.2",
+     "title": "Drinking Water — Environmental",
+     "ref": "GI 151.006 + SAEHC-01",
+     "what": "Field: From an environmental protection perspective: confirm water sources are physically isolated from contamination sources (fuel storage, chemical areas, sewage discharge). Test chlorine at the point closest to a contamination risk (not just the main supply). Check water supply hoses for cracks or soil contact.\nDesk: Log each water point assessed — location, distance from nearest contamination source (m), chlorine reading (ppm), hose condition (good/cracked). Raise a Finding for any water point within 10 m of a contamination source or chlorine below 0.5 ppm.\nAnalysis: Any water point consistently reading low chlorine? Either the source is being compromised or the treatment frequency is inadequate — escalate beyond a finding.",
+     "why": "Construction sites have fuel, chemicals, and sewage in close proximity to water points. The environmental officer's role is to assess the risk of cross-contamination from the environment side — not just confirm chlorine ppm.",
+     "how": "1. List all water supply points on site.\n2. For each: estimate the distance to the nearest potential contamination source (fuel tank, chemical store, sewage line).\n3. At the water point closest to a contamination risk: test chlorine. Record ppm.\n4. Inspect the supply hose: cracked? Lying on soil? Submerged in a puddle?\n5. Photograph any hose in contact with soil or any point within 10 m of a contamination source.\n——— At your desk ———\n6. Enter each point: location, distance to contamination source (m), chlorine (ppm), hose condition.\n7. Raise a Finding for: <10 m from contamination source, chlorine <0.5 ppm, or hose in soil contact.\n——— Trend ———\n8. Any water point consistently low chlorine? Source may be at risk — escalate to EHS and water supply team.",
+     "right": "Field: 3 water points — WP-1: 45m from fuel store, chlorine 1.2 ppm, hose above ground ✓. WP-2: 8m from chemical store → Finding F-017 (proximity, High). WP-3: hose lying in puddle → Finding F-018.\nDesk: All 3 logged; F-017 and F-018 raised.\nAnalysis: WP-2 proximity finding recurring — recommend relocating water point in monthly report.",
+     "wrong": "The water looks fine.",
+     "tasks": [{"k": "rounds_submitted", "label": "Water source environmental checks", "target": 3}]},
+
+    # ═══ Module 6: Documentation & Reporting ═══
+    {"code": "E15", "phase": 4, "module": "EM6", "chapter": "6.1",
+     "title": "Daily Environment Tour",
+     "ref": "Aramco EMP + GI 430.001",
+     "what": "Field: Conduct a structured daily tour covering all 5 environmental categories: waste management, soil/water protection, dust control, HAZCOM, and sanitation. The tour must cover all active work areas — not just high-risk areas. Document start and end time.\nDesk: Enter all 5 categories in the system before end of shift. Every violation must have a Finding raised same day with photo. Submit the tour record before leaving.\nAnalysis: Review your own weekly tour completion. Any category consistently skipped? That blind spot becomes a KPI gap your supervisor sees. Address the gap in the weekly report.",
+     "why": "A complete daily tour = all 5 categories covered in all active areas + all entered before shift end. Skipping one category is an incomplete tour — there is no partial credit.",
+     "how": "1. Plan your route: list all active areas for the day.\n2. Start with the highest-risk area (active earthworks or chemical use).\n3. Category 1 — Waste: bins covered? HAAs inspected? No overflow?\n4. Category 2 — Soil/water: dewatering discharge compliant? Oil containment in place?\n5. Category 3 — Dust: water truck spraying? Trucks covered?\n6. Category 4 — HAZCOM: visible unlabelled container? SDS accessible?\n7. Category 5 — Sanitation: ratio adequate? No overflow units?\n8. Record start and end time. Minimum 2 hours for a valid full tour.\n——— At your desk ———\n9. Enter all 5 categories. Photos for every Finding.\n10. Submit before shift end.\n——— Weekly self-review ———\n11. Check your own records: all 5 categories complete each day? Any gaps?",
+     "right": "Field: Tour 07:00–09:30 (150 min) — all 5 categories covered across 4 active areas. 2 findings: F-019 (uncovered truck) and F-020 (waste point overflow). Both photographed.\nDesk: All 5 categories entered, 2 findings submitted, tour submitted by 10:00.\nAnalysis: Week review — 5/5 tours complete, all 5 categories each day. No gaps.",
+     "wrong": "I checked the main areas.",
+     "tasks": [{"k": "rounds_submitted", "label": "Full daily environment tours submitted", "target": 10},
+               {"k": "findings_written", "label": "Environmental violations documented", "target": 5}]},
+
+    {"code": "E16", "phase": 4, "module": "EM6", "chapter": "6.2",
+     "title": "Environmental Incident Reporting",
+     "ref": "GI 2.401 + Aramco ERP (SAPO → EPD)",
+     "what": "Field: Know the reporting chain before an incident happens. The moment you confirm an environmental incident (spill reaching soil/water, illegal discharge, significant dust event off-site): stop the source if safe, contain, photograph, then immediately report to EHS supervisor. Do not wait to assess — report first, assess second.\nDesk: Log the incident in full: date, time, location, type, estimated quantity, source, immediate actions taken, responsible party, EHS notified at (time). Raise a Finding if root cause is a management system failure.\nAnalysis: Review the week's incident log. Were all incidents reported within the required timeframe? Any incident that was delayed in reporting? Include root cause in the weekly report.",
+     "why": "Scenario: You find a chemical spill. Actions in order — 1: Stop source. 2: Contain. 3: Report to EHS (verbally, immediately). 4: Document. 5: Dispose. Any step out of order — especially reporting — is a secondary violation.",
+     "how": "1. Know the reporting chain in advance: who is your direct EHS supervisor? What is their number? Who notifies SAPO if needed?\n2. When you find an incident: assess safety first — is the area safe to approach?\n3. If safe: stop the source (close valve, move drum, switch off equipment).\n4. Contain: deploy boom or sand berm around the spread.\n5. Report to EHS supervisor — verbally, immediately. Do not wait until you finish containment.\n6. Photograph: source, spread extent, containment measures.\n——— At your desk ———\n7. Enter the full incident log within 2 hours: time discovered, source, material, estimated quantity, containment actions, EHS notified at.\n8. If the incident was caused by a system failure (missing bunding, no containment plan): raise a Finding with severity Critical.\n——— Weekly review ———\n9. Were all incidents this week reported within 2 hours? Any late? Note in weekly report with root cause.",
+     "right": "Field: Found chemical spill (paint thinner, ~5L) at painting station — source identified (open drum tipped), sand berm deployed around spread, EHS supervisor called immediately at 09:14. Photographed source and containment.\nDesk: Full incident logged by 10:00 — all fields complete. Finding F-021 raised (no secondary containment at painting station, severity Critical).\nAnalysis: All 2 incidents this week reported within 1 hour. F-021 root cause: no containment plan at painting area — plan requirement added to monthly report.",
+     "wrong": "I'll write up the report later.",
+     "tasks": [{"k": "findings_written", "label": "Environmental incidents fully documented", "target": 2}]},
+
+    {"code": "E17", "phase": 4, "module": "EM6", "chapter": "6.3",
+     "title": "Periodic Records",
+     "ref": "GI 430.001 + Aramco EMP",
+     "what": "Field: At the end of each week, retrieve and review: the hazardous waste log, dust control records (water truck usage or spraying logs), and the water quality check register. Are they complete — every day filled in, no blank rows?\nDesk: Enter the records audit — for each register: date range reviewed, complete (Y/N), missing days (list), responsible party for each gap. Raise a Finding for each gap or missing record.\nAnalysis: Any record consistently incomplete? That person or process needs direct follow-up — include in monthly report with a corrective action recommendation.",
+     "why": "Periodic records are the audit trail. A regulator or Aramco audit will check whether records match the field reality. Gaps are automatically a non-conformance — even if the field practice was correct.",
+     "how": "1. Collect the hazardous waste log — every entry for the past week present? No blank rows?\n2. Collect the dust control/water truck log — every working day recorded?\n3. Collect the water quality check register — every check point, every day?\n4. For each register: note any missing day or incomplete row.\n5. Identify the responsible person for each gap.\n——— At your desk ———\n6. Enter the records review: register name, date range, complete (Y/N), missing entries (list by date).\n7. Raise a Finding for each incomplete register.\n——— Monthly pattern ———\n8. Any register consistently incomplete? Include the responsible person and a corrective recommendation in the monthly report — do not just raise Findings repeatedly.",
+     "right": "Field: 3 registers reviewed — hazardous waste log: complete ✓. Dust control log: missing Thursday → Finding F-022. Water quality register: complete ✓.\nDesk: Records review logged; F-022 assigned to dust control supervisor.\nAnalysis: Dust control log was incomplete in 3 of 4 weeks — corrective recommendation for automatic logging system included in monthly report.",
+     "wrong": "The records are being kept.",
+     "tasks": [{"k": "weeks_reported", "label": "Weekly records audits completed", "target": 4}]},
+]
+ENV_LEVEL_BY_CODE = {l["code"]: l for l in ENV_LEVELS}
+ENV_LEVEL_CODES   = [l["code"] for l in ENV_LEVELS]
+
+
+# ── PTW Training Routes ───────────────────────────────────────────────────────
+
+def _ptw_progress(officer_id):
+    """Return {(mod_seq, door_seq): submission} for one officer."""
+    subs = PtwDoorSubmission.query.filter_by(officer_id=officer_id).all()
+    return {(s.module_seq, s.door_seq): s for s in subs}
+
+def _ptw_door_unlocked(progress, mod_seq, door_seq):
+    """Door 1 always open. Door N requires door N-1 approved."""
+    if door_seq == 1:
+        return True
+    prev = progress.get((mod_seq, door_seq - 1))
+    return prev is not None and prev.status == "approved"
+
+def _ptw_module_done(progress, mod_seq):
+    mod = PTW_MOD_BY_SEQ.get(mod_seq)
+    if not mod:
+        return False
+    return all(progress.get((mod_seq, d["seq"])) and
+               progress[(mod_seq, d["seq"])].status == "approved"
+               for d in mod["doors"] if not d.get("ref_only"))
+
+
+@app.route("/ptw-training")
+@login_required
+def ptw_training_home():
+    u = cur_user()
+    if u.role != "safety_officer":
+        abort(403)
+    if not getattr(u, "ptw_training_active", False):
+        return redirect(url_for("user_location_page"))
+    progress = _ptw_progress(u.id)
+    mods = []
+    for m in PTW_MODULES:
+        field_doors = [d for d in m["doors"] if not d.get("ref_only")]
+        done = sum(1 for d in field_doors
+                   if progress.get((m["seq"], d["seq"])) and
+                      progress[(m["seq"], d["seq"])].status == "approved")
+        mods.append({**m, "done": done, "total": len(field_doors)})
+    return render_template("ptw_training_home.html", mods=mods, officer=u)
+
+
+@app.route("/ptw-training/module/<int:mod_seq>")
+@login_required
+def ptw_training_module(mod_seq):
+    u = cur_user()
+    if u.role != "safety_officer":
+        abort(403)
+    if not getattr(u, "ptw_training_active", False):
+        return redirect(url_for("user_location_page"))
+    mod = PTW_MOD_BY_SEQ.get(mod_seq) or abort(404)
+    progress = _ptw_progress(u.id)
+    doors = []
+    for d in mod["doors"]:
+        sub = progress.get((mod_seq, d["seq"]))
+        doors.append({**d,
+                      "sub": sub,
+                      "unlocked": _ptw_door_unlocked(progress, mod_seq, d["seq"])})
+    return render_template("ptw_training_module.html", mod=mod, doors=doors, officer=u)
+
+
+@app.route("/ptw-training/module/<int:mod_seq>/door/<int:door_seq>", methods=["GET", "POST"])
+@login_required
+def ptw_training_door(mod_seq, door_seq):
+    u = cur_user()
+    if u.role != "safety_officer":
+        abort(403)
+    if not getattr(u, "ptw_training_active", False):
+        return redirect(url_for("user_location_page"))
+    mod  = PTW_MOD_BY_SEQ.get(mod_seq) or abort(404)
+    door = next((d for d in mod["doors"] if d["seq"] == door_seq), None) or abort(404)
+    progress = _ptw_progress(u.id)
+    if not _ptw_door_unlocked(progress, mod_seq, door_seq):
+        flash("Complete and get approval for the previous stage first.", "warning")
+        return redirect(url_for("ptw_training_module", mod_seq=mod_seq))
+    sub = progress.get((mod_seq, door_seq))
+
+    if request.method == "POST":
+        if sub and sub.status in ("pending", "approved"):
+            flash("Already submitted.", "info")
+            return redirect(url_for("ptw_training_door", mod_seq=mod_seq, door_seq=door_seq))
+        # Reference door: auto-approve on first visit
+        if door.get("ref_only"):
+            sub = PtwDoorSubmission(
+                officer_id=u.id, module_seq=mod_seq, door_seq=door_seq,
+                answers=json.dumps([], ensure_ascii=False),
+                photo_path=None, status="approved"
+            )
+            db.session.add(sub)
+            db.session.commit()
+            flash("Reference marked as reviewed.", "success")
+            return redirect(url_for("ptw_training_module", mod_seq=mod_seq))
+        answers = []
+        for i, _ in enumerate(door["questions"], 1):
+            answers.append((request.form.get(f"q{i}") or "").strip())
+        photo = request.files.get("photo")
+        photo_path = None
+        if photo and photo.filename:
+            import os as _os
+            ext = _os.path.splitext(photo.filename)[1].lower()
+            fname = f"ptw_{u.id}_{mod_seq}_{door_seq}_{int(datetime.utcnow().timestamp())}{ext}"
+            save_dir = _os.path.join(app.root_path, "static", "hse_photos")
+            _os.makedirs(save_dir, exist_ok=True)
+            photo.save(_os.path.join(save_dir, fname))
+            photo_path = fname
+        sub = PtwDoorSubmission(
+            officer_id=u.id, module_seq=mod_seq, door_seq=door_seq,
+            answers=json.dumps(answers, ensure_ascii=False),
+            photo_path=photo_path, status="pending"
+        )
+        db.session.add(sub)
+        db.session.commit()
+        flash("Submitted — waiting for supervisor approval.", "success")
+        return redirect(url_for("ptw_training_module", mod_seq=mod_seq))
+
+    answers = json.loads(sub.answers) if sub and sub.answers else []
+    return render_template("ptw_training_door.html",
+                           mod=mod, door=door, sub=sub, answers=answers, officer=u)
+
+
+@app.route("/ptw-training/supervisor")
+@login_required
+def ptw_supervisor_review():
+    u = cur_user()
+    if u.role not in ("safety_supervisor", "admin", "super_admin"):
+        abort(403)
+    officers = _get_safety_officers(u)
+    officer_ids = [o.id for o in officers]
+    # Only show safety_officer trainees
+    trainee_ids = [o.id for o in officers
+                   if o.role == "safety_officer" and getattr(o, "ptw_training_active", False)]
+    pending = (PtwDoorSubmission.query
+               .filter(PtwDoorSubmission.officer_id.in_(trainee_ids),
+                       PtwDoorSubmission.status == "pending")
+               .order_by(PtwDoorSubmission.submitted_at).all())
+    officer_map = {o.id: o for o in officers}
+    rows = []
+    for s in pending:
+        mod  = PTW_MOD_BY_SEQ.get(s.module_seq, {})
+        door = next((d for d in mod.get("doors", []) if d["seq"] == s.door_seq), {})
+        rows.append({"sub": s, "officer": officer_map.get(s.officer_id),
+                     "mod": mod, "door": door,
+                     "answers": json.loads(s.answers) if s.answers else []})
+    # Summary per trainee
+    trainees = []
+    for oid in trainee_ids:
+        o = officer_map.get(oid)
+        if not o:
+            continue
+        prog = _ptw_progress(oid)
+        done = sum(1 for s in prog.values() if s.status == "approved")
+        total = sum(len(m["doors"]) for m in PTW_MODULES)
+        trainees.append({"officer": o, "done": done, "total": total,
+                         "pending": sum(1 for s in prog.values() if s.status == "pending")})
+    return render_template("ptw_supervisor_review.html",
+                           rows=rows, trainees=trainees, now=datetime.now(RIYADH_TZ))
+
+
+@app.post("/ptw-training/supervisor/review/<int:sub_id>")
+@login_required
+def ptw_supervisor_do_review(sub_id):
+    u = cur_user()
+    if u.role not in ("safety_supervisor", "admin", "super_admin"):
+        abort(403)
+    sub = db.session.get(PtwDoorSubmission, sub_id) or abort(404)
+    action = request.form.get("action")
+    note   = (request.form.get("note") or "").strip()
+    if action not in ("approve", "reject"):
+        abort(400)
+    sub.status        = "approved" if action == "approve" else "rejected"
+    sub.reviewer_id   = u.id
+    sub.reviewed_at   = datetime.utcnow()
+    sub.reviewer_note = note or None
+    db.session.commit()
+    flash(f"Stage {'approved' if action == 'approve' else 'rejected'}.", "success")
+    return redirect(url_for("ptw_supervisor_review"))
+
+
+@app.route("/ptw-training/reports")
+@login_required
+def ptw_reports_picker():
+    u = cur_user()
+    if u.role not in ("safety_supervisor", "admin", "super_admin"):
+        abort(403)
+    today = datetime.now(RIYADH_TZ).date()
+    return render_template("ptw_reports_picker.html", today=today)
+
+
+@app.route("/ptw-training/reports/weekly")
+@login_required
+def ptw_report_weekly():
+    u = cur_user()
+    if u.role not in ("safety_supervisor", "admin", "super_admin"):
+        abort(403)
+    today = datetime.now(RIYADH_TZ).date()
+    try:
+        ws = date.fromisoformat(request.args.get("week_start", ""))
+    except (TypeError, ValueError):
+        ws = today - timedelta(days=today.weekday())
+    we = ws + timedelta(days=6)
+    officers = _get_safety_officers(u)
+    trainees = [o for o in officers
+                if o.role == "safety_officer" and getattr(o, "ptw_training_active", False)]
+    rows = []
+    total_subs = total_approved = total_rejected = 0
+    for o in trainees:
+        subs = (PtwDoorSubmission.query
+                .filter(PtwDoorSubmission.officer_id == o.id,
+                        PtwDoorSubmission.submitted_at >= datetime.combine(ws, __import__('datetime').time.min),
+                        PtwDoorSubmission.submitted_at <= datetime.combine(we, __import__('datetime').time.max))
+                .all())
+        approved  = sum(1 for s in subs if s.status == "approved")
+        rejected  = sum(1 for s in subs if s.status == "rejected")
+        pending   = sum(1 for s in subs if s.status == "pending")
+        prog = _ptw_progress(o.id)
+        field_total = sum(len([d for d in m["doors"] if not d.get("ref_only")]) for m in PTW_MODULES)
+        all_approved = sum(1 for s in prog.values() if s.status == "approved")
+        cur_mod = next((m["seq"] for m in PTW_MODULES
+                        if not _ptw_module_done(prog, m["seq"])), 7)
+        rows.append({"officer": o, "submitted": len(subs), "approved": approved,
+                     "rejected": rejected, "pending": pending,
+                     "all_approved": all_approved, "field_total": field_total,
+                     "cur_mod": cur_mod})
+        total_subs     += len(subs)
+        total_approved += approved
+        total_rejected += rejected
+    return render_template("ptw_report_weekly.html",
+                           rows=rows, ws=ws, we=we,
+                           total_subs=total_subs, total_approved=total_approved,
+                           total_rejected=total_rejected,
+                           now=datetime.now(RIYADH_TZ))
+
+
+@app.route("/ptw-training/reports/monthly")
+@login_required
+def ptw_report_monthly():
+    u = cur_user()
+    if u.role not in ("safety_supervisor", "admin", "super_admin"):
+        abort(403)
+    today = datetime.now(RIYADH_TZ).date()
+    try:
+        year  = int(request.args.get("year",  today.year))
+        month = int(request.args.get("month", today.month))
+    except (TypeError, ValueError):
+        return redirect(url_for("ptw_reports_picker"))
+    from calendar import monthrange, month_name as _mn
+    first_day = date(year, month, 1)
+    last_day  = date(year, month, monthrange(year, month)[1])
+    officers = _get_safety_officers(u)
+    trainees = [o for o in officers
+                if o.role == "safety_officer" and getattr(o, "ptw_training_active", False)]
+    rows = []
+    total_subs = total_approved = 0
+    for o in trainees:
+        subs = (PtwDoorSubmission.query
+                .filter(PtwDoorSubmission.officer_id == o.id,
+                        PtwDoorSubmission.submitted_at >= datetime.combine(first_day, __import__('datetime').time.min),
+                        PtwDoorSubmission.submitted_at <= datetime.combine(last_day, __import__('datetime').time.max))
+                .all())
+        prog = _ptw_progress(o.id)
+        field_total = sum(len([d for d in m["doors"] if not d.get("ref_only")]) for m in PTW_MODULES)
+        all_approved = sum(1 for s in prog.values() if s.status == "approved")
+        mods_done = sum(1 for m in PTW_MODULES if _ptw_module_done(prog, m["seq"]))
+        approved_this_month = sum(1 for s in subs if s.status == "approved")
+        rows.append({"officer": o,
+                     "submitted": len(subs),
+                     "approved_month": approved_this_month,
+                     "all_approved": all_approved,
+                     "field_total": field_total,
+                     "mods_done": mods_done,
+                     "pct": int(all_approved / field_total * 100) if field_total else 0})
+        total_subs     += len(subs)
+        total_approved += approved_this_month
+    return render_template("ptw_report_monthly.html",
+                           rows=rows, year=year, month=month,
+                           month_name=_mn[month], first_day=first_day, last_day=last_day,
+                           total_subs=total_subs, total_approved=total_approved,
+                           now=datetime.now(RIYADH_TZ))
+
+
+@app.route("/ptw-training/supervisor/progress")
+@login_required
+def ptw_progress_report():
+    u = cur_user()
+    if u.role not in ("safety_supervisor", "admin", "super_admin"):
+        abort(403)
+    officers = _get_safety_officers(u)
+    trainees = []
+    for o in officers:
+        if not (o.role == "safety_officer" and getattr(o, "ptw_training_active", False)):
+            continue
+        prog = _ptw_progress(o.id)
+        field_total = sum(len([d for d in m["doors"] if not d.get("ref_only")]) for m in PTW_MODULES)
+        approved    = sum(1 for s in prog.values() if s.status == "approved"
+                          and not PTW_MOD_BY_SEQ.get(s.module_seq, {}).get("doors", [{}])[0].get("ref_only"))
+        pending_ct  = sum(1 for s in prog.values() if s.status == "pending")
+        rejected_ct = sum(1 for s in prog.values() if s.status == "rejected")
+        # per-module summary
+        mods_summary = []
+        for m in PTW_MODULES:
+            field_doors = [d for d in m["doors"] if not d.get("ref_only")]
+            done = sum(1 for d in field_doors
+                       if prog.get((m["seq"], d["seq"])) and
+                          prog[(m["seq"], d["seq"])].status == "approved")
+            last_sub = max(
+                (prog[(m["seq"], d["seq"])].submitted_at for d in m["doors"]
+                 if prog.get((m["seq"], d["seq"]))),
+                default=None)
+            mods_summary.append({"seq": m["seq"], "title": m["title"],
+                                  "done": done, "total": len(field_doors),
+                                  "last": last_sub})
+        last_activity = max((s.submitted_at for s in prog.values()), default=None)
+        trainees.append({"officer": o, "approved": approved, "field_total": field_total,
+                         "pending": pending_ct, "rejected": rejected_ct,
+                         "last_activity": last_activity, "mods": mods_summary})
+    return render_template("ptw_progress_report.html", trainees=trainees,
+                           now=datetime.now(RIYADH_TZ))
+
+
+@app.route("/ptw-training/supervisor/answers/<int:officer_id>")
+@login_required
+def ptw_answers_report(officer_id):
+    u = cur_user()
+    if u.role not in ("safety_supervisor", "admin", "super_admin"):
+        abort(403)
+    officer = db.session.get(User, officer_id) or abort(404)
+    if not (officer.role == "safety_officer" and getattr(officer, "ptw_training_active", False)):
+        abort(404)
+    prog = _ptw_progress(officer_id)
+    sections = []
+    for m in PTW_MODULES:
+        doors_data = []
+        for d in m["doors"]:
+            if d.get("ref_only"):
+                continue
+            sub = prog.get((m["seq"], d["seq"]))
+            if not sub:
+                continue
+            answers = json.loads(sub.answers) if sub.answers else []
+            doors_data.append({"door": d, "sub": sub, "answers": answers})
+        if doors_data:
+            sections.append({"mod": m, "doors": doors_data})
+    return render_template("ptw_answers_report.html", officer=officer,
+                           sections=sections, now=datetime.now(RIYADH_TZ))
+
+
+# ── Welfare Models ───────────────────────────────────────────────────
+
+
+class WlfLevelWork(db.Model):
+    """One submission per level-specific task the officer completes."""
+    __tablename__ = "wlf_level_work"
+    id            = db.Column(db.Integer, primary_key=True)
+    officer_id    = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id    = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    level_code    = db.Column(db.String(5),  nullable=False)   # L1 … L14
+    date          = db.Column(db.Date,       nullable=False)
+    unit          = db.Column(db.String(20), nullable=True)
+    has_measurement = db.Column(db.Boolean,  default=False)    # true for heat-index readings
+    notes         = db.Column(db.Text,       nullable=True)
+    created_at    = db.Column(db.DateTime,   default=datetime.utcnow)
+
+
+class WlfPhoto(db.Model):
+    __tablename__ = "wlf_photo"
+    id         = db.Column(db.Integer, primary_key=True)
+    round_id   = db.Column(db.Integer, db.ForeignKey("wlf_round.id"), nullable=True)
+    finding_id = db.Column(db.Integer, db.ForeignKey("wlf_finding.id"), nullable=True)
+    item_key   = db.Column(db.String(40))
+    ref_no     = db.Column(db.String(40))
+    photo_path = db.Column(db.String(255), nullable=False)
+    kind       = db.Column(db.String(20), default="before")   # before/after
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class WlfFinding(db.Model):
+    __tablename__ = "wlf_finding"
+    id           = db.Column(db.Integer, primary_key=True)
+    round_id     = db.Column(db.Integer, db.ForeignKey("wlf_round.id"), nullable=True)
+    officer_id   = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id   = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date         = db.Column(db.Date, nullable=False)
+    unit         = db.Column(db.String(20))
+    area_text    = db.Column(db.String(255))
+    item_key     = db.Column(db.String(40))
+    ref_no       = db.Column(db.String(40))          # Shelter 19 / WS-07
+    description  = db.Column(db.Text, nullable=False)
+    severity     = db.Column(db.String(20), default="Medium")
+    responsible  = db.Column(db.String(160))
+    due_date     = db.Column(db.Date, nullable=True)
+    status       = db.Column(db.String(20), default="open")   # open/closed
+    action_taken = db.Column(db.Text)
+    closure_note = db.Column(db.Text)
+    closed_at    = db.Column(db.DateTime, nullable=True)
+    closed_by    = db.Column(db.Integer, nullable=True)
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class WlfComplaint(db.Model):
+    __tablename__ = "wlf_complaint"
+    id          = db.Column(db.Integer, primary_key=True)
+    officer_id  = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id  = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date        = db.Column(db.Date, nullable=False)
+    unit        = db.Column(db.String(20))
+    kind        = db.Column(db.String(20), default="facility")  # facility/escalate
+    ref_no      = db.Column(db.String(40))
+    description = db.Column(db.Text, nullable=False)
+    raised_by_n = db.Column(db.Integer, default=1)
+    status      = db.Column(db.String(20), default="open")      # open/closed/escalated
+    seen_by_sup = db.Column(db.Boolean, default=False)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class WlfFlagLog(db.Model):
+    __tablename__ = "wlf_flag_log"
+    id          = db.Column(db.Integer, primary_key=True)
+    officer_id  = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id  = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date        = db.Column(db.Date, nullable=False)
+    hour_label  = db.Column(db.String(10), nullable=False)   # "07:00"
+    flag        = db.Column(db.String(10))
+    index_value = db.Column(db.String(10))
+    source      = db.Column(db.String(30), default="whatsapp")
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("officer_id", "date", "hour_label",
+                                          name="uq_wlf_flag_odh"),)
+
+
+class WlfProgress(db.Model):
+    __tablename__ = "wlf_progress"
+    id          = db.Column(db.Integer, primary_key=True)
+    officer_id  = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id  = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    level_code  = db.Column(db.String(10), nullable=False)
+    status      = db.Column(db.String(20), default="locked")  # locked/active/pending/done
+    briefed_at  = db.Column(db.DateTime, nullable=True)
+    completed_at= db.Column(db.DateTime, nullable=True)
+    approved_by = db.Column(db.Integer, nullable=True)
+    approved_at = db.Column(db.DateTime, nullable=True)
+    deliverable = db.Column(db.String(200), nullable=True)
+    notes       = db.Column(db.Text, nullable=True)
+    __table_args__ = (db.UniqueConstraint("officer_id", "level_code",
+                                          name="uq_wlf_prog_ol"),)
+
+
+class EnvLevelWork(db.Model):
+    """One submission per level-specific task the environment officer completes."""
+    __tablename__ = "env_level_work"
+    id              = db.Column(db.Integer, primary_key=True)
+    officer_id      = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id      = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    level_code      = db.Column(db.String(5),  nullable=False)   # E1 … E17
+    date            = db.Column(db.Date,       nullable=False)
+    unit            = db.Column(db.String(20), nullable=True)
+    has_measurement = db.Column(db.Boolean,    default=False)
+    notes           = db.Column(db.Text,       nullable=True)
+    created_at      = db.Column(db.DateTime,   default=datetime.utcnow)
+
+
+class EnvProgress(db.Model):
+    __tablename__ = "env_progress"
+    id           = db.Column(db.Integer, primary_key=True)
+    officer_id   = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id   = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    level_code   = db.Column(db.String(10), nullable=False)
+    status       = db.Column(db.String(20), default="locked")  # locked/active/pending/done
+    briefed_at   = db.Column(db.DateTime, nullable=True)
+    completed_at = db.Column(db.DateTime, nullable=True)
+    approved_by  = db.Column(db.Integer, nullable=True)
+    approved_at  = db.Column(db.DateTime, nullable=True)
+    deliverable  = db.Column(db.String(200), nullable=True)
+    notes        = db.Column(db.Text, nullable=True)
+    __table_args__ = (db.UniqueConstraint("officer_id", "level_code",
+                                          name="uq_env_prog_ol"),)
+
+
+class OfficerTeam(db.Model):
+    """Maps an officer (any role) to a safety_supervisor — set by admin."""
+    __tablename__ = "officer_team"
+    id            = db.Column(db.Integer, primary_key=True)
+    supervisor_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    officer_id    = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id    = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("supervisor_id", "officer_id",
+                                          name="uq_officer_team_so"),)
+
+
+class WlfSetting(db.Model):
+    """Key-value store for per-company welfare settings (e.g. season toggle)."""
+    __tablename__ = "wlf_setting"
+    id         = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    key        = db.Column(db.String(40), nullable=False)
+    value      = db.Column(db.String(200), nullable=False)
+    __table_args__ = (db.UniqueConstraint("company_id", "key",
+                                          name="uq_wlf_setting_ck"),)
+
+
+class WlfWeeklyReport(db.Model):
+    """Auto-generated weekly snapshot shared by officer with supervisor."""
+    __tablename__ = "wlf_weekly_report"
+    id          = db.Column(db.Integer, primary_key=True)
+    company_id  = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    officer_id  = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    week_start  = db.Column(db.Date, nullable=False)
+    officer_note = db.Column(db.Text, nullable=True)
+    sup_comment = db.Column(db.Text, nullable=True)
+    sup_seen    = db.Column(db.Boolean, default=False)
+    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("officer_id", "week_start",
+                                          name="uq_wlf_wr_ow"),)
+
+
+class WlfAsset(db.Model):
+    """Persistent welfare asset register (water stations, shelters, camp facilities…)."""
+    __tablename__ = "wlf_asset"
+    id            = db.Column(db.Integer, primary_key=True)
+    company_id    = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    location_code = db.Column(db.String(20), nullable=False)
+    asset_type    = db.Column(db.String(30), nullable=False)
+    label         = db.Column(db.String(80), nullable=False)
+    qty           = db.Column(db.Integer, default=1)
+    capacity      = db.Column(db.Integer, nullable=True)   # shelter pax cap etc.
+    notes         = db.Column(db.Text, nullable=True)
+    added_by      = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at    = db.Column(db.DateTime, default=datetime.utcnow,
+                              onupdate=datetime.utcnow)
+
+
+# ── Welfare access control ───────────────────────────────────────────
+
+def is_welfare_officer(u):
+    return bool(u) and getattr(u, "role", None) == "welfare_officer"
+
+
+def is_welfare_viewer(u):
+    """Supervisor-side visibility. Does NOT grant HSE access anywhere."""
+    if not u or not getattr(u, "is_active", False):
+        return False
+    return getattr(u, "role", None) in ("welfare_officer", "safety_supervisor",
+                                        "safety_manager", "admin", "super_admin")
+
+
+def welfare_officer_required(f):
+    @wraps(f)
+    def inner(*args, **kwargs):
+        u = cur_user()
+        if not u:
+            return redirect(url_for("login"))
+        if not (is_welfare_officer(u) or is_welfare_viewer(u)):
+            flash("This page is for the welfare team.", "danger")
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return inner
+
+
+def welfare_supervisor_required(f):
+    @wraps(f)
+    def inner(*args, **kwargs):
+        u = cur_user()
+        if not u:
+            return redirect(url_for("login"))
+        if is_welfare_officer(u) or not is_welfare_viewer(u):
+            flash("Supervisor access only.", "danger")
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return inner
+
+
+# ── Environment Officer access control ──────────────────────────────
+
+def is_environment_officer(u):
+    return bool(u) and getattr(u, "role", None) == "environment_officer"
+
+
+def is_environment_viewer(u):
+    if not u or not getattr(u, "is_active", False):
+        return False
+    return getattr(u, "role", None) in (
+        "environment_officer", "safety_supervisor", "safety_manager", "admin", "super_admin")
+
+
+def environment_officer_required(f):
+    @wraps(f)
+    def inner(*args, **kwargs):
+        u = cur_user()
+        if not u:
+            return redirect(url_for("login"))
+        if not is_environment_viewer(u):
+            flash("هذه الصفحة لفريق البيئة فقط.", "danger")
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return inner
+
+
+# ── Environment Models ────────────────────────────────────────────────
+
+class EnvWasteCheck(db.Model):
+    __tablename__ = "env_waste_check"
+    id                  = db.Column(db.Integer, primary_key=True)
+    officer_id          = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id          = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date                = db.Column(db.Date, nullable=False)
+    segregation_ok      = db.Column(db.Boolean, default=False)
+    bins_labeled        = db.Column(db.Boolean, default=False)
+    hazardous_area_ok   = db.Column(db.Boolean, default=False)
+    disposal_records_ok = db.Column(db.Boolean, default=False)
+    bins_overflow       = db.Column(db.Boolean, default=False)
+    contractor_ok       = db.Column(db.Boolean, default=False)
+    notes               = db.Column(db.Text, nullable=True)
+    created_at          = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EnvSoilWaterCheck(db.Model):
+    __tablename__ = "env_soil_water_check"
+    id               = db.Column(db.Integer, primary_key=True)
+    officer_id       = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id       = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date             = db.Column(db.Date, nullable=False)
+    spill_kit_ok     = db.Column(db.Boolean, default=False)
+    drip_trays_ok    = db.Column(db.Boolean, default=False)
+    no_soil_staining = db.Column(db.Boolean, default=False)
+    drainage_clear   = db.Column(db.Boolean, default=False)
+    wadi_buffer_ok   = db.Column(db.Boolean, default=False)
+    notes            = db.Column(db.Text, nullable=True)
+    created_at       = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EnvDustCheck(db.Model):
+    __tablename__ = "env_dust_check"
+    id                 = db.Column(db.Integer, primary_key=True)
+    officer_id         = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id         = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date               = db.Column(db.Date, nullable=False)
+    watering_done      = db.Column(db.Boolean, default=False)
+    wind_speed_ok      = db.Column(db.Boolean, default=False)
+    covered_trucks     = db.Column(db.Boolean, default=False)
+    haul_road_treated  = db.Column(db.Boolean, default=False)
+    complaints_count   = db.Column(db.Integer, default=0)
+    notes              = db.Column(db.Text, nullable=True)
+    created_at         = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EnvHazcomCheck(db.Model):
+    __tablename__ = "env_hazcom_check"
+    id                = db.Column(db.Integer, primary_key=True)
+    officer_id        = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id        = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date              = db.Column(db.Date, nullable=False)
+    location          = db.Column(db.String(120), nullable=True)
+    sds_available     = db.Column(db.Boolean, default=False)
+    labels_ok         = db.Column(db.Boolean, default=False)
+    storage_segregated = db.Column(db.Boolean, default=False)
+    spill_kit_present = db.Column(db.Boolean, default=False)
+    ppe_available     = db.Column(db.Boolean, default=False)
+    active_chem_work  = db.Column(db.Boolean, default=False)
+    ptw_number        = db.Column(db.String(40), nullable=True)
+    ptw_valid         = db.Column(db.Boolean, default=False)
+    ptw_controls_met  = db.Column(db.Boolean, default=False)
+    notes             = db.Column(db.Text, nullable=True)
+    created_at        = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EnvSewageCheck(db.Model):
+    __tablename__ = "env_sewage_check"
+    id                   = db.Column(db.Integer, primary_key=True)
+    officer_id           = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id           = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date                 = db.Column(db.Date, nullable=False)
+    no_leaks             = db.Column(db.Boolean, default=False)
+    collection_points_ok = db.Column(db.Boolean, default=False)
+    disposal_records_ok  = db.Column(db.Boolean, default=False)
+    ground_discoloration = db.Column(db.Boolean, default=False)
+    odor_complaints      = db.Column(db.Integer, default=0)
+    notes                = db.Column(db.Text, nullable=True)
+    created_at           = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EnvIncident(db.Model):
+    __tablename__ = "env_incident"
+    id            = db.Column(db.Integer, primary_key=True)
+    officer_id    = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id    = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date          = db.Column(db.Date, nullable=False)
+    incident_type = db.Column(db.String(80), nullable=False)
+    location      = db.Column(db.String(120), nullable=True)
+    description   = db.Column(db.Text, nullable=False)
+    action_taken  = db.Column(db.Text, nullable=True)
+    status        = db.Column(db.String(20), default="open")  # open/closed
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# ── New ENV check models (Amiral CSM 2026) ───────────────────────────
+
+class EnvCylindersCheck(db.Model):
+    __tablename__ = "env_cylinders_check"
+    id                = db.Column(db.Integer, primary_key=True)
+    officer_id        = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id        = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date              = db.Column(db.Date, nullable=False)
+    package           = db.Column(db.String(20), nullable=True)
+    location          = db.Column(db.String(120), nullable=True)
+    vertical_secured  = db.Column(db.Boolean, default=False)
+    empty_separated   = db.Column(db.Boolean, default=False)
+    caps_on           = db.Column(db.Boolean, default=False)
+    o2_separation_ok  = db.Column(db.Boolean, default=False)
+    measured_distance_m = db.Column(db.Float, nullable=True)
+    temp_ok           = db.Column(db.Boolean, default=False)
+    temp_reading      = db.Column(db.Float, nullable=True)
+    no_leaks          = db.Column(db.Boolean, default=False)
+    area_ventilated   = db.Column(db.Boolean, default=False)
+    no_smoking_sign   = db.Column(db.Boolean, default=False)
+    notes             = db.Column(db.Text, nullable=True)
+    created_at        = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EnvNormCheck(db.Model):
+    __tablename__ = "env_norm_check"
+    id                  = db.Column(db.Integer, primary_key=True)
+    officer_id          = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id          = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date                = db.Column(db.Date, nullable=False)
+    package             = db.Column(db.String(20), nullable=True)
+    location            = db.Column(db.String(120), nullable=True)
+    rpo_designated      = db.Column(db.Boolean, default=False)
+    rpo_name            = db.Column(db.String(80), nullable=True)
+    rpo_contact         = db.Column(db.String(40), nullable=True)
+    epd_permit_ok       = db.Column(db.Boolean, default=False)
+    norm_records_ok     = db.Column(db.Boolean, default=False)
+    ndt_permit_ok       = db.Column(db.Boolean, default=False)
+    dose_logs_ok        = db.Column(db.Boolean, default=False)
+    norm_equip_handled  = db.Column(db.Boolean, default=False)
+    no_exposed_sources  = db.Column(db.Boolean, default=False)
+    radiation_levels_ok = db.Column(db.Boolean, default=False)
+    ndt_active          = db.Column(db.Boolean, default=False)
+    ndt_permit_no       = db.Column(db.String(40), nullable=True)
+    ndt_source_type     = db.Column(db.String(40), nullable=True)
+    exclusion_zone_ok   = db.Column(db.Boolean, default=False)
+    notes               = db.Column(db.Text, nullable=True)
+    created_at          = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EnvBlastingCheck(db.Model):
+    __tablename__ = "env_blasting_check"
+    id                = db.Column(db.Integer, primary_key=True)
+    officer_id        = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id        = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date              = db.Column(db.Date, nullable=False)
+    package           = db.Column(db.String(20), nullable=True)
+    location          = db.Column(db.String(120), nullable=True)
+    abrasive_type     = db.Column(db.String(80), nullable=True)
+    no_silica_sand    = db.Column(db.Boolean, default=False)
+    abrasive_approved = db.Column(db.Boolean, default=False)
+    waste_collected   = db.Column(db.Boolean, default=False)
+    no_scatter        = db.Column(db.Boolean, default=False)
+    barriers_ok       = db.Column(db.Boolean, default=False)
+    records_updated   = db.Column(db.Boolean, default=False)
+    notes             = db.Column(db.Text, nullable=True)
+    created_at        = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EnvRoadsCheck(db.Model):
+    __tablename__ = "env_roads_check"
+    id                  = db.Column(db.Integer, primary_key=True)
+    officer_id          = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id          = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date                = db.Column(db.Date, nullable=False)
+    package             = db.Column(db.String(20), nullable=True)
+    location            = db.Column(db.String(120), nullable=True)
+    dust_control_active = db.Column(db.Boolean, default=False)
+    watering_roads      = db.Column(db.Boolean, default=False)
+    trucks_covered      = db.Column(db.Boolean, default=False)
+    debris_removed      = db.Column(db.Boolean, default=False)
+    warnings_ok         = db.Column(db.Boolean, default=False)
+    no_runoff_to_wadi   = db.Column(db.Boolean, default=False)
+    notes               = db.Column(db.Text, nullable=True)
+    created_at          = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EnvPressureCheck(db.Model):
+    __tablename__ = "env_pressure_check"
+    id                       = db.Column(db.Integer, primary_key=True)
+    officer_id               = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id               = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date                     = db.Column(db.Date, nullable=False)
+    package                  = db.Column(db.String(20), nullable=True)
+    test_item                = db.Column(db.String(120), nullable=True)
+    water_volume_m3          = db.Column(db.Float, nullable=True)
+    disposal_plan_approved   = db.Column(db.Boolean, default=False)
+    no_direct_soil_discharge = db.Column(db.Boolean, default=False)
+    treated_before_discharge = db.Column(db.Boolean, default=False)
+    settling_pond_used       = db.Column(db.Boolean, default=False)
+    containment_berm_ok      = db.Column(db.Boolean, default=False)
+    ph_reading               = db.Column(db.Float, nullable=True)
+    chemical_additives       = db.Column(db.String(80), nullable=True)
+    quality_ok               = db.Column(db.Boolean, default=False)
+    notes                    = db.Column(db.Text, nullable=True)
+    created_at               = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EnvJettingCheck(db.Model):
+    __tablename__ = "env_jetting_check"
+    id                  = db.Column(db.Integer, primary_key=True)
+    officer_id          = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id          = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date                = db.Column(db.Date, nullable=False)
+    package             = db.Column(db.String(20), nullable=True)
+    location            = db.Column(db.String(120), nullable=True)
+    pressure_bar        = db.Column(db.Integer, nullable=True)
+    water_volume_m3     = db.Column(db.Float, nullable=True)
+    containment_ok      = db.Column(db.Boolean, default=False)
+    vacuum_truck_on_site = db.Column(db.Boolean, default=False)
+    berm_around_area    = db.Column(db.Boolean, default=False)
+    waste_disposed      = db.Column(db.Boolean, default=False)
+    sludge_collected    = db.Column(db.Boolean, default=False)
+    hazardous_checked   = db.Column(db.Boolean, default=False)
+    manifest_completed  = db.Column(db.Boolean, default=False)
+    notes               = db.Column(db.Text, nullable=True)
+    created_at          = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EnvWeldingCheck(db.Model):
+    __tablename__ = "env_welding_check"
+    id                    = db.Column(db.Integer, primary_key=True)
+    officer_id            = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id            = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date                  = db.Column(db.Date, nullable=False)
+    package               = db.Column(db.String(20), nullable=True)
+    activity_type         = db.Column(db.String(60), nullable=True)
+    welding_rods_stored   = db.Column(db.Boolean, default=False)
+    spent_rods_collected  = db.Column(db.Boolean, default=False)
+    fume_extraction       = db.Column(db.Boolean, default=False)
+    no_open_burning       = db.Column(db.Boolean, default=False)
+    paint_waste_contained = db.Column(db.Boolean, default=False)
+    no_paint_soil_discharge = db.Column(db.Boolean, default=False)
+    msds_available        = db.Column(db.Boolean, default=False)
+    hazwaste_labeled      = db.Column(db.Boolean, default=False)
+    notes                 = db.Column(db.Text, nullable=True)
+    created_at            = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class EnvDemolitionCheck(db.Model):
+    __tablename__ = "env_demolition_check"
+    id                    = db.Column(db.Integer, primary_key=True)
+    officer_id            = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id            = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date                  = db.Column(db.Date, nullable=False)
+    package               = db.Column(db.String(20), nullable=True)
+    location              = db.Column(db.String(120), nullable=True)
+    asbestos_survey_done  = db.Column(db.Boolean, default=False)
+    no_asbestos_found     = db.Column(db.Boolean, default=False)
+    asbestos_permit_ok    = db.Column(db.Boolean, default=False)
+    debris_sorted         = db.Column(db.Boolean, default=False)
+    no_burning_debris     = db.Column(db.Boolean, default=False)
+    transport_manifest_ok = db.Column(db.Boolean, default=False)
+    dust_suppression      = db.Column(db.Boolean, default=False)
+    notes                 = db.Column(db.Text, nullable=True)
+    created_at            = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+# ── New Welfare daily check models (Amiral WSSM / SAEHC) ─────────────
+
+class WelfareHeatCheck(db.Model):
+    __tablename__ = "welfare_heat_check"
+    id                      = db.Column(db.Integer, primary_key=True)
+    officer_id              = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id              = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date                    = db.Column(db.Date, nullable=False)
+    package                 = db.Column(db.String(20), nullable=True)
+    wbgt_morning            = db.Column(db.Float, nullable=True)
+    wbgt_noon               = db.Column(db.Float, nullable=True)
+    max_temp_c              = db.Column(db.Float, nullable=True)
+    water_available         = db.Column(db.Boolean, default=False)
+    shade_within_100m       = db.Column(db.Boolean, default=False)
+    rest_breaks_enforced    = db.Column(db.Boolean, default=False)
+    midday_ban_enforced     = db.Column(db.Boolean, default=False)
+    buddy_system_ok         = db.Column(db.Boolean, default=False)
+    medic_on_site           = db.Column(db.Boolean, default=False)
+    acclimatization_new     = db.Column(db.Boolean, default=False)
+    heat_cases_count        = db.Column(db.Integer, default=0)
+    notes                   = db.Column(db.Text, nullable=True)
+    created_at              = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class WelfareFirstaidCheck(db.Model):
+    __tablename__ = "welfare_firstaid_check"
+    id                    = db.Column(db.Integer, primary_key=True)
+    officer_id            = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id            = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date                  = db.Column(db.Date, nullable=False)
+    package               = db.Column(db.String(20), nullable=True)
+    medic_present         = db.Column(db.Boolean, default=False)
+    jhah_contact_available = db.Column(db.Boolean, default=False)
+    bls_certified_workers = db.Column(db.Boolean, default=False)
+    first_aid_kits_ok     = db.Column(db.Boolean, default=False)
+    kits_stocked          = db.Column(db.Boolean, default=False)
+    kits_accessible       = db.Column(db.Boolean, default=False)
+    kit_10unit_count      = db.Column(db.Integer, default=0)
+    kit_36unit_count      = db.Column(db.Integer, default=0)
+    aed_available         = db.Column(db.Boolean, default=False)
+    evacuation_route_marked = db.Column(db.Boolean, default=False)
+    ambulance_access_ok   = db.Column(db.Boolean, default=False)
+    notes                 = db.Column(db.Text, nullable=True)
+    created_at            = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class WelfareSanitationCheck(db.Model):
+    __tablename__ = "welfare_sanitation_check"
+    id                  = db.Column(db.Integer, primary_key=True)
+    officer_id          = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id          = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    date                = db.Column(db.Date, nullable=False)
+    package             = db.Column(db.String(20), nullable=True)
+    location            = db.Column(db.String(120), nullable=True)
+    worker_count        = db.Column(db.Integer, nullable=True)
+    toilet_count        = db.Column(db.Integer, nullable=True)
+    washing_units       = db.Column(db.Integer, nullable=True)
+    toilet_ratio_met    = db.Column(db.Boolean, default=False)
+    chlorine_ppm        = db.Column(db.Float, nullable=True)
+    chlorine_ok         = db.Column(db.Boolean, default=False)
+    toilets_clean       = db.Column(db.Boolean, default=False)
+    soap_paper_available = db.Column(db.Boolean, default=False)
+    waste_bins_emptied  = db.Column(db.Boolean, default=False)
+    no_standing_water   = db.Column(db.Boolean, default=False)
+    pest_control_ok     = db.Column(db.Boolean, default=False)
+    notes               = db.Column(db.Text, nullable=True)
+    created_at          = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+class WelfareAccommodation(db.Model):
+    __tablename__ = "welfare_accommodation"
+    id                       = db.Column(db.Integer, primary_key=True)
+    officer_id               = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id               = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    inspect_date             = db.Column(db.Date, nullable=False)
+    camp_name                = db.Column(db.String(80), nullable=False)
+    capacity                 = db.Column(db.Integer, nullable=True)
+    occupancy                = db.Column(db.Integer, nullable=True)
+    cleanliness              = db.Column(db.Integer, nullable=True)
+    facilities               = db.Column(db.Integer, nullable=True)
+    safety_rating            = db.Column(db.Integer, nullable=True)
+    space_per_person_ok      = db.Column(db.Boolean, default=False)
+    no_triple_bunks          = db.Column(db.Boolean, default=False)
+    ac_24_7_working          = db.Column(db.Boolean, default=False)
+    pest_control_ok          = db.Column(db.Boolean, default=False)
+    occupancy_within_capacity = db.Column(db.Boolean, default=False)
+    emergency_exits_ok       = db.Column(db.Boolean, default=False)
+    issues_found             = db.Column(db.Text, nullable=True)
+    action_needed            = db.Column(db.Text, nullable=True)
+    created_at               = db.Column(db.DateTime, default=datetime.utcnow)
+
+class WelfareTransport(db.Model):
+    __tablename__ = "welfare_transport"
+    id                       = db.Column(db.Integer, primary_key=True)
+    officer_id               = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    company_id               = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    log_date                 = db.Column(db.Date, nullable=False)
+    vehicle_id               = db.Column(db.String(30), nullable=False)
+    route                    = db.Column(db.String(120), nullable=True)
+    passengers               = db.Column(db.Integer, nullable=True)
+    capacity                 = db.Column(db.Integer, nullable=True)
+    driver_name              = db.Column(db.String(80), nullable=True)
+    condition_ok             = db.Column(db.Boolean, default=True)
+    ac_working               = db.Column(db.Boolean, default=False)
+    seatbelts_ok             = db.Column(db.Boolean, default=False)
+    capacity_not_exceeded    = db.Column(db.Boolean, default=False)
+    driver_license_valid     = db.Column(db.Boolean, default=False)
+    no_standing_passengers   = db.Column(db.Boolean, default=False)
+    issues_found             = db.Column(db.Text, nullable=True)
+    created_at               = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+@app.context_processor
+def inject_welfare_flags():
+    from flask import g as _g
+    u = getattr(_g, "user", None)
+    try:
+        pending_q = 0
+        role = getattr(u, "role", None)
+        if role in ("safety_officer", "safety_supervisor", "admin", "super_admin") and u:
+            try:
+                q = WlfQuery.query.filter(WlfQuery.status == "open")
+                if role == "safety_officer":
+                    q = q.filter(WlfQuery.assignee_id == u.id)
+                else:
+                    _c = cid()
+                    if _c:
+                        q = q.filter(WlfQuery.company_id == _c)
+                pending_q = q.count()
+            except Exception:
+                pending_q = 0
+        return {"g_is_welfare": is_welfare_officer(u),
+                "g_is_welfare_viewer": (is_welfare_viewer(u) and not is_welfare_officer(u)),
+                "g_wlf_pending_queries": pending_q}
+    except Exception:
+        return {"g_is_welfare": False, "g_is_welfare_viewer": False,
+                "g_wlf_pending_queries": 0}
+
+
+@app.context_processor
+def inject_env_flags():
+    from flask import g as _g
+    try:
+        u = getattr(_g, "user", None)
+        return {"g_is_env": is_environment_officer(u),
+                "g_is_env_viewer": (is_environment_viewer(u) and not is_environment_officer(u))}
+    except Exception:
+        return {"g_is_env": False, "g_is_env_viewer": False}
+
+
+# ── Welfare helpers ──────────────────────────────────────────────────
+
+def _wlf_today():
+    return datetime.now(RIYADH_TZ).date()
+
+
+def _wlf_officers():
+    """Welfare trainees in the current company."""
+    q = User.query.filter(User.role == "welfare_officer", User.is_active == True)
+    _c = cid()
+    if _c:
+        q = q.filter(User.company_id == _c)
+    return q.order_by(User.name.asc()).all()
+
+
+def _all_officers_scoped():
+    """All 3 officer types visible to current supervisor (for report pickers).
+    safety_supervisor → only their OfficerTeam assignments.
+    Others → all officers in company."""
+    OFFICER_ROLES = ("safety_officer", "welfare_officer", "environment_officer")
+    u = g.user
+    if u and u.role == "safety_supervisor":
+        assigned_ids = [
+            row.officer_id
+            for row in OfficerTeam.query.filter_by(supervisor_id=u.id).all()
+        ]
+        if not assigned_ids:
+            return []
+        return User.query.filter(
+            User.id.in_(assigned_ids),
+            User.role.in_(OFFICER_ROLES),
+            User.is_active == True,
+        ).order_by(User.role, User.name).all()
+    _c = cid()
+    q = User.query.filter(User.role.in_(OFFICER_ROLES), User.is_active == True)
+    if _c:
+        q = q.filter(User.company_id == _c)
+    return q.order_by(User.role, User.name).all()
+
+
+def _wlf_officers_scoped():
+    """Returns welfare officers visible to the current user.
+    safety_supervisor → only officers assigned to them via OfficerTeam.
+    admin / safety_manager / others → all welfare officers in company."""
+    u = g.user
+    if u and u.role == "safety_supervisor":
+        assigned_ids = [
+            row.officer_id
+            for row in OfficerTeam.query.filter_by(supervisor_id=u.id).all()
+        ]
+        if not assigned_ids:
+            return []
+        q = User.query.filter(
+            User.id.in_(assigned_ids),
+            User.role == "welfare_officer",
+            User.is_active == True,
+        )
+        return q.order_by(User.name.asc()).all()
+    return _wlf_officers()
+
+
+
+def _wlf_ensure_progress(uid):
+    """Creates the 14 level rows on first visit (one per training chapter). L1 starts active."""
+    existing = {p.level_code: p for p in WlfProgress.query.filter_by(officer_id=uid).all()}
+    if len(existing) >= len(WLF_LEVEL_CODES):
+        return existing
+    changed = False
+    for i, code in enumerate(WLF_LEVEL_CODES):
+        if code not in existing:
+            p = WlfProgress(officer_id=uid, company_id=cid(), level_code=code,
+                            status=("active" if i == 0 else "locked"))
+            db.session.add(p)
+            existing[code] = p
+            changed = True
+    if changed:
+        db.session.commit()
+    return existing
+
+
+def _wlf_current_level(uid):
+    progs = _wlf_ensure_progress(uid)
+    for code in WLF_LEVEL_CODES:
+        p = progs.get(code)
+        if p and p.status in ("active", "pending"):
+            return p
+    return progs.get(WLF_LEVEL_CODES[-1])
+
+
+# ── Environment helpers ──────────────────────────────────────────────
+
+def _env_ensure_progress(uid):
+    """Creates the 17 level rows on first visit. E1 starts active."""
+    existing = {p.level_code: p for p in EnvProgress.query.filter_by(officer_id=uid).all()}
+    if len(existing) >= len(ENV_LEVEL_CODES):
+        return existing
+    changed = False
+    for i, code in enumerate(ENV_LEVEL_CODES):
+        if code not in existing:
+            p = EnvProgress(officer_id=uid, company_id=cid(), level_code=code,
+                            status=("active" if i == 0 else "locked"))
+            db.session.add(p)
+            existing[code] = p
+            changed = True
+    if changed:
+        db.session.commit()
+    return existing
+
+
+def _env_current_level(uid):
+    progs = _env_ensure_progress(uid)
+    for code in ENV_LEVEL_CODES:
+        p = progs.get(code)
+        if p and p.status in ("active", "pending"):
+            return p
+    return progs.get(ENV_LEVEL_CODES[-1])
+
+
+def _env_counters(uid, since=None):
+    c = {}
+    wq = EnvLevelWork.query.filter_by(officer_id=uid)
+    if since:
+        wq = wq.filter(EnvLevelWork.date >= since)
+    works = wq.all()
+    c["rounds_submitted"]  = len(works)
+    c["rounds_measured"]   = sum(1 for w in works if w.has_measurement)
+    fq = WlfFinding.query.filter_by(officer_id=uid)
+    if since:
+        fq = fq.filter(WlfFinding.date >= since)
+    finds = fq.all()
+    c["findings_written"]  = len(finds)
+    c["findings_closed"]   = sum(1 for f in finds if f.status == "closed")
+    wr_q = WlfWeeklyReport.query.filter_by(officer_id=uid)
+    if since:
+        wr_q = wr_q.filter(WlfWeeklyReport.week_start >= since)
+    c["weeks_reported"]    = wr_q.count()
+    return c
+
+
+def _wlf_counters(uid, since=None):
+    """All task counters used by level gates and KPIs."""
+    c = {}
+    wq = WlfLevelWork.query.filter_by(officer_id=uid)
+    if since:
+        wq = wq.filter(WlfLevelWork.date >= since)
+    works = wq.all()
+    c["rounds_submitted"] = len(works)
+    c["rounds_measured"]  = sum(1 for w in works if w.has_measurement)
+    c["units_covered"]    = len(set(w.unit for w in works if w.unit))
+    fq = WlfFinding.query.filter_by(officer_id=uid)
+    if since:
+        fq = fq.filter(WlfFinding.date >= since)
+    finds = fq.all()
+    c["findings_written"] = len(finds)
+    c["findings_closed"]  = sum(1 for f in finds if f.status == "closed")
+    cq = WlfComplaint.query.filter_by(officer_id=uid)
+    if since:
+        cq = cq.filter(WlfComplaint.date >= since)
+    c["complaints"] = cq.count()
+    wr_q = WlfWeeklyReport.query.filter_by(officer_id=uid)
+    if since:
+        wr_q = wr_q.filter(WlfWeeklyReport.week_start >= since)
+    c["weeks_reported"] = wr_q.count()
+    return c
+
+
+def _wlf_overdue(uid):
+    today = _wlf_today()
+    return WlfFinding.query.filter(
+        WlfFinding.officer_id == uid,
+        WlfFinding.status == "open",
+        WlfFinding.due_date != None,
+        WlfFinding.due_date < today).all()
+
+
+def _wlf_gate_state(uid):
+    """Returns (level, tasks_with_progress, blocked_reason_or_None, all_done)."""
+    p = _wlf_current_level(uid)
+    lvl = WLF_LEVEL_BY_CODE.get(p.level_code) if p else None
+    if not lvl:
+        return None, [], None, False
+    counters = _wlf_counters(uid)
+    tasks, all_done = [], True
+    for t in lvl["tasks"]:
+        have = counters.get(t["k"], 0)
+        done = have >= t["target"]
+        all_done = all_done and done
+        tasks.append({"label": t["label"], "have": have,
+                      "target": t["target"], "done": done})
+    overdue = _wlf_overdue(uid)
+    blocked = None
+    if overdue:
+        blocked = f"Clear {len(overdue)} overdue finding(s) to unlock the gate"
+    return p, tasks, blocked, all_done
+
+
+
+# ── Welfare routes: trainee ──────────────────────────────────────────
+
+@app.route("/welfare/home")
+@login_required
+@welfare_officer_required
+def welfare_home():
+    u = cur_user()
+    if not is_welfare_officer(u):
+        return redirect(url_for("welfare_supervisor"))
+    today = _wlf_today()
+    _wlf_ensure_progress(u.id)
+    lvl_p, tasks, blocked, all_done = _wlf_gate_state(u.id)
+    lvl = WLF_LEVEL_BY_CODE.get(lvl_p.level_code) if lvl_p else None
+    overdue = _wlf_overdue(u.id)
+    pending_ref = WlfComplaint.query.filter_by(
+        officer_id=u.id, kind="escalate", status="open").count()
+    done_idx = WLF_LEVEL_CODES.index(lvl_p.level_code) if lvl_p else 0
+    pct = round(done_idx * 100.0 / len(WLF_LEVEL_CODES))
+    lvl_status = lvl_p.status if lvl_p else "locked"
+    _c = cid()
+    try:
+        daily_checks = {
+            "heat":      WelfareHeatCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
+            "firstaid":  WelfareFirstaidCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
+            "sanitation": WelfareSanitationCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
+        }
+    except Exception:
+        db.session.rollback()
+        daily_checks = {"heat": None, "firstaid": None, "sanitation": None}
+    return render_template("welfare_home.html",
+                           today=today, level=lvl,
+                           tasks=tasks, blocked=blocked, all_done=all_done,
+                           overdue=overdue, pending_ref=pending_ref,
+                           pct=pct,
+                           level_no=done_idx + 1, level_total=len(WLF_LEVEL_CODES),
+                           lvl_status=lvl_status,
+                           checks=daily_checks)
+
+
+@app.route("/welfare/findings")
+@login_required
+@welfare_officer_required
+def welfare_findings():
+    u = cur_user()
+    status = request.args.get("status", "open")
+    today = _wlf_today()
+    q = WlfFinding.query
+    if is_welfare_officer(u):
+        q = q.filter_by(officer_id=u.id)
+    else:
+        _c = cid()
+        if _c:
+            q = q.filter(WlfFinding.company_id == _c)
+    if status == "closed":
+        q = q.filter(WlfFinding.status == "closed")
+    elif status == "overdue":
+        q = q.filter(WlfFinding.status == "open",
+                     WlfFinding.due_date != None, WlfFinding.due_date < today)
+    else:
+        q = q.filter(WlfFinding.status == "open")
+    rows = q.order_by(
+        func.isnull(WlfFinding.due_date).asc(),
+        WlfFinding.due_date.asc(),
+        WlfFinding.id.desc()
+    ).limit(200).all()
+    return render_template("welfare_findings.html", rows=rows, status=status,
+                           today=today, locked=WLF_LOCKED_SEVERITY)
+
+
+@app.route("/welfare/finding/<int:fid>/close", methods=["GET", "POST"])
+@login_required
+@welfare_officer_required
+def welfare_finding_close(fid):
+    u = cur_user()
+    f = WlfFinding.query.filter_by(id=fid).first_or_404()
+    if is_welfare_officer(u) and f.officer_id != u.id:
+        abort(403)
+    # Trainees may not close Critical/High — supervisor verification required
+    if is_welfare_officer(u) and f.severity in WLF_LOCKED_SEVERITY:
+        flash("Critical and High findings require supervisor verification.", "warning")
+        return redirect(url_for("welfare_findings"))
+    if f.status == "closed":
+        return redirect(url_for("welfare_findings", status="closed"))
+
+    if request.method == "POST":
+        note = (request.form.get("closure_note") or "").strip()
+        if not note:
+            flash("Closure note is required.", "warning")
+            return redirect(url_for("welfare_finding_close", fid=f.id))
+        path = _save_hse_photo(request.files.get("after_photo"), "wlf", company_id=cid())
+        if not path:
+            flash("An after photo is required to close a finding.", "warning")
+            return redirect(url_for("welfare_finding_close", fid=f.id))
+        db.session.add(WlfPhoto(finding_id=f.id, item_key=f.item_key,
+                                ref_no=f.ref_no, photo_path=path, kind="after"))
+        f.closure_note = note
+        f.status = "closed"
+        f.closed_at = datetime.utcnow()
+        f.closed_by = u.id
+        db.session.commit()
+        flash("Finding closed.", "success")
+        return redirect(url_for("welfare_findings"))
+
+    before = WlfPhoto.query.filter_by(round_id=f.round_id,
+                                      item_key=f.item_key, kind="before").all()
+    return render_template("welfare_finding_close.html", f=f, before=before)
+
+
+@app.route("/welfare/complaints")
+@login_required
+@welfare_officer_required
+def welfare_complaints():
+    u = cur_user()
+    q = WlfComplaint.query
+    if is_welfare_officer(u):
+        q = q.filter_by(officer_id=u.id, kind="facility")
+    else:
+        _c = cid()
+        if _c:
+            q = q.filter(WlfComplaint.company_id == _c)
+    rows = q.order_by(WlfComplaint.id.desc()).limit(100).all()
+    return render_template("welfare_complaints.html", rows=rows)
+
+
+@app.route("/welfare/complaint/new", methods=["GET", "POST"])
+@login_required
+@welfare_officer_required
+def welfare_complaint_new():
+    u = cur_user()
+    if request.method == "POST":
+        kind = request.form.get("kind") or "facility"
+        desc = (request.form.get("description") or "").strip()
+        if not desc:
+            flash("Description is required.", "warning")
+            return redirect(url_for("welfare_complaint_new"))
+        try:
+            n = int(request.form.get("raised_by_n") or 1)
+        except Exception:
+            n = 1
+        c = WlfComplaint(officer_id=u.id, company_id=cid(), date=_wlf_today(),
+                         unit=(request.form.get("unit") or "").strip(),
+                         kind=("escalate" if kind == "escalate" else "facility"),
+                         ref_no=(request.form.get("ref_no") or "").strip(),
+                         description=desc, raised_by_n=n,
+                         status=("escalated" if kind == "escalate" else "open"))
+        db.session.add(c)
+        db.session.commit()
+        if c.kind == "escalate":
+            flash("Escalated. Your supervisor will see this on their dashboard.", "success")
+        else:
+            flash("Complaint recorded.", "success")
+        return redirect(url_for("welfare_complaints"))
+    return render_template("welfare_complaint_new.html", units=WLF_UNITS)
+
+
+@app.route("/welfare/flaglog", methods=["GET", "POST"])
+@login_required
+@welfare_officer_required
+def welfare_flaglog():
+    u = cur_user()
+    today = _wlf_today()
+    if request.method == "POST":
+        hour = (request.form.get("hour_label") or "").strip()
+        if hour:
+            row = WlfFlagLog.query.filter_by(officer_id=u.id, date=today,
+                                             hour_label=hour).first()
+            if not row:
+                row = WlfFlagLog(officer_id=u.id, company_id=cid(),
+                                 date=today, hour_label=hour)
+                db.session.add(row)
+            row.flag = request.form.get("flag") or ""
+            row.index_value = (request.form.get("index_value") or "").strip()
+            db.session.commit()
+        return redirect(url_for("welfare_flaglog"))
+    rows = (WlfFlagLog.query.filter_by(officer_id=u.id, date=today)
+            .order_by(WlfFlagLog.hour_label.asc()).all())
+    hist = (WlfFlagLog.query.filter_by(officer_id=u.id)
+            .filter(WlfFlagLog.date < today)
+            .order_by(WlfFlagLog.date.desc(), WlfFlagLog.hour_label.asc())
+            .limit(40).all())
+    return render_template("welfare_flaglog.html", rows=rows, hist=hist,
+                           today=today, flags=WLF_FLAGS)
+
+
+@app.route("/welfare/path")
+@login_required
+@welfare_officer_required
+def welfare_path():
+    u = cur_user()
+    progs = _wlf_ensure_progress(u.id)
+    lvl_p, tasks, blocked, all_done = _wlf_gate_state(u.id)
+    return render_template("welfare_path.html", levels=WLF_LEVELS,
+                           progs=progs, current=lvl_p, tasks=tasks,
+                           blocked=blocked, all_done=all_done)
+
+
+@app.route("/welfare/level/<code>", methods=["GET", "POST"])
+@login_required
+@welfare_officer_required
+def welfare_level(code):
+    u = cur_user()
+    lvl = WLF_LEVEL_BY_CODE.get(code)
+    if not lvl:
+        abort(404)
+    progs = _wlf_ensure_progress(u.id)
+    p = progs.get(code)
+    if not p or p.status == "locked":
+        flash("This level is not unlocked yet.", "info")
+        return redirect(url_for("welfare_path"))
+    if request.method == "POST":
+        act = request.form.get("action")
+        if act == "brief" and not p.briefed_at:
+            p.briefed_at = datetime.utcnow()
+            db.session.commit()
+        elif act == "request_gate":
+            _p, tasks, blocked, all_done = _wlf_gate_state(u.id)
+            if blocked or not all_done:
+                flash(blocked or "Finish all tasks first.", "warning")
+            else:
+                # Handle deliverable file upload
+                _file = request.files.get("deliverable")
+                if _file and _file.filename:
+                    import os as _os, uuid as _uuid
+                    _ext = _os.path.splitext(_file.filename)[1].lower()
+                    _allowed = {".pdf", ".jpg", ".jpeg", ".png"}
+                    if _ext not in _allowed:
+                        flash("Deliverable must be PDF or image.", "warning")
+                        return redirect(url_for("welfare_level", code=code))
+                    _fname = f"wlf_del_{u.id}_{code}_{_uuid.uuid4().hex[:8]}{_ext}"
+                    _fdir = _os.path.join(app.root_path, "static", "hse_photos")
+                    _os.makedirs(_fdir, exist_ok=True)
+                    _file.save(_os.path.join(_fdir, _fname))
+                    p.deliverable = _fname
+                p.status = "pending"
+                p.completed_at = datetime.utcnow()
+                db.session.commit()
+                flash("Sent to your supervisor for approval.", "success")
+        return redirect(url_for("welfare_level", code=code))
+    lvl_p, tasks, blocked, all_done = _wlf_gate_state(u.id)
+    is_current = bool(lvl_p) and lvl_p.level_code == code
+    return render_template("welfare_level.html", lvl=lvl, p=p,
+                           tasks=(tasks if is_current else []),
+                           blocked=(blocked if is_current else None),
+                           all_done=(all_done if is_current else False),
+                           is_current=is_current)
+
+
+@app.route("/welfare/level/<code>/work/new", methods=["GET", "POST"])
+@login_required
+@welfare_officer_required
+def welfare_level_work_new(code):
+    u = cur_user()
+    lvl = WLF_LEVEL_BY_CODE.get(code)
+    if not lvl:
+        abort(404)
+    progs = _wlf_ensure_progress(u.id)
+    p = progs.get(code)
+    if not p or p.status == "locked":
+        flash("This level is not unlocked yet.", "info")
+        return redirect(url_for("welfare_path"))
+    today = _wlf_today()
+    if request.method == "POST":
+        unit  = (request.form.get("unit") or "").strip()
+        notes = (request.form.get("notes") or "").strip()
+        measured = bool(request.form.get("has_measurement"))
+        w = WlfLevelWork(
+            officer_id=u.id, company_id=cid(),
+            level_code=code, date=today,
+            unit=unit or None,
+            has_measurement=measured,
+            notes=notes or None,
+        )
+        db.session.add(w)
+        db.session.commit()
+        flash("Work recorded — great job!", "success")
+        return redirect(url_for("welfare_level", code=code))
+    # counts for progress display
+    done_count = WlfLevelWork.query.filter_by(officer_id=u.id, level_code=code).count()
+    target = lvl["tasks"][0]["target"] if lvl.get("tasks") else 1
+    # recent submissions for this level
+    recent = (WlfLevelWork.query
+              .filter_by(officer_id=u.id, level_code=code)
+              .order_by(WlfLevelWork.date.desc()).limit(10).all())
+    # parse what → field / desk / analysis
+    what_raw = lvl.get("what", "")
+    what_field = what_desk = what_analysis = ""
+    if "\nDesk:" in what_raw:
+        _parts = what_raw.split("\nDesk:", 1)
+        what_field = _parts[0].replace("Field:", "").strip()
+        _rest = _parts[1]
+        if "\nAnalysis:" in _rest:
+            _p2 = _rest.split("\nAnalysis:", 1)
+            what_desk     = _p2[0].strip()
+            what_analysis = _p2[1].strip()
+        else:
+            what_desk = _rest.strip()
+    else:
+        what_field = what_raw.replace("Field:", "").strip()
+    return render_template("welfare_level_work.html",
+                           lvl=lvl, p=p, today=today,
+                           locations=WLF_LOCATIONS,
+                           done_count=done_count, target=target,
+                           recent=recent,
+                           what_field=what_field,
+                           what_desk=what_desk,
+                           what_analysis=what_analysis)
+
+
+def _env_gate_state(uid):
+    p = _env_current_level(uid)
+    lvl = ENV_LEVEL_BY_CODE.get(p.level_code) if p else None
+    if not lvl:
+        return None, [], None, False
+    counters = _env_counters(uid)
+    tasks, all_done = [], True
+    for t in lvl.get("tasks", []):
+        have = counters.get(t["k"], 0)
+        done = have >= t["target"]
+        all_done = all_done and done
+        tasks.append({"label": t["label"], "have": have,
+                      "target": t["target"], "done": done})
+    overdue = _wlf_overdue(uid)
+    blocked = None
+    if overdue:
+        blocked = f"Clear {len(overdue)} overdue finding(s) to unlock the gate"
+    return p, tasks, blocked, all_done
+
+
+# ── Environment routes: trainee ──────────────────────────────────────
+
+@app.route("/env/path")
+@login_required
+@environment_officer_required
+def env_path():
+    u = cur_user()
+    progs = _env_ensure_progress(u.id)
+    lvl_p, tasks, blocked, all_done = _env_gate_state(u.id)
+    return render_template("env_path.html", levels=ENV_LEVELS,
+                           progs=progs, current=lvl_p, tasks=tasks,
+                           blocked=blocked, all_done=all_done)
+
+
+@app.route("/env/level/<code>", methods=["GET", "POST"])
+@login_required
+@environment_officer_required
+def env_level(code):
+    u = cur_user()
+    lvl = ENV_LEVEL_BY_CODE.get(code)
+    if not lvl:
+        abort(404)
+    progs = _env_ensure_progress(u.id)
+    p = progs.get(code)
+    if not p or p.status == "locked":
+        flash("This level is not unlocked yet.", "info")
+        return redirect(url_for("env_path"))
+    if request.method == "POST":
+        act = request.form.get("action")
+        if act == "brief" and not p.briefed_at:
+            p.briefed_at = datetime.utcnow()
+            db.session.commit()
+        elif act == "request_gate":
+            _p, tasks, blocked, all_done = _env_gate_state(u.id)
+            if blocked or not all_done:
+                flash(blocked or "Finish all tasks first.", "warning")
+            else:
+                _file = request.files.get("deliverable")
+                if _file and _file.filename:
+                    import os as _os, uuid as _uuid
+                    _ext = _os.path.splitext(_file.filename)[1].lower()
+                    if _ext not in {".pdf", ".jpg", ".jpeg", ".png"}:
+                        flash("Deliverable must be PDF or image.", "warning")
+                        return redirect(url_for("env_level", code=code))
+                    _fname = f"env_del_{u.id}_{code}_{_uuid.uuid4().hex[:8]}{_ext}"
+                    _fdir = _os.path.join(app.root_path, "static", "hse_photos")
+                    _os.makedirs(_fdir, exist_ok=True)
+                    _file.save(_os.path.join(_fdir, _fname))
+                    p.deliverable = _fname
+                p.status = "pending"
+                p.completed_at = datetime.utcnow()
+                db.session.commit()
+                flash("Sent to your supervisor for approval.", "success")
+        return redirect(url_for("env_level", code=code))
+    lvl_p, tasks, blocked, all_done = _env_gate_state(u.id)
+    is_current = bool(lvl_p) and lvl_p.level_code == code
+    return render_template("env_level.html", lvl=lvl, p=p,
+                           tasks=(tasks if is_current else []),
+                           blocked=(blocked if is_current else None),
+                           all_done=(all_done if is_current else False),
+                           is_current=is_current)
+
+
+@app.route("/env/level/<code>/work/new", methods=["GET", "POST"])
+@login_required
+@environment_officer_required
+def env_level_work_new(code):
+    u = cur_user()
+    lvl = ENV_LEVEL_BY_CODE.get(code)
+    if not lvl:
+        abort(404)
+    progs = _env_ensure_progress(u.id)
+    p = progs.get(code)
+    if not p or p.status == "locked":
+        flash("This level is not unlocked yet.", "info")
+        return redirect(url_for("env_path"))
+    today = _wlf_today()
+    if request.method == "POST":
+        unit     = (request.form.get("unit") or "").strip()
+        notes    = (request.form.get("notes") or "").strip()
+        measured = bool(request.form.get("has_measurement"))
+        w = EnvLevelWork(
+            officer_id=u.id, company_id=cid(),
+            level_code=code, date=today,
+            unit=unit or None,
+            has_measurement=measured,
+            notes=notes or None,
+        )
+        db.session.add(w)
+        db.session.commit()
+        flash("Work recorded — great job!", "success")
+        return redirect(url_for("env_level", code=code))
+    done_count = EnvLevelWork.query.filter_by(officer_id=u.id, level_code=code).count()
+    target = lvl["tasks"][0]["target"] if lvl.get("tasks") else 1
+    recent = (EnvLevelWork.query
+              .filter_by(officer_id=u.id, level_code=code)
+              .order_by(EnvLevelWork.date.desc()).limit(10).all())
+    what_raw = lvl.get("what", "")
+    what_field = what_desk = what_analysis = ""
+    if "\nDesk:" in what_raw:
+        _parts = what_raw.split("\nDesk:", 1)
+        what_field = _parts[0].replace("Field:", "").strip()
+        _rest = _parts[1]
+        if "\nAnalysis:" in _rest:
+            _p2 = _rest.split("\nAnalysis:", 1)
+            what_desk     = _p2[0].strip()
+            what_analysis = _p2[1].strip()
+        else:
+            what_desk = _rest.strip()
+    else:
+        what_field = what_raw.replace("Field:", "").strip()
+    return render_template("env_level_work.html",
+                           lvl=lvl, p=p, today=today,
+                           locations=WLF_LOCATIONS,
+                           done_count=done_count, target=target,
+                           recent=recent,
+                           what_field=what_field,
+                           what_desk=what_desk,
+                           what_analysis=what_analysis)
+
+
+@app.route("/welfare/kpis")
+@login_required
+@welfare_officer_required
+def welfare_kpis():
+    u = cur_user()
+    today = _wlf_today()
+    month_start = today.replace(day=1)
+    c = _wlf_counters(u.id, since=month_start)
+    finds = WlfFinding.query.filter(WlfFinding.officer_id == u.id,
+                                    WlfFinding.date >= month_start).all()
+    closed = [f for f in finds if f.status == "closed"]
+    on_time = sum(1 for f in closed
+                  if f.due_date and f.closed_at and f.closed_at.date() <= f.due_date)
+    pct_on_time = round(on_time * 100.0 / len(closed), 1) if closed else None
+    lvl_p, tasks, blocked, all_done = _wlf_gate_state(u.id)
+    return render_template("welfare_kpis.html", c=c, month_start=month_start,
+                           pct_on_time=pct_on_time, open_n=len(finds) - len(closed),
+                           tasks=tasks, blocked=blocked,
+                           level=(WLF_LEVEL_BY_CODE.get(lvl_p.level_code) if lvl_p else None),
+                           units_total=len(WLF_UNITS))
+
+
+@app.route("/welfare/sw.js")
+def welfare_sw():
+    """Service worker so the field page opens with no signal."""
+    js = """
+const CACHE = 'wlf-v1';
+self.addEventListener('install', e => { self.skipWaiting(); });
+self.addEventListener('activate', e => { e.waitUntil(self.clients.claim()); });
+self.addEventListener('fetch', e => {
+  const url = new URL(e.request.url);
+  if (e.request.method !== 'GET') return;
+  if (!url.pathname.startsWith('/welfare/') && !url.pathname.startsWith('/static/')) return;
+  e.respondWith(
+    fetch(e.request).then(res => {
+      const copy = res.clone();
+      caches.open(CACHE).then(c => c.put(e.request, copy)).catch(()=>{});
+      return res;
+    }).catch(() => caches.match(e.request))
+  );
+});
+"""
+    return Response(js, mimetype="application/javascript")
+
+
+# ── Welfare routes: supervisor ───────────────────────────────────────
+
+@app.route("/welfare/supervisor")
+@login_required
+@welfare_supervisor_required
+def welfare_supervisor():
+    today = _wlf_today()
+    week_start = today - timedelta(days=6)
+    officers = _wlf_officers_scoped()
+    cards = []
+    for o in officers:
+        rounds_w = WlfLevelWork.query.filter(WlfLevelWork.officer_id == o.id,
+                                              WlfLevelWork.date >= week_start).count()
+        overdue = len(_wlf_overdue(o.id))
+        lvl_p, tasks, blocked, all_done = _wlf_gate_state(o.id)
+        # evidence package for gate approval
+        evidence = None
+        if lvl_p and lvl_p.status == "pending":
+            month_start = today.replace(day=1)
+            ev_counters = _wlf_counters(o.id, since=month_start)
+            ev_finds = WlfFinding.query.filter(
+                WlfFinding.officer_id == o.id,
+                WlfFinding.date >= month_start).all()
+            ev_closed = sum(1 for f in ev_finds if f.status == "closed")
+            evidence = {
+                "counters": ev_counters,
+                "finds_open": len(ev_finds) - ev_closed,
+                "finds_closed": ev_closed,
+            }
+        cards.append({
+            "u": o, "rounds_w": rounds_w, "pending_sync": 0,
+            "overdue": overdue, "today": None,
+            "level": (WLF_LEVEL_BY_CODE.get(lvl_p.level_code) if lvl_p else None),
+            "level_status": (lvl_p.status if lvl_p else ""),
+            "level_code": (lvl_p.level_code if lvl_p else ""),
+            "deliverable": (lvl_p.deliverable if lvl_p else None),
+            "tasks": tasks, "blocked": blocked, "all_done": all_done,
+            "evidence": evidence,
+        })
+    esc = (WlfComplaint.query.filter(WlfComplaint.kind == "escalate",
+                                     WlfComplaint.status == "escalated")
+           .order_by(WlfComplaint.id.desc()).limit(20).all())
+    _c = cid()
+    if _c:
+        esc = [e for e in esc if e.company_id == _c]
+    # overdue queries (open > SLA hours)
+    sla_cutoff = datetime.utcnow() - timedelta(hours=WLF_QUERY_SLA_HOURS)
+    oq = (WlfQuery.query.filter(WlfQuery.status == "open",
+                                WlfQuery.created_at <= sla_cutoff)
+          .order_by(WlfQuery.created_at.asc()).all())
+    if _c:
+        oq = [q for q in oq if q.company_id == _c]
+    # gather names for display
+    all_ids = set()
+    for q in oq:
+        all_ids.update([q.asker_id, q.assignee_id])
+    all_ids.discard(None)
+    oq_names = {}
+    if all_ids:
+        from sqlalchemy import text as _t
+        rows_ = db.session.execute(
+            _t("SELECT id, name FROM user WHERE id IN :ids"), {"ids": tuple(all_ids)}
+        ).fetchall()
+        oq_names = {r[0]: r[1] for r in rows_}
+    # open findings (Critical / High) across all officers
+    open_finds = (WlfFinding.query
+                  .filter(WlfFinding.status.in_(["open", "in_progress"]),
+                          WlfFinding.severity.in_(["Critical", "High"]))
+                  .order_by(WlfFinding.severity.asc(), WlfFinding.date.desc())
+                  .limit(50).all())
+    if _c:
+        open_finds = [f for f in open_finds if f.company_id == _c]
+    # map officer names
+    find_officer_ids = {f.officer_id for f in open_finds}
+    find_names = {}
+    if find_officer_ids:
+        from sqlalchemy import text as _t2
+        fn_rows = db.session.execute(
+            _t2("SELECT id, name FROM user WHERE id IN :ids"),
+            {"ids": tuple(find_officer_ids)}
+        ).fetchall()
+        find_names = {r[0]: r[1] for r in fn_rows}
+    return render_template("welfare_supervisor.html", cards=cards, today=today,
+                           escalations=esc, overdue_queries=oq, oq_names=oq_names,
+                           current_season=_wlf_season(),
+                           open_finds=open_finds, find_names=find_names)
+
+
+@app.route("/welfare/approve/<int:uid>/<code>", methods=["POST"])
+@login_required
+@welfare_supervisor_required
+def welfare_approve(uid, code):
+    me = cur_user()
+    p = WlfProgress.query.filter_by(officer_id=uid, level_code=code).first_or_404()
+    if p.status != "pending":
+        flash("This level is not awaiting approval.", "info")
+        return redirect(url_for("welfare_supervisor"))
+    p.status = "done"
+    p.approved_by = me.id
+    p.approved_at = datetime.utcnow()
+    idx = WLF_LEVEL_CODES.index(code)
+    if idx + 1 < len(WLF_LEVEL_CODES):
+        nxt = WlfProgress.query.filter_by(officer_id=uid,
+                                          level_code=WLF_LEVEL_CODES[idx + 1]).first()
+        if nxt and nxt.status == "locked":
+            nxt.status = "active"
+    db.session.commit()
+    flash(f"{code} approved.", "success")
+    return redirect(url_for("welfare_supervisor"))
+
+
+@app.route("/welfare/approve_reject/<int:uid>/<code>", methods=["POST"])
+@login_required
+@welfare_supervisor_required
+def welfare_approve_reject(uid, code):
+    p = WlfProgress.query.filter_by(officer_id=uid, level_code=code).first_or_404()
+    if p.status != "pending":
+        flash("This level is not awaiting approval.", "info")
+        return redirect(url_for("welfare_supervisor"))
+    reason = (request.form.get("reason") or "").strip()
+    p.status = "active"
+    p.notes = (f"Returned by supervisor: {reason}" if reason else "Returned by supervisor")
+    db.session.commit()
+    flash(f"{code} sent back to officer{(': ' + reason) if reason else ''}.", "warning")
+    return redirect(url_for("welfare_supervisor"))
+
+
+@app.route("/env/supervisor")
+@login_required
+@welfare_supervisor_required
+def env_supervisor():
+    """Supervisor view: pending env gate approvals for all environment officers."""
+    _c = cid()
+    q = User.query.filter(User.role == "environment_officer", User.is_active == True)
+    if _c:
+        q = q.filter(User.company_id == _c)
+    officers = q.order_by(User.name.asc()).all()
+
+    cards = []
+    for o in officers:
+        progs = _env_ensure_progress(o.id)
+        lvl_p, tasks, blocked, all_done = _env_gate_state(o.id)
+        lvl = ENV_LEVEL_BY_CODE.get(lvl_p.level_code) if lvl_p else None
+        since_dt = datetime.utcnow() - timedelta(days=30)
+        counters = _env_counters(o.id, since=since_dt.date())
+        rounds_w = (EnvLevelWork.query.filter_by(officer_id=o.id)
+                    .filter(EnvLevelWork.date >= (_wlf_today() - timedelta(days=7)))
+                    .count())
+        overdue = len(_wlf_overdue(o.id))
+        # build evidence package for pending levels
+        evidence = None
+        if lvl_p and lvl_p.status == "pending":
+            last5 = (EnvLevelWork.query.filter_by(officer_id=o.id, level_code=lvl_p.level_code)
+                     .order_by(EnvLevelWork.date.desc()).limit(5).all())
+            finds_closed = WlfFinding.query.filter_by(officer_id=o.id, status="closed").count()
+            finds_open   = WlfFinding.query.filter_by(officer_id=o.id, status="open").count()
+            evidence = {"last5": last5, "counters": counters,
+                        "finds_closed": finds_closed, "finds_open": finds_open,
+                        "photos": []}
+        cards.append({"u": o, "level_code": lvl_p.level_code if lvl_p else "—",
+                      "level": lvl, "level_status": lvl_p.status if lvl_p else None,
+                      "tasks": tasks, "blocked": blocked,
+                      "rounds_w": rounds_w, "overdue": overdue,
+                      "evidence": evidence,
+                      "deliverable": lvl_p.deliverable if lvl_p else None})
+    return render_template("env_supervisor.html", cards=cards,
+                           today=_wlf_today())
+
+
+@app.route("/env/approve/<int:uid>/<code>", methods=["POST"])
+@login_required
+@welfare_supervisor_required
+def env_approve(uid, code):
+    me = cur_user()
+    p = EnvProgress.query.filter_by(officer_id=uid, level_code=code).first_or_404()
+    if p.status != "pending":
+        flash("This level is not awaiting approval.", "info")
+        return redirect(url_for("env_supervisor"))
+    p.status = "done"
+    p.approved_by = me.id
+    p.approved_at = datetime.utcnow()
+    idx = ENV_LEVEL_CODES.index(code)
+    if idx + 1 < len(ENV_LEVEL_CODES):
+        nxt = EnvProgress.query.filter_by(officer_id=uid,
+                                          level_code=ENV_LEVEL_CODES[idx + 1]).first()
+        if nxt and nxt.status == "locked":
+            nxt.status = "active"
+    db.session.commit()
+    flash(f"{code} approved.", "success")
+    return redirect(url_for("env_supervisor"))
+
+
+@app.route("/env/approve_reject/<int:uid>/<code>", methods=["POST"])
+@login_required
+@welfare_supervisor_required
+def env_approve_reject(uid, code):
+    p = EnvProgress.query.filter_by(officer_id=uid, level_code=code).first_or_404()
+    if p.status != "pending":
+        flash("This level is not awaiting approval.", "info")
+        return redirect(url_for("env_supervisor"))
+    reason = (request.form.get("reason") or "").strip()
+    p.status = "active"
+    p.notes = (f"Returned by supervisor: {reason}" if reason else "Returned by supervisor")
+    db.session.commit()
+    flash(f"{code} sent back to officer{(': ' + reason) if reason else ''}.", "warning")
+    return redirect(url_for("env_supervisor"))
+
+
+@app.route("/welfare/escalation/<int:cid_>/ack", methods=["POST"])
+@login_required
+@welfare_supervisor_required
+def welfare_escalation_ack(cid_):
+    c = WlfComplaint.query.filter_by(id=cid_).first_or_404()
+    c.seen_by_sup = True
+    c.status = "closed"
+    db.session.commit()
+    return redirect(url_for("welfare_supervisor"))
+
+
+@app.route("/welfare/finding/<int:fid>/verify", methods=["POST"])
+@login_required
+@welfare_supervisor_required
+def welfare_finding_verify(fid):
+    me = cur_user()
+    f = WlfFinding.query.filter_by(id=fid).first_or_404()
+    f.status = "closed"
+    f.closure_note = ((f.closure_note or "") +
+                      " | Verified by supervisor: " +
+                      (request.form.get("note") or "").strip()).strip(" |")
+    f.closed_at = datetime.utcnow()
+    f.closed_by = me.id
+    db.session.commit()
+    flash("Finding verified and closed.", "success")
+    return redirect(request.referrer or url_for("welfare_supervisor"))
+
+
+def _env_period_stats(officer_id, d_start, d_end):
+    """Compute environment officer stats for any date range."""
+    def _cnt(model):
+        return model.query.filter_by(officer_id=officer_id).filter(
+            model.date >= d_start, model.date <= d_end).count()
+    waste  = _cnt(EnvWasteCheck)
+    soil   = _cnt(EnvSoilWaterCheck)
+    dust   = _cnt(EnvDustCheck)
+    hazcom = _cnt(EnvHazcomCheck)
+    sewage = _cnt(EnvSewageCheck)
+    days   = (d_end - d_start).days + 1
+    incidents_new  = EnvIncident.query.filter_by(officer_id=officer_id).filter(
+        EnvIncident.date >= d_start, EnvIncident.date <= d_end).count()
+    incidents_open = EnvIncident.query.filter_by(officer_id=officer_id, status="open").count()
+    level_work     = EnvLevelWork.query.filter_by(officer_id=officer_id).filter(
+        EnvLevelWork.date >= d_start, EnvLevelWork.date <= d_end).count()
+    total = waste + soil + dust + hazcom + sewage
+    return {
+        "waste": waste, "soil": soil, "dust": dust, "hazcom": hazcom, "sewage": sewage,
+        "total": total, "max": days * 5,
+        "incidents_new": incidents_new, "incidents_open": incidents_open,
+        "level_work": level_work, "zero": total == 0,
+    }
+
+
+def _wlf_week_stats(officer_id, week_start):
+    """Compute this-week welfare stats for one officer from existing DB tables."""
+    week_end = week_start + timedelta(days=6)
+    works = (WlfLevelWork.query
+             .filter_by(officer_id=officer_id)
+             .filter(WlfLevelWork.date >= week_start, WlfLevelWork.date <= week_end)
+             .order_by(WlfLevelWork.date.asc()).all())
+    finds = (WlfFinding.query
+             .filter_by(officer_id=officer_id)
+             .filter(WlfFinding.date >= week_start, WlfFinding.date <= week_end)
+             .all())
+    finds_open   = [f for f in finds if f.status != "closed"]
+    finds_closed = [f for f in finds if f.status == "closed"]
+    complaints = (WlfComplaint.query
+                  .filter_by(officer_id=officer_id)
+                  .filter(WlfComplaint.date >= week_start, WlfComplaint.date <= week_end)
+                  .all())
+    overdue = [f for f in WlfFinding.query.filter_by(officer_id=officer_id,
+               status="open").all()
+               if f.due_date and f.due_date < week_end]
+    scores = [w.score for w in works if w.score is not None]
+    avg_score = round(sum(scores) / len(scores), 1) if scores else None
+    return {
+        "rounds": works, "round_count": len(works),
+        "finds_new": len(finds), "finds_open": len(finds_open),
+        "finds_closed": len(finds_closed),
+        "finds_critical": [f for f in finds_open if f.severity in ("Critical","High")],
+        "complaints": len(complaints), "overdue": len(overdue),
+        "avg_score": avg_score,
+    }
+
+
+@app.route("/welfare/weekly", methods=["GET", "POST"])
+@login_required
+@welfare_officer_required
+def welfare_weekly():
+    u = cur_user()
+    today = _wlf_today()
+    week_start = today - timedelta(days=(today.weekday() + 1) % 7)
+    existing = WlfWeeklyReport.query.filter_by(
+        officer_id=u.id, week_start=week_start).first()
+    stats = _wlf_week_stats(u.id, week_start)
+    if request.method == "POST":
+        note = (request.form.get("officer_note") or "").strip()
+        if existing:
+            existing.officer_note = note or None
+        else:
+            wr = WlfWeeklyReport(company_id=cid(), officer_id=u.id,
+                                 week_start=week_start, officer_note=note or None)
+            db.session.add(wr)
+        db.session.commit()
+        flash("Weekly report shared with supervisor.", "success")
+        return redirect(url_for("welfare_home"))
+    # past 6 weeks
+    past = []
+    for i in range(1, 7):
+        ws = week_start - timedelta(weeks=i)
+        wr = WlfWeeklyReport.query.filter_by(officer_id=u.id, week_start=ws).first()
+        past.append({"week_start": ws, "wr": wr,
+                     "stats": _wlf_week_stats(u.id, ws)})
+    return render_template("welfare_weekly.html",
+                           week_start=week_start, existing=existing,
+                           stats=stats, past=past)
+
+
+@app.route("/welfare/officer/<int:uid>")
+@login_required
+@welfare_supervisor_required
+def welfare_officer_profile(uid):
+    """Full profile page for one welfare officer — visible to supervisor/admin."""
+    from sqlalchemy import desc as _desc2
+    o = User.query.get_or_404(uid)
+    today  = _wlf_today()
+    month_start = today.replace(day=1)
+    import calendar as _cal
+    month_end = month_start.replace(
+        day=_cal.monthrange(month_start.year, month_start.month)[1])
+
+    # ── Last 30 level work submissions ──
+    rounds = (WlfLevelWork.query
+              .filter_by(officer_id=uid)
+              .order_by(_desc2(WlfLevelWork.date), _desc2(WlfLevelWork.id))
+              .limit(30).all())
+
+    # ── All findings ──
+    findings = (WlfFinding.query
+                .filter_by(officer_id=uid)
+                .order_by(_desc2(WlfFinding.date))
+                .limit(50).all())
+    finds_open   = [f for f in findings if f.status == "open"]
+    finds_closed = [f for f in findings if f.status == "closed"]
+
+    # ── Complaints ──
+    complaints = (WlfComplaint.query
+                  .filter_by(officer_id=uid)
+                  .order_by(_desc2(WlfComplaint.date))
+                  .limit(30).all())
+
+    # ── Level progress ──
+    all_progress = {p.level_code: p
+                    for p in WlfProgress.query.filter_by(officer_id=uid).all()}
+    level_rows = []
+    for lvl in WLF_LEVELS:
+        p = all_progress.get(lvl["code"])
+        level_rows.append({"lvl": lvl, "p": p,
+                            "status": p.status if p else "locked"})
+
+    # ── Weekly reports — last 8 ──
+    week_start_sun = today - timedelta(days=(today.isoweekday() % 7))
+    weekly_reports = []
+    for i in range(8):
+        ws = week_start_sun - timedelta(weeks=i)
+        wr = WlfWeeklyReport.query.filter_by(officer_id=uid, week_start=ws).first()
+        s  = _wlf_week_stats(uid, ws)
+        weekly_reports.append({"week_start": ws, "wr": wr, "stats": s})
+
+    # ── Monthly card data ──
+    monthly = _wlf_monthly_card_data(o, month_start, month_end)
+
+    return render_template("welfare_officer_profile.html",
+                           o=o, today=today, rounds=rounds,
+                           findings=findings,
+                           finds_open=finds_open, finds_closed=finds_closed,
+                           complaints=complaints,
+                           level_rows=level_rows, weekly_reports=weekly_reports,
+                           monthly=monthly,
+                           month_start=month_start)
+
+
+@app.route("/welfare/monthly")
+@login_required
+@welfare_supervisor_required
+def welfare_monthly_overview():
+    """One-page overview: all officers, pick a month."""
+    today = _wlf_today()
+    month_str = request.args.get("month", today.strftime("%Y-%m"))
+    try:
+        month_start = datetime.strptime(month_str + "-01", "%Y-%m-%d").date()
+    except ValueError:
+        month_start = today.replace(day=1)
+    import calendar
+    last_day = calendar.monthrange(month_start.year, month_start.month)[1]
+    month_end = month_start.replace(day=last_day)
+    officers = _wlf_officers_scoped()
+    cards = []
+    for o in officers:
+        cards.append(_wlf_monthly_card_data(o, month_start, month_end))
+    return render_template("welfare_monthly_overview.html",
+                           cards=cards, month_start=month_start,
+                           month_str=month_str)
+
+
+@app.route("/welfare/monthly/<int:uid>")
+@login_required
+@welfare_supervisor_required
+def welfare_monthly_card(uid):
+    """Printable single-officer monthly card."""
+    from sqlalchemy import text as _sqlt
+    o = db.session.get(User, uid)
+    if not o:
+        abort(404)
+    today = _wlf_today()
+    month_str = request.args.get("month", today.strftime("%Y-%m"))
+    try:
+        month_start = datetime.strptime(month_str + "-01", "%Y-%m-%d").date()
+    except ValueError:
+        month_start = today.replace(day=1)
+    import calendar
+    last_day = calendar.monthrange(month_start.year, month_start.month)[1]
+    month_end = month_start.replace(day=last_day)
+    data = _wlf_monthly_card_data(o, month_start, month_end)
+    return render_template("welfare_monthly_card.html",
+                           d=data, month_start=month_start, month_str=month_str)
+
+
+def _wlf_monthly_card_data(o, month_start, month_end):
+    """Build the full data dict for one officer's monthly card."""
+    works = (WlfLevelWork.query
+             .filter_by(officer_id=o.id)
+             .filter(WlfLevelWork.date >= month_start, WlfLevelWork.date <= month_end)
+             .all())
+    finds = (WlfFinding.query
+             .filter_by(officer_id=o.id)
+             .filter(WlfFinding.date >= month_start, WlfFinding.date <= month_end)
+             .all())
+    finds_open   = [f for f in finds if f.status != "closed"]
+    finds_closed = [f for f in finds if f.status == "closed"]
+    on_time = sum(1 for f in finds_closed
+                  if f.due_date and f.closed_at and f.closed_at.date() <= f.due_date)
+    complaints = (WlfComplaint.query
+                  .filter_by(officer_id=o.id)
+                  .filter(WlfComplaint.date >= month_start,
+                          WlfComplaint.date <= month_end).all())
+    weekly_shared = (WlfWeeklyReport.query
+                     .filter_by(officer_id=o.id)
+                     .filter(WlfWeeklyReport.week_start >= month_start,
+                             WlfWeeklyReport.week_start <= month_end).all())
+    lvl_p, _, _, _ = _wlf_gate_state(o.id)
+    lvl = WLF_LEVEL_BY_CODE.get(lvl_p.level_code) if lvl_p else None
+    done_idx = WLF_LEVEL_CODES.index(lvl_p.level_code) if lvl_p else 0
+    return {
+        "u": o,
+        "rounds": len(works),
+        "finds_new": len(finds), "finds_closed": len(finds_closed),
+        "finds_open": len(finds_open),
+        "on_time_pct": round(on_time * 100 / len(finds_closed)) if finds_closed else None,
+        "complaints": len(complaints),
+        "weekly_shared": len(weekly_shared),
+        "level_no": done_idx + 1, "level_total": len(WLF_LEVEL_CODES),
+        "level": lvl, "level_status": (lvl_p.status if lvl_p else ""),
+    }
+
+
+@app.route("/welfare/weekly_reports")
+@login_required
+@welfare_supervisor_required
+def welfare_weekly_reports():
+    officers = _wlf_officers_scoped()
+    today = _wlf_today()
+    week_start = today - timedelta(days=(today.weekday() + 1) % 7)
+    rows = []
+    for o in officers:
+        weeks = []
+        for i in range(6):
+            ws = week_start - timedelta(weeks=i)
+            wr = WlfWeeklyReport.query.filter_by(officer_id=o.id, week_start=ws).first()
+            weeks.append({"week_start": ws, "wr": wr,
+                          "stats": _wlf_week_stats(o.id, ws)})
+        rows.append({"u": o, "weeks": weeks})
+    return render_template("welfare_weekly_reports.html",
+                           rows=rows, week_start=week_start)
+
+
+@app.route("/welfare/weekly_comment/<int:wrid>", methods=["POST"])
+@login_required
+@welfare_supervisor_required
+def welfare_weekly_comment(wrid):
+    wr = WlfWeeklyReport.query.filter_by(id=wrid).first_or_404()
+    wr.sup_comment = (request.form.get("comment") or "").strip() or None
+    wr.sup_seen = True
+    db.session.commit()
+    flash("Comment saved.", "success")
+    return redirect(url_for("welfare_weekly_reports"))
+
+
+# ── Welfare: formal weekly report (picker + printable table) ──────────
+
+@app.route("/welfare/report/weekly")
+@login_required
+@welfare_supervisor_required
+def welfare_report_weekly_picker():
+    today = _wlf_today()
+    days_since_sunday = today.isoweekday() % 7
+    default_ws = today - timedelta(days=days_since_sunday)
+    all_officers = _all_officers_scoped()
+    return render_template("welfare_report_weekly_picker.html",
+                           default_ws=default_ws,
+                           all_officers=all_officers)
+
+
+@app.route("/welfare/report/weekly/view")
+@login_required
+@welfare_supervisor_required
+def welfare_report_weekly_view():
+    import calendar as _cal
+    today = _wlf_today()
+    raw = request.args.get("week_start")
+    try:
+        ws = datetime.strptime(raw, "%Y-%m-%d").date() if raw else None
+    except ValueError:
+        ws = None
+    if not ws:
+        days_since_sunday = today.isoweekday() % 7
+        ws = today - timedelta(days=days_since_sunday)
+    we = ws + timedelta(days=6)
+
+    selected_ids_raw = request.args.getlist("officer_ids")
+    selected_ids = [int(x) for x in selected_ids_raw if x.isdigit()] if selected_ids_raw else []
+
+    all_officers = _all_officers_scoped()
+    officers = [o for o in all_officers if o.id in selected_ids] if selected_ids else all_officers
+
+    wlf_rows = []
+    env_rows = []
+    for o in officers:
+        if o.role == "environment_officer":
+            s = _env_period_stats(o.id, ws, we)
+            env_rows.append({"officer_id": o.id, "officer_name": o.name, **s})
+        else:
+            s = _wlf_week_stats(o.id, ws)
+            wr = WlfWeeklyReport.query.filter_by(officer_id=o.id, week_start=ws).first()
+            pts = s["round_count"] * 3 + s["finds_closed"] * 2 - s["overdue"]
+            wlf_rows.append({
+                "officer_id":   o.id,
+                "officer_name": o.name,
+                "role":         o.role,
+                "rounds":       s["round_count"],
+                "finds_new":    s["finds_new"],
+                "finds_closed": s["finds_closed"],
+                "overdue":      s["overdue"],
+                "complaints":   s["complaints"],
+                "shared":       wr is not None,
+                "officer_note": wr.officer_note if wr else None,
+                "points":       pts,
+                "zero":         s["round_count"] == 0,
+            })
+    wlf_rows.sort(key=lambda r: r["points"], reverse=True)
+    env_rows.sort(key=lambda r: r["total"], reverse=True)
+    return render_template("welfare_report_weekly_view.html",
+                           wlf_rows=wlf_rows, env_rows=env_rows, ws=ws, we=we,
+                           now=datetime.now(RIYADH_TZ))
+
+
+# ── Welfare: formal monthly report (picker + printable table) ─────────
+
+@app.route("/welfare/report/monthly")
+@login_required
+@welfare_supervisor_required
+def welfare_report_monthly_picker():
+    today = _wlf_today()
+    all_officers = _all_officers_scoped()
+    return render_template("welfare_report_monthly_picker.html", today=today, all_officers=all_officers)
+
+
+@app.route("/welfare/report/monthly/view")
+@login_required
+@welfare_supervisor_required
+def welfare_report_monthly_view():
+    import calendar as _cal
+    today = _wlf_today()
+    raw_month = request.args.get("month", "")
+    try:
+        if "-" in raw_month:          # format: YYYY-MM  (from <input type="month">)
+            year, month = map(int, raw_month.split("-")[:2])
+        else:
+            year  = int(request.args.get("year",  today.year))
+            month = int(request.args.get("month", today.month))
+    except (ValueError, TypeError):
+        year, month = today.year, today.month
+    month_start = today.replace(year=year, month=month, day=1)
+    last_day    = _cal.monthrange(year, month)[1]
+    month_end   = month_start.replace(day=last_day)
+    month_name  = month_start.strftime("%B")
+
+    selected_ids_raw = request.args.getlist("officer_ids")
+    selected_ids = [int(x) for x in selected_ids_raw if x.isdigit()] if selected_ids_raw else []
+
+    all_officers = _all_officers_scoped()
+    officers = [o for o in all_officers if o.id in selected_ids] if selected_ids else all_officers
+
+    wlf_rows = []
+    env_rows = []
+    for o in officers:
+        if o.role == "environment_officer":
+            s = _env_period_stats(o.id, month_start, month_end)
+            env_rows.append({"officer_id": o.id, "officer_name": o.name, **s})
+        else:
+            d = _wlf_monthly_card_data(o, month_start, month_end)
+            pts = d["rounds"] * 3 + d["finds_closed"] * 2 - d["finds_open"]
+            wlf_rows.append({
+                "officer_id":    o.id,
+                "officer_name":  o.name,
+                "role":          o.role,
+                "rounds":        d["rounds"],
+                "finds_new":     d["finds_new"],
+                "finds_closed":  d["finds_closed"],
+                "finds_open":    d["finds_open"],
+                "on_time_pct":   d["on_time_pct"],
+                "complaints":    d["complaints"],
+                "weekly_shared": d["weekly_shared"],
+                "level_no":      d["level_no"],
+                "level_total":   d["level_total"],
+                "points":        pts,
+                "zero":          d["rounds"] == 0,
+            })
+    wlf_rows.sort(key=lambda r: r["points"], reverse=True)
+    env_rows.sort(key=lambda r: r["total"], reverse=True)
+    return render_template("welfare_report_monthly_view.html",
+                           wlf_rows=wlf_rows, env_rows=env_rows,
+                           year=year, month=month,
+                           month_name=month_name,
+                           first_day=month_start, last_day=month_end,
+                           now=datetime.now(RIYADH_TZ))
+
+
+@app.route("/welfare/compliance-report")
+@login_required
+@safety_manager_required
+def welfare_compliance_report():
+    import calendar as _cal
+    today = datetime.now(RIYADH_TZ).date()
+    raw = request.args.get("month", "")
+    try:
+        if "-" in raw:
+            year, month = map(int, raw.split("-")[:2])
+        else:
+            year, month = today.year, today.month
+    except Exception:
+        year, month = today.year, today.month
+    month_name  = date(year, month, 1).strftime("%B")
+    month_start = date(year, month, 1)
+    month_end   = date(year, month, _cal.monthrange(year, month)[1])
+    _cid = cid()
+    officers_q = User.query.filter_by(role="welfare_officer", is_active=True)
+    if _cid:
+        officers_q = officers_q.filter(User.company_id == _cid)
+    officers = officers_q.order_by(User.name).all()
+    rows = []
+    for o in officers:
+        d = _wlf_monthly_card_data(o, month_start, month_end)
+        rows.append({
+            "officer_id":    o.id,
+            "officer_name":  o.name,
+            "rounds":        d["rounds"],
+            "avg_score":     d["avg_score"],
+            "best_score":    d["best_score"],
+            "finds_new":     d["finds_new"],
+            "finds_closed":  d["finds_closed"],
+            "finds_open":    d["finds_open"],
+            "on_time_pct":   d["on_time_pct"],
+            "complaints":    d["complaints"],
+            "weekly_shared": d["weekly_shared"],
+            "level_no":      d["level_no"],
+            "level_total":   d["level_total"],
+            "zero":          d["rounds"] == 0,
+        })
+    rows.sort(key=lambda r: r["rounds"], reverse=True)
+    return render_template("welfare_compliance_report.html",
+                           rows=rows, year=year, month=month,
+                           month_name=month_name,
+                           first_day=month_start, last_day=month_end,
+                           today=today, now=datetime.now(RIYADH_TZ))
+
+
+@app.route("/welfare/daily")
+@login_required
+@welfare_supervisor_required
+def welfare_daily():
+    d = _safe_date(request.args.get("date")) or _wlf_today()
+    selected_ids_raw = request.args.getlist("officer_ids")
+    selected_ids = [int(x) for x in selected_ids_raw if x.isdigit()] if selected_ids_raw else []
+
+    all_officers = _all_officers_scoped()
+    officers = [o for o in all_officers if o.id in selected_ids] if selected_ids else all_officers
+    blocks = []
+    for o in officers:
+        works = WlfLevelWork.query.filter_by(officer_id=o.id, date=d).all()
+        findings = WlfFinding.query.filter_by(officer_id=o.id, date=d).all()
+        comps = WlfComplaint.query.filter_by(officer_id=o.id, date=d).all()
+        blocks.append({"u": o, "works": works, "findings": findings, "complaints": comps})
+    return render_template("welfare_daily.html", d=d, blocks=blocks,
+                           items_def=_wlf_items(),
+                           all_officers=all_officers,
+                           selected_ids=selected_ids)
+
+
+
+# ── Welfare Query ("Ask the Officer") ────────────────────────────────
+# Internal channel only. No WhatsApp, no email, no phone numbers.
+# v2026-08-28-daily-redesign
+# Visibility: welfare_officer (own queries) · safety_officer (assigned)
+#             · safety_supervisor · admin · super_admin
+# Excluded intentionally: safety_manager
+
+WLF_QUERY_DAILY_CAP = 2       # max queries directed to one officer per day
+WLF_QUERY_SLA_HOURS = 4       # after this, query appears overdue on supervisor dash
+
+
+class WlfQuery(db.Model):
+    __tablename__ = "wlf_query"
+    id            = db.Column(db.Integer, primary_key=True)
+    company_id    = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    asker_id      = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    assignee_id   = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    assign_reason = db.Column(db.String(40))     # checkin / supervisor / last_covered / none
+    date          = db.Column(db.Date, nullable=False)
+    unit          = db.Column(db.String(40))
+    item_key      = db.Column(db.String(40))
+    ref_no        = db.Column(db.String(40))
+    question      = db.Column(db.Text, nullable=False)
+    photo_wanted  = db.Column(db.Boolean, default=False)
+    status        = db.Column(db.String(20), default="open")   # open / answered
+    answer_text   = db.Column(db.Text)
+    answer_photo  = db.Column(db.String(255))
+    answered_by   = db.Column(db.Integer, nullable=True)
+    answered_at   = db.Column(db.DateTime, nullable=True)
+    round_id      = db.Column(db.Integer, db.ForeignKey("wlf_round.id"), nullable=True)
+    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
+
+
+def _wlf_query_access(u):
+    """Query channel visibility. safety_manager excluded intentionally."""
+    if not u or not getattr(u, "is_active", False):
+        return False
+    return getattr(u, "role", None) in ("welfare_officer", "safety_officer",
+                                        "safety_supervisor", "admin", "super_admin")
+
+
+def welfare_query_required(f):
+    @wraps(f)
+    def inner(*args, **kwargs):
+        u = cur_user()
+        if not u:
+            return redirect(url_for("login"))
+        if not _wlf_query_access(u):
+            flash("You do not have access to welfare queries.", "danger")
+            return redirect(url_for("index"))
+        return f(*args, **kwargs)
+    return inner
+
+
+def _wlf_query_inbox_role(u):
+    """Who replies (not who sends)."""
+    return getattr(u, "role", None) in ("safety_officer", "safety_supervisor",
+                                        "admin", "super_admin")
+
+
+def _wlf_pick_assignee(unit):
+    """Pick who replies: checked-in officer → supervisor → last who covered."""
+    today = _wlf_today()
+    _c = cid()
+
+    def _cap_ok(uid):
+        n = WlfQuery.query.filter(WlfQuery.assignee_id == uid,
+                                  WlfQuery.date == today).count()
+        return n < WLF_QUERY_DAILY_CAP
+
+    # 1) officer checked in to this unit today
+    try:
+        q = HseCheckin.query.filter(HseCheckin.date == today,
+                                    HseCheckin.location.like(f"%{unit}%"))
+        if _c:
+            q = q.filter(HseCheckin.company_id == _c)
+        for ci in q.all():
+            ou = db.session.get(User, ci.officer_id)
+            if ou and ou.is_active and ou.role == "safety_officer" and _cap_ok(ou.id):
+                return ou.id, "checkin"
+    except Exception:
+        pass
+
+    # 2) safety supervisor
+    sq = User.query.filter(User.role == "safety_supervisor", User.is_active == True)
+    if _c:
+        sq = sq.filter(User.company_id == _c)
+    sup = sq.first()
+    if sup:
+        return sup.id, "supervisor"
+
+    # 3) last officer who covered the unit
+    try:
+        lq = (HseCheckin.query.filter(HseCheckin.location.like(f"%{unit}%"))
+              .order_by(HseCheckin.date.desc()))
+        if _c:
+            lq = lq.filter(HseCheckin.company_id == _c)
+        last = lq.first()
+        if last:
+            return last.officer_id, "last_covered"
+    except Exception:
+        pass
+
+    return None, "none"
+
+
+def _wlf_query_overdue(qrow):
+    if qrow.status != "open" or not qrow.created_at:
+        return False
+    return (datetime.utcnow() - qrow.created_at).total_seconds() > WLF_QUERY_SLA_HOURS * 3600
+
+
+@app.route("/welfare/queries")
+@login_required
+@welfare_query_required
+def welfare_queries():
+    u = cur_user()
+    if _wlf_query_inbox_role(u) and u.role != "welfare_officer":
+        return redirect(url_for("welfare_query_inbox"))
+    rows = (WlfQuery.query.filter_by(asker_id=u.id)
+            .order_by(WlfQuery.id.desc()).limit(60).all())
+    names = {}
+    answerers = {}
+    for r in rows:
+        if r.assignee_id and r.assignee_id not in names:
+            ou = db.session.get(User, r.assignee_id)
+            names[r.assignee_id] = ou.name if ou else "—"
+        else:
+            names[None] = "—"
+        if r.answered_by and r.answered_by not in answerers:
+            ou = db.session.get(User, r.answered_by)
+            answerers[r.answered_by] = ou.name if ou else "—"
+    # Build officer list with last-known location for manual selection
+    _c = cid()
+    _oq = User.query.filter_by(role="safety_officer", is_active=True)
+    if _c:
+        _oq = _oq.filter(User.company_id == _c)
+    _officers_raw = _oq.order_by(User.name).all()
+    officer_choices = []
+    for _o in _officers_raw:
+        _last = (HseCheckin.query.filter_by(officer_id=_o.id)
+                 .order_by(HseCheckin.date.desc()).first())
+        officer_choices.append({
+            "id": _o.id, "name": _o.name,
+            "last_unit": (_last.location if _last else "—"),
+        })
+    # Also add supervisors as a fallback choice
+    _sq = User.query.filter(User.role.in_(["safety_supervisor"]), User.is_active == True)
+    if _c:
+        _sq = _sq.filter(User.company_id == _c)
+    for _s in _sq.all():
+        officer_choices.append({"id": _s.id, "name": f"{_s.name} (Supervisor)", "last_unit": "—"})
+    return render_template("welfare_queries.html", rows=rows, names=names,
+                           answerers=answerers,
+                           locations=WLF_LOCATIONS, items=_wlf_items(),
+                           officer_choices=officer_choices,
+                           overdue=_wlf_query_overdue)
+
+
+@app.route("/welfare/query/new", methods=["POST"])
+@login_required
+@welfare_officer_required
+def welfare_query_new():
+    u = cur_user()
+    unit = (request.form.get("unit") or "").strip()
+    question = (request.form.get("question") or "").strip()
+    if not unit or not question:
+        flash("Unit and question are required.", "warning")
+        return redirect(url_for("welfare_queries"))
+    # Manual assignee selection (Option B)
+    _aid_raw = request.form.get("assignee_id")
+    if _aid_raw and _aid_raw.isdigit():
+        aid, reason = int(_aid_raw), "manual"
+    else:
+        aid, reason = _wlf_pick_assignee(unit)
+    q = WlfQuery(company_id=cid(), asker_id=u.id, assignee_id=aid,
+                 assign_reason=reason, date=_wlf_today(), unit=unit,
+                 item_key=(request.form.get("item_key") or "").strip(),
+                 ref_no=(request.form.get("ref_no") or "").strip(),
+                 question=question,
+                 photo_wanted=bool(request.form.get("photo_wanted")))
+    db.session.add(q)
+    db.session.commit()
+    if aid:
+        try:
+            import threading as _thr
+            _thr.Thread(target=_send_push_to_user,
+                        args=(aid, "Welfare query",
+                              f"Unit {unit}: {question[:60]}"),
+                        daemon=True).start()
+        except Exception:
+            pass
+        flash("Sent.", "success")
+    else:
+        flash("Saved — no officer found for that unit.", "warning")
+    return redirect(url_for("welfare_queries"))
+
+
+@app.route("/welfare/queries/inbox")
+@login_required
+@welfare_query_required
+def welfare_query_inbox():
+    u = cur_user()
+    if not _wlf_query_inbox_role(u):
+        return redirect(url_for("welfare_queries"))
+    mine = u.role == "safety_officer"
+    q = WlfQuery.query
+    if mine:
+        q = q.filter(WlfQuery.assignee_id == u.id)
+    else:
+        _c = cid()
+        if _c:
+            q = q.filter(WlfQuery.company_id == _c)
+    rows = q.order_by(WlfQuery.status.asc(), WlfQuery.id.desc()).limit(120).all()
+    askers = {}
+    answerers = {}
+    for r in rows:
+        if r.asker_id and r.asker_id not in askers:
+            ou = db.session.get(User, r.asker_id)
+            askers[r.asker_id] = ou.name if ou else "—"
+        if r.answered_by and r.answered_by not in answerers:
+            ou = db.session.get(User, r.answered_by)
+            answerers[r.answered_by] = ou.name if ou else "—"
+    answered_n = WlfQuery.query.filter(WlfQuery.answered_by == u.id).count()
+    return render_template("welfare_query_inbox.html", rows=rows, askers=askers,
+                           answerers=answerers, mine=mine, answered_n=answered_n,
+                           overdue=_wlf_query_overdue)
+
+
+@app.route("/welfare/query/<int:qid>/answer", methods=["POST"])
+@login_required
+@welfare_query_required
+def welfare_query_answer(qid):
+    u = cur_user()
+    if not _wlf_query_inbox_role(u):
+        abort(403)
+    q = WlfQuery.query.filter_by(id=qid).first_or_404()
+    if u.role == "safety_officer" and q.assignee_id != u.id:
+        abort(403)
+    txt = (request.form.get("answer_text") or "").strip()
+    if not txt:
+        flash("An answer is required.", "warning")
+        return redirect(url_for("welfare_query_inbox"))
+    path = _save_hse_photo(request.files.get("answer_photo"), "wlfq", company_id=cid())
+    q.answer_text = txt
+    if path:
+        q.answer_photo = path
+    q.status = "answered"
+    q.answered_by = u.id
+    q.answered_at = datetime.utcnow()
+    db.session.commit()
+    try:
+        import threading as _thr
+        _thr.Thread(target=_send_push_to_user,
+                    args=(q.asker_id, "Query answered",
+                          f"Unit {q.unit}: {txt[:60]}"), daemon=True).start()
+    except Exception:
+        pass
+    flash("Answer sent.", "success")
+    return redirect(url_for("welfare_query_inbox"))
+
+
+# ── Welfare: Season toggle ────────────────────────────────────────────
+
+@app.route("/welfare/season", methods=["POST"])
+@login_required
+@welfare_supervisor_required
+def welfare_season_toggle():
+    new_season = request.form.get("season")
+    if new_season not in ("summer", "winter"):
+        flash("Invalid season.", "warning")
+        return redirect(url_for("welfare_supervisor"))
+    _c = cid()
+    s = WlfSetting.query.filter_by(key="season", company_id=_c).first()
+    if s:
+        s.value = new_season
+    else:
+        db.session.add(WlfSetting(company_id=_c, key="season", value=new_season))
+    db.session.commit()
+    flash(f"Season set to {new_season}.", "success")
+    return redirect(url_for("welfare_supervisor"))
+
+
+# ── Welfare: Asset register ───────────────────────────────────────────
+
+WLF_ASSET_TYPES = [
+    ("water_station", "Water station / cooler bank"),
+    ("shelter",       "Rest shelter"),
+    ("toilet",        "Field toilet unit"),
+    ("handwash",      "Hand-wash point"),
+    ("waste_bin",     "Waste / skip bin"),
+    ("flag_board",    "Heat-flag board"),
+    ("signage",       "Signage / emergency board"),
+    ("muster",        "Muster point"),
+    ("other",         "Other"),
+]
+
+
+@app.route("/welfare/assets")
+@login_required
+@welfare_officer_required
+def welfare_assets():
+    _c = cid()
+    q = WlfAsset.query
+    if _c:
+        q = q.filter(WlfAsset.company_id == _c)
+    assets = q.order_by(WlfAsset.location_code, WlfAsset.asset_type, WlfAsset.label).all()
+    loc_map = {l["code"]: l["label"] for l in WLF_LOCATIONS}
+    return render_template("welfare_assets.html", assets=assets,
+                           locations=WLF_LOCATIONS, loc_map=loc_map,
+                           asset_types=WLF_ASSET_TYPES)
+
+
+@app.route("/welfare/asset/new", methods=["GET", "POST"])
+@login_required
+@welfare_officer_required
+def welfare_asset_new():
+    if request.method == "POST":
+        loc  = (request.form.get("location_code") or "").strip()
+        atyp = (request.form.get("asset_type") or "").strip()
+        lbl  = (request.form.get("label") or "").strip()
+        if not loc or not atyp or not lbl:
+            flash("Location, type and label are required.", "warning")
+        else:
+            cap_raw = request.form.get("capacity") or ""
+            cap = int(cap_raw) if cap_raw.isdigit() else None
+            qty_raw = request.form.get("qty") or "1"
+            qty = int(qty_raw) if qty_raw.isdigit() else 1
+            a = WlfAsset(company_id=cid(),
+                         location_code=loc, asset_type=atyp, label=lbl,
+                         qty=qty, capacity=cap,
+                         notes=(request.form.get("notes") or "").strip(),
+                         added_by=cur_user().id)
+            db.session.add(a)
+            db.session.commit()
+            flash("Asset added.", "success")
+        return redirect(url_for("welfare_assets"))
+    return render_template("welfare_asset_new.html",
+                           locations=WLF_LOCATIONS, asset_types=WLF_ASSET_TYPES)
+
+
+@app.route("/welfare/asset/<int:aid>/delete", methods=["POST"])
+@login_required
+@welfare_officer_required
+def welfare_asset_delete(aid):
+    a = WlfAsset.query.filter_by(id=aid).first_or_404()
+    _c = cid()
+    if _c and a.company_id != _c:
+        flash("Not allowed.", "danger")
+        return redirect(url_for("welfare_assets"))
+    db.session.delete(a)
+    db.session.commit()
+    flash("Removed.", "success")
+    return redirect(url_for("welfare_assets"))
+
+
 # ===================== Bootstrapping =====================
 with app.app_context():
     try:
         db.create_all()
+    except Exception as e:
+        app.logger.error("create_all failed: %s", e)
+
+    try:
         seed_warning_reasons()
     except Exception as e:
+        db.session.rollback()
         app.logger.warning("seed_warning_reasons skipped: %s", e)
+
+    # ── Migration: requests.officer_user_id + employee_id nullable ──
+    # ملاحظة: SQLAlchemy 1.4 القديم لا يوفّر Connection.commit/rollback،
+    # لذا نستخدم engine.begin() الذي يلتزم تلقائياً عند الخروج.
+    def _mysql_column_exists(table, column):
+        try:
+            row = db.session.execute(text(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() "
+                "AND TABLE_NAME = :t AND COLUMN_NAME = :c"
+            ), {"t": table, "c": column}).scalar()
+            return bool(row)
+        except Exception:
+            return True   # عند الشك لا نحاول التعديل
+
+    def _mysql_column_nullable(table, column):
+        try:
+            row = db.session.execute(text(
+                "SELECT IS_NULLABLE FROM information_schema.COLUMNS "
+                "WHERE TABLE_SCHEMA = DATABASE() "
+                "AND TABLE_NAME = :t AND COLUMN_NAME = :c"
+            ), {"t": table, "c": column}).scalar()
+            return (row or "YES").upper() == "YES"
+        except Exception:
+            return True
+
+    _is_mysql = "mysql" in str(db.engine.url)
+    if _is_mysql:
+        try:
+            if not _mysql_column_exists("requests", "officer_user_id"):
+                with db.engine.begin() as _conn:
+                    _conn.execute(text(
+                        "ALTER TABLE requests "
+                        "ADD COLUMN officer_user_id INT NULL, "
+                        "ADD CONSTRAINT fk_requests_officer_user "
+                        "FOREIGN KEY (officer_user_id) REFERENCES `user`(id)"
+                    ))
+                app.logger.info("migration: requests.officer_user_id added")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning("migration officer_user_id skipped: %s", e)
+
+        try:
+            if not _mysql_column_nullable("requests", "employee_id"):
+                with db.engine.begin() as _conn:
+                    _conn.execute(text(
+                        "ALTER TABLE requests MODIFY COLUMN employee_id INT NULL"
+                    ))
+                app.logger.info("migration: requests.employee_id set nullable")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning("migration employee_id nullable skipped: %s", e)
+
+        try:
+            if not _mysql_column_exists("wlf_progress", "deliverable"):
+                with db.engine.begin() as _conn:
+                    _conn.execute(text(
+                        "ALTER TABLE wlf_progress ADD COLUMN deliverable VARCHAR(200) NULL"
+                    ))
+                app.logger.info("migration: wlf_progress.deliverable added")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning("migration wlf_progress.deliverable skipped: %s", e)
+
+        # wlf_asset: add missing columns if table existed before this version
+        for _col, _ddl in [
+            ("location_code", "ALTER TABLE wlf_asset ADD COLUMN location_code VARCHAR(20) NOT NULL DEFAULT ''"),
+            ("asset_type",    "ALTER TABLE wlf_asset ADD COLUMN asset_type VARCHAR(30) NOT NULL DEFAULT ''"),
+            ("label",         "ALTER TABLE wlf_asset ADD COLUMN label VARCHAR(80) NOT NULL DEFAULT ''"),
+            ("qty",           "ALTER TABLE wlf_asset ADD COLUMN qty INT NOT NULL DEFAULT 1"),
+            ("capacity",      "ALTER TABLE wlf_asset ADD COLUMN capacity INT NULL"),
+            ("notes",         "ALTER TABLE wlf_asset ADD COLUMN notes TEXT NULL"),
+            ("added_by",      "ALTER TABLE wlf_asset ADD COLUMN added_by INT NULL"),
+            ("created_at",    "ALTER TABLE wlf_asset ADD COLUMN created_at DATETIME NULL"),
+            ("updated_at",    "ALTER TABLE wlf_asset ADD COLUMN updated_at DATETIME NULL"),
+        ]:
+            try:
+                if not _mysql_column_exists("wlf_asset", _col):
+                    with db.engine.begin() as _conn:
+                        _conn.execute(text(_ddl))
+                    app.logger.info("migration: wlf_asset.%s added", _col)
+            except Exception as e:
+                db.session.rollback()
+                app.logger.warning("migration wlf_asset.%s skipped: %s", _col, e)
+
+        # wlf_weekly_report: ensure required columns exist
+        for _col, _ddl in [
+            ("officer_note", "ALTER TABLE wlf_weekly_report ADD COLUMN officer_note TEXT NULL"),
+            ("sup_comment",  "ALTER TABLE wlf_weekly_report ADD COLUMN sup_comment TEXT NULL"),
+            ("sup_seen",     "ALTER TABLE wlf_weekly_report ADD COLUMN sup_seen TINYINT(1) NOT NULL DEFAULT 0"),
+        ]:
+            try:
+                if not _mysql_column_exists("wlf_weekly_report", _col):
+                    with db.engine.begin() as _conn:
+                        _conn.execute(text(_ddl))
+                    app.logger.info("migration: wlf_weekly_report.%s added", _col)
+            except Exception as e:
+                db.session.rollback()
+                app.logger.warning("migration wlf_weekly_report.%s skipped: %s", _col, e)
+
+        # wlf_progress.notes column
+        try:
+            if not _mysql_column_exists("wlf_progress", "notes"):
+                with db.engine.begin() as _conn:
+                    _conn.execute(text(
+                        "ALTER TABLE wlf_progress ADD COLUMN notes TEXT NULL"
+                    ))
+                app.logger.info("migration: wlf_progress.notes added")
+        except Exception as e:
+            db.session.rollback()
+            app.logger.warning("migration wlf_progress.notes skipped: %s", e)
 
 # على الاستضافة: Passenger يستورد الملف فقط، لذا ننادي الإنشاء هنا:
 ensure_db_and_admin()
@@ -10867,6 +17696,856 @@ def settings_user_activate(uid):
     db.session.commit()
     flash(f"{target.name} activated.", "success")
     return redirect(url_for("settings_users"))
+
+
+# ===================== Safety Supervisor =====================
+
+def _safety_sup_required():
+    u = cur_user()
+    if not u or u.role not in ("safety_supervisor", "admin", "super_admin"):
+        abort(403)
+    return u
+
+def _get_safety_officers(sup_user):
+    """Active safety officers visible to this supervisor.
+    safety_supervisor → only officers explicitly assigned via OfficerTeam.
+    admin / super_admin → all safety officers in company."""
+    if sup_user.role == "safety_supervisor":
+        assigned_ids = [
+            row.officer_id
+            for row in OfficerTeam.query.filter_by(supervisor_id=sup_user.id).all()
+        ]
+        if not assigned_ids:
+            return []
+        return User.query.filter(
+            User.id.in_(assigned_ids),
+            User.role == "safety_officer",
+            User.is_active == True,
+        ).order_by(User.name).all()
+    return User.query.filter_by(role="safety_officer", is_active=True,
+                                company_id=sup_user.company_id).order_by(User.name).all()
+
+@app.route("/safety-supervisor/home")
+@login_required
+def safety_supervisor_home():
+    u = cur_user()
+    if u.role not in ("safety_supervisor", "admin", "super_admin"):
+        abort(403)
+    today = datetime.now(RIYADH_TZ).date()
+    days_since_sunday = today.isoweekday() % 7
+    week_start = today - timedelta(days=days_since_sunday)
+    officers = _get_safety_officers(u)
+    officer_ids = [o.id for o in officers]
+
+    # Aggregated stats per officer (GROUP BY — avoids N+1)
+    def _grp(col, date_col, extra=None):
+        q = (db.session.query(col, func.count())
+             .filter(col.in_(officer_ids), date_col.between(week_start, today))
+             .group_by(col))
+        if extra is not None:
+            q = q.filter(extra)
+        return dict(q.all())
+
+    obs_map  = _grp(HseObservation.officer_id, HseObservation.date)
+    tbt_map  = _grp(HseTbt.officer_id, HseTbt.date)
+    nm_map   = _grp(HseNearMiss.officer_id, HseNearMiss.date)
+    jso_map  = _grp(HseJsoClosure.officer_id, HseJsoClosure.date)
+    bbs_map  = dict(
+        db.session.query(HseBbs.officer_id, func.coalesce(func.sum(HseBbs.card_count), 0))
+        .filter(HseBbs.officer_id.in_(officer_ids), HseBbs.date.between(week_start, today))
+        .group_by(HseBbs.officer_id).all()
+    )
+    ptw_map  = dict(
+        db.session.query(HsePtw.officer_id, func.count())
+        .filter(HsePtw.officer_id.in_(officer_ids), HsePtw.status == "active", HsePtw.week_end >= today)
+        .group_by(HsePtw.officer_id).all()
+    )
+    insp_map = _grp(HseInspection.officer_id, HseInspection.date)
+    locs_today = {l.user_id: l for l in UserLocation.query.filter(
+        UserLocation.user_id.in_(officer_ids)).all()}
+
+    rows = []
+    for o in officers:
+        oid = o.id
+        loc = locs_today.get(oid)
+        loc_present = False
+        loc_text    = None
+        if loc and loc.updated_at:
+            lu = (loc.updated_at.replace(tzinfo=None) if loc.updated_at.tzinfo is None
+                  else loc.updated_at.astimezone(RIYADH_TZ).replace(tzinfo=None))
+            loc_present = lu.date() == today
+            if loc_present:
+                parts = ([f"PKG{loc.pkg}"] if loc.pkg else []) + \
+                        ([f"Unit {loc.unit}"] if loc.unit else []) + \
+                        ([loc.area_text] if loc.area_text else [])
+                loc_text = " · ".join(parts)
+        obs = obs_map.get(oid, 0)
+        tbt = tbt_map.get(oid, 0)
+        nm  = nm_map.get(oid, 0)
+        jso = jso_map.get(oid, 0)
+        bbs = int(bbs_map.get(oid, 0))
+        ptw = ptw_map.get(oid, 0)
+        insp = insp_map.get(oid, 0)
+        score = round(obs*2 + tbt*3 + ptw, 1)
+        rows.append({
+            "id": oid, "name": o.name, "code": o.supervisor_code,
+            "checked_in": loc_present,
+            "location": loc_text,
+            "obs_w": obs, "tbt_w": tbt, "nm_w": nm,
+            "jso_w": jso, "bbs_w": bbs, "ptw_w": ptw, "insp_w": insp,
+            "total_w": obs + tbt + nm + jso,
+            "score": score,
+            "is_trainee": bool(getattr(o, "ptw_training_active", False)),
+        })
+
+    rows.sort(key=lambda r: r["score"], reverse=True)
+    checked_in = sum(1 for r in rows if r["checked_in"])
+    pending_req = Request.query.filter_by(supervisor_id=u.id, status="pending").count()
+    return render_template("safety_supervisor_home.html",
+                           officers=rows, today=today, week_start=week_start,
+                           checked_in=checked_in, total=len(rows),
+                           pending_req=pending_req)
+
+@app.route("/safety-supervisor/officers", methods=["GET", "POST"])
+@login_required
+def safety_supervisor_officers():
+    u = cur_user()
+    if u.role not in ("safety_supervisor", "admin", "super_admin"):
+        abort(403)
+    if request.method == "POST":
+        code = (request.form.get("code") or "").strip()
+        name = (request.form.get("name") or "").strip()
+        role = (request.form.get("role") or "safety_officer").strip()
+        allowed_roles = {"safety_officer", "welfare_officer", "environment_officer"}
+        if role not in allowed_roles:
+            role = "safety_officer"
+        if not code:
+            flash("Officer ID is required.", "danger")
+        else:
+            existing = User.query.filter_by(supervisor_code=code).first()
+            if existing:
+                existing.role = role
+                existing.company_id = u.company_id
+                existing.is_active = True
+                if name:
+                    existing.name = name
+                db.session.commit()
+                flash(f"{existing.name or code} updated to {role.replace('_',' ').title()}.", "success")
+            else:
+                new_officer = User(supervisor_code=code, name=name,
+                                   role=role, is_active=True,
+                                   company_id=u.company_id)
+                db.session.add(new_officer)
+                db.session.commit()
+                flash(f"{name or code} added as {role.replace('_',' ').title()}.", "success")
+        return redirect(url_for("safety_supervisor_officers"))
+    today = datetime.now(RIYADH_TZ).date()
+    days_since_sunday = today.isoweekday() % 7
+    week_start = today - timedelta(days=days_since_sunday)
+    officers = _get_safety_officers(u)
+    officer_ids = [o.id for o in officers]
+    locs = {l.user_id: l for l in UserLocation.query.filter(
+        UserLocation.user_id.in_(officer_ids)).all()}
+    rows = []
+    for o in officers:
+        loc = locs.get(o.id)
+        loc_today = False
+        loc_text  = None
+        if loc and loc.updated_at:
+            lu = (loc.updated_at.replace(tzinfo=None) if loc.updated_at.tzinfo is None
+                  else loc.updated_at.astimezone(RIYADH_TZ).replace(tzinfo=None))
+            loc_today = lu.date() == today
+            if loc_today:
+                parts = ([f"PKG{loc.pkg}"] if loc.pkg else []) + \
+                        ([f"Unit {loc.unit}"] if loc.unit else []) + \
+                        ([loc.area_text] if loc.area_text else [])
+                loc_text = " · ".join(parts)
+        obs_w = HseObservation.query.filter(HseObservation.officer_id == o.id,
+                                            HseObservation.date >= week_start).count()
+        tbt_w = HseTbt.query.filter(HseTbt.officer_id == o.id,
+                                    HseTbt.date >= week_start).count()
+        nm_w  = HseNearMiss.query.filter(HseNearMiss.officer_id == o.id,
+                                         HseNearMiss.date >= week_start).count()
+        rows.append({"id": o.id, "name": o.name, "code": o.supervisor_code,
+                     "checked_in": loc_today,
+                     "location": loc_text,
+                     "obs_w": obs_w, "tbt_w": tbt_w, "nm_w": nm_w,
+                     "total_w": obs_w + tbt_w + nm_w})
+    return render_template("safety_supervisor_officers.html",
+                           officers=rows, today=today, week_start=week_start)
+
+# ── Admin: manage safety supervisor ─────────────────────────
+@app.route("/admin/safety-supervisor/assign", methods=["GET", "POST"])
+@admin_required
+def admin_safety_sup_assign():
+    if request.method == "POST":
+        action = request.form.get("action")
+        sup_id = request.form.get("sup_id", type=int)
+        officer_id = request.form.get("officer_id", type=int)
+        if action == "add" and sup_id and officer_id:
+            existing = SafetySupervisorMap.query.filter_by(
+                safety_sup_id=sup_id, officer_id=officer_id).first()
+            if not existing:
+                db.session.add(SafetySupervisorMap(
+                    safety_sup_id=sup_id, officer_id=officer_id,
+                    company_id=cid()))
+                db.session.commit()
+                flash("Assigned.", "success")
+        elif action == "remove" and sup_id and officer_id:
+            SafetySupervisorMap.query.filter_by(
+                safety_sup_id=sup_id, officer_id=officer_id).delete()
+            db.session.commit()
+            flash("Removed.", "success")
+        return redirect(url_for("admin_safety_sup_assign"))
+    safety_sups = User.query.filter_by(role="safety_supervisor", is_active=True,
+                                        company_id=cid()).order_by(User.name).all()
+    officers = User.query.filter_by(role="safety_officer", is_active=True,
+                                     company_id=cid()).order_by(User.name).all()
+    maps = SafetySupervisorMap.query.filter(
+        SafetySupervisorMap.company_id == cid()).all()
+    map_dict = {}
+    for m in maps:
+        map_dict.setdefault(m.safety_sup_id, []).append(m.officer_id)
+    return render_template("admin_safety_sup_assign.html",
+                           safety_sups=safety_sups, officers=officers,
+                           map_dict=map_dict)
+
+# ── API: safety supervisor officers list (iOS) ───────────────
+@app.route("/api/safety-supervisor/officers", methods=["GET"])
+def api_safety_sup_officers():
+    u = get_api_user() or cur_user()
+    if not u or not u.is_active:
+        return jsonify(error="Unauthorized"), 401
+    if u.role not in ("safety_supervisor", "admin", "super_admin"):
+        return jsonify(error="Forbidden"), 403
+    today = datetime.now(RIYADH_TZ).date()
+    # Support ?date=YYYY-MM-DD for specific day check-in, ?days=N for stats period
+    date_param = freq.args.get("date")
+    days_param = int(freq.args.get("days", 7))
+    try:
+        target_date = datetime.strptime(date_param, "%Y-%m-%d").date() if date_param else today
+    except ValueError:
+        target_date = today
+    stats_start = target_date - timedelta(days=max(1, days_param) - 1)
+
+    officers = _get_safety_officers(u)
+    officer_ids = [o.id for o in officers]
+
+    # Check-in: use HseCheckin for historical dates, UserLocation for today
+    if target_date == today:
+        locs = {l.user_id: l for l in UserLocation.query.filter(
+            UserLocation.user_id.in_(officer_ids)).all()}
+    else:
+        locs = None
+
+    checkins_on_date = {c.officer_id: c for c in HseCheckin.query.filter(
+        HseCheckin.officer_id.in_(officer_ids),
+        HseCheckin.date == target_date
+    ).all()} if target_date != today else {}
+
+    def _grp(col, date_col):
+        return dict(db.session.query(col, func.count())
+                    .filter(col.in_(officer_ids), date_col.between(stats_start, target_date))
+                    .group_by(col).all())
+
+    obs_map  = _grp(HseObservation.officer_id, HseObservation.date)
+    tbt_map  = _grp(HseTbt.officer_id, HseTbt.date)
+    nm_map   = _grp(HseNearMiss.officer_id, HseNearMiss.date)
+    jso_map  = _grp(HseJsoClosure.officer_id, HseJsoClosure.date)
+    bbs_map  = dict(
+        db.session.query(HseBbs.officer_id, func.coalesce(func.sum(HseBbs.card_count), 0))
+        .filter(HseBbs.officer_id.in_(officer_ids), HseBbs.date.between(stats_start, target_date))
+        .group_by(HseBbs.officer_id).all()
+    )
+    ptw_map  = dict(
+        db.session.query(HsePtw.officer_id, func.count())
+        .filter(HsePtw.officer_id.in_(officer_ids), HsePtw.status == "active", HsePtw.week_end >= target_date)
+        .group_by(HsePtw.officer_id).all()
+    )
+    insp_map = _grp(HseInspection.officer_id, HseInspection.date)
+
+    data = []
+    for o in officers:
+        loc_today = False
+        loc_text  = None
+        if target_date == today and locs:
+            loc = locs.get(o.id)
+            if loc and loc.updated_at:
+                loc_date = (loc.updated_at.replace(tzinfo=None)
+                            if loc.updated_at.tzinfo is None else
+                            loc.updated_at.astimezone(RIYADH_TZ).replace(tzinfo=None))
+                loc_today = loc_date.date() == today
+                if loc_today:
+                    parts = ([f"PKG{loc.pkg}"] if loc.pkg else []) + \
+                            ([f"Unit {loc.unit}"] if loc.unit else []) + \
+                            ([loc.area_text] if loc.area_text else [])
+                    loc_text = " · ".join(parts)
+        else:
+            ci = checkins_on_date.get(o.id)
+            if ci:
+                loc_today = True
+                loc_text  = ci.location
+        obs_w  = obs_map.get(o.id, 0)
+        tbt_w  = tbt_map.get(o.id, 0)
+        nm_w   = nm_map.get(o.id, 0)
+        jso_w  = jso_map.get(o.id, 0)
+        bbs_w  = int(bbs_map.get(o.id, 0))
+        ptw_w  = ptw_map.get(o.id, 0)
+        insp_w = insp_map.get(o.id, 0)
+        score  = round(obs_w*2 + tbt_w*3 + ptw_w, 1)
+        data.append({
+            "id": o.id, "name": o.name, "code": o.supervisor_code,
+            "checked_in": loc_today,
+            "checkin_location": loc_text,
+            "obs_week": obs_w, "tbt_week": tbt_w, "nm_week": nm_w,
+            "jso_week": jso_w, "bbs_week": bbs_w, "ptw_week": ptw_w, "insp_week": insp_w,
+            "total_week": obs_w + tbt_w + nm_w + jso_w,
+            "score": score,
+        })
+    data.sort(key=lambda r: r["score"], reverse=True)
+    return jsonify({"officers": data, "today": today.isoformat(),
+                    "target_date": target_date.isoformat(),
+                    "stats_start": stats_start.isoformat(),
+                    "days": days_param})
+
+
+# ═══════════════════════════════════════════════════════════════════
+# ██  ENVIRONMENT OFFICER ROUTES
+# ═══════════════════════════════════════════════════════════════════
+
+@app.route("/env/")
+@login_required
+@environment_officer_required
+def env_dashboard():
+    u = cur_user()
+    _c = cid()
+    today = datetime.now(RIYADH_TZ).date()
+    try:
+        recent_incidents = EnvIncident.query.filter_by(company_id=_c, status="open").order_by(EnvIncident.date.desc()).limit(5).all()
+        checks_today = {
+            "waste":     EnvWasteCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
+            "soil":      EnvSoilWaterCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
+            "dust":      EnvDustCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
+            "hazcom":    EnvHazcomCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
+            "cylinders": EnvCylindersCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
+            "spills":    EnvSoilWaterCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
+            "norm":      EnvNormCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
+        }
+    except Exception:
+        db.session.rollback()
+        recent_incidents = []
+        checks_today = {"waste": None, "soil": None, "dust": None, "hazcom": None,
+                        "cylinders": None, "spills": None, "norm": None}
+    return render_template("env_dashboard.html", today=today, checks=checks_today,
+                           incidents=recent_incidents)
+
+
+@app.route("/env/waste/", methods=["GET", "POST"])
+@environment_officer_required
+def env_waste():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    existing = EnvWasteCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
+    history = EnvWasteCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvWasteCheck.date.desc()).limit(10).all()
+    if request.method == "POST" and not existing:
+        r = request.form
+        rec = EnvWasteCheck(officer_id=u.id, company_id=_c, date=today,
+            segregation_ok=bool(r.get("segregation_ok")),
+            bins_labeled=bool(r.get("bins_labeled")),
+            hazardous_area_ok=bool(r.get("hazardous_area_ok")),
+            disposal_records_ok=bool(r.get("disposal_records_ok")),
+            bins_overflow=bool(r.get("bins_overflow")),
+            contractor_ok=bool(r.get("contractor_ok")),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص النفايات.", "success")
+        return redirect(url_for("env_dashboard"))
+    return render_template("env_waste_check.html", today=today, existing=existing, history=history)
+
+
+@app.route("/env/soil/", methods=["GET", "POST"])
+@environment_officer_required
+def env_soil():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    existing = EnvSoilWaterCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
+    history = EnvSoilWaterCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvSoilWaterCheck.date.desc()).limit(10).all()
+    if request.method == "POST" and not existing:
+        r = request.form
+        rec = EnvSoilWaterCheck(officer_id=u.id, company_id=_c, date=today,
+            spill_kit_ok=bool(r.get("spill_kit_ok")),
+            drip_trays_ok=bool(r.get("drip_trays_ok")),
+            no_soil_staining=bool(r.get("no_soil_staining")),
+            drainage_clear=bool(r.get("drainage_clear")),
+            wadi_buffer_ok=bool(r.get("wadi_buffer_ok")),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص التربة والمياه.", "success")
+        return redirect(url_for("env_dashboard"))
+    return render_template("env_soil_water_check.html", today=today, existing=existing, history=history)
+
+
+@app.route("/env/dust/", methods=["GET", "POST"])
+@environment_officer_required
+def env_dust():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    existing = EnvDustCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
+    history = EnvDustCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvDustCheck.date.desc()).limit(10).all()
+    if request.method == "POST" and not existing:
+        r = request.form
+        rec = EnvDustCheck(officer_id=u.id, company_id=_c, date=today,
+            watering_done=bool(r.get("watering_done")),
+            wind_speed_ok=bool(r.get("wind_speed_ok")),
+            covered_trucks=bool(r.get("covered_trucks")),
+            haul_road_treated=bool(r.get("haul_road_treated")),
+            complaints_count=int(r.get("complaints_count") or 0),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص مكافحة الغبار.", "success")
+        return redirect(url_for("env_dashboard"))
+    return render_template("env_dust_check.html", today=today, existing=existing, history=history)
+
+
+@app.route("/env/hazcom/", methods=["GET", "POST"])
+@environment_officer_required
+def env_hazcom():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    history = EnvHazcomCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvHazcomCheck.date.desc()).limit(10).all()
+    if request.method == "POST":
+        r = request.form
+        rec = EnvHazcomCheck(officer_id=u.id, company_id=_c, date=today,
+            location=r.get("location",""),
+            sds_available=bool(r.get("sds_available")),
+            labels_ok=bool(r.get("labels_ok")),
+            storage_segregated=bool(r.get("storage_segregated")),
+            spill_kit_present=bool(r.get("spill_kit_present")),
+            ppe_available=bool(r.get("ppe_available")),
+            active_chem_work=bool(r.get("active_chem_work")),
+            ptw_number=r.get("ptw_number",""),
+            ptw_valid=bool(r.get("ptw_valid")),
+            ptw_controls_met=bool(r.get("ptw_controls_met")),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص HAZCOM.", "success")
+        return redirect(url_for("env_dashboard"))
+    return render_template("env_hazcom_check.html", today=today, history=history)
+
+
+@app.route("/env/sewage/", methods=["GET", "POST"])
+@environment_officer_required
+def env_sewage():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    existing = EnvSewageCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
+    history = EnvSewageCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvSewageCheck.date.desc()).limit(10).all()
+    if request.method == "POST" and not existing:
+        r = request.form
+        rec = EnvSewageCheck(officer_id=u.id, company_id=_c, date=today,
+            no_leaks=bool(r.get("no_leaks")),
+            collection_points_ok=bool(r.get("collection_points_ok")),
+            disposal_records_ok=bool(r.get("disposal_records_ok")),
+            ground_discoloration=bool(r.get("ground_discoloration")),
+            odor_complaints=int(r.get("odor_complaints") or 0),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص الصرف الصحي.", "success")
+        return redirect(url_for("env_dashboard"))
+    return render_template("env_sewage_check.html", today=today, existing=existing, history=history)
+
+
+@app.route("/env/incident/", methods=["GET", "POST"])
+@environment_officer_required
+def env_incident_list():
+    _c = cid()
+    incidents = EnvIncident.query.filter_by(company_id=_c).order_by(EnvIncident.date.desc()).all()
+    return render_template("env_incident_list.html", incidents=incidents)
+
+
+@app.route("/env/incident/new/", methods=["GET", "POST"])
+@environment_officer_required
+def env_incident_new():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    if request.method == "POST":
+        r = request.form
+        rec = EnvIncident(officer_id=u.id, company_id=_c,
+            date=r.get("date") or today,
+            incident_type=r.get("incident_type",""),
+            location=r.get("location",""),
+            description=r.get("description",""),
+            action_taken=r.get("action_taken",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم تسجيل الحادثة البيئية.", "success")
+        return redirect(url_for("env_incident_list"))
+    return render_template("env_incident_new.html", today=today)
+
+
+@app.route("/env/incident/<int:inc_id>/close/", methods=["POST"])
+@environment_officer_required
+def env_incident_close(inc_id):
+    inc = EnvIncident.query.get_or_404(inc_id)
+    inc.status = "closed"
+    db.session.commit()
+    flash("تم إغلاق الحادثة.", "success")
+    return redirect(url_for("env_incident_list"))
+
+
+# ── New ENV check routes (Amiral CSM 2026) ────────────────────────────
+
+@app.route("/env/cylinders/", methods=["GET", "POST"])
+@environment_officer_required
+def env_cylinders():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    existing = EnvCylindersCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
+    history = EnvCylindersCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvCylindersCheck.date.desc()).limit(10).all()
+    if request.method == "POST" and not existing:
+        r = request.form
+        rec = EnvCylindersCheck(officer_id=u.id, company_id=_c, date=today,
+            package=r.get("package",""), location=r.get("location",""),
+            vertical_secured=bool(r.get("vertical_secured")),
+            empty_separated=bool(r.get("empty_separated")),
+            caps_on=bool(r.get("caps_on")),
+            o2_separation_ok=bool(r.get("o2_separation_ok")),
+            measured_distance_m=float(r.get("measured_distance_m") or 0) or None,
+            temp_ok=bool(r.get("temp_ok")),
+            temp_reading=float(r.get("temp_reading") or 0) or None,
+            no_leaks=bool(r.get("no_leaks")),
+            area_ventilated=bool(r.get("area_ventilated")),
+            no_smoking_sign=bool(r.get("no_smoking_sign")),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص أسطوانات الغاز.", "success")
+        return redirect(url_for("env_dashboard"))
+    return render_template("env_cylinders_check.html", today=today, existing=existing, history=history)
+
+
+@app.route("/env/norm/", methods=["GET", "POST"])
+@environment_officer_required
+def env_norm():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    existing = EnvNormCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
+    history = EnvNormCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvNormCheck.date.desc()).limit(10).all()
+    if request.method == "POST" and not existing:
+        r = request.form
+        rec = EnvNormCheck(officer_id=u.id, company_id=_c, date=today,
+            package=r.get("package",""), location=r.get("location",""),
+            rpo_designated=bool(r.get("rpo_designated")),
+            rpo_name=r.get("rpo_name",""), rpo_contact=r.get("rpo_contact",""),
+            epd_permit_ok=bool(r.get("epd_permit_ok")),
+            norm_records_ok=bool(r.get("norm_records_ok")),
+            ndt_permit_ok=bool(r.get("ndt_permit_ok")),
+            dose_logs_ok=bool(r.get("dose_logs_ok")),
+            norm_equip_handled=bool(r.get("norm_equip_handled")),
+            no_exposed_sources=bool(r.get("no_exposed_sources")),
+            radiation_levels_ok=bool(r.get("radiation_levels_ok")),
+            ndt_active=bool(r.get("ndt_active")),
+            ndt_permit_no=r.get("ndt_permit_no",""),
+            ndt_source_type=r.get("ndt_source_type",""),
+            exclusion_zone_ok=bool(r.get("exclusion_zone_ok")),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص NORM والإشعاع.", "success")
+        return redirect(url_for("env_dashboard"))
+    return render_template("env_norm_check.html", today=today, existing=existing, history=history)
+
+
+@app.route("/env/spills-check/", methods=["GET", "POST"])
+@environment_officer_required
+def env_spills_check():
+    return redirect(url_for("env_soil"))
+
+
+@app.route("/env/blasting/", methods=["GET", "POST"])
+@environment_officer_required
+def env_blasting():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    history = EnvBlastingCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvBlastingCheck.date.desc()).limit(10).all()
+    if request.method == "POST":
+        r = request.form
+        rec = EnvBlastingCheck(officer_id=u.id, company_id=_c, date=today,
+            package=r.get("package",""), location=r.get("location",""),
+            abrasive_type=r.get("abrasive_type",""),
+            no_silica_sand=bool(r.get("no_silica_sand")),
+            abrasive_approved=bool(r.get("abrasive_approved")),
+            waste_collected=bool(r.get("waste_collected")),
+            no_scatter=bool(r.get("no_scatter")),
+            barriers_ok=bool(r.get("barriers_ok")),
+            records_updated=bool(r.get("records_updated")),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص التفجير الكاشط.", "success")
+        return redirect(url_for("env_dashboard"))
+    return render_template("env_blasting_check.html", today=today, history=history)
+
+
+@app.route("/env/roads/", methods=["GET", "POST"])
+@environment_officer_required
+def env_roads():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    history = EnvRoadsCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvRoadsCheck.date.desc()).limit(10).all()
+    if request.method == "POST":
+        r = request.form
+        rec = EnvRoadsCheck(officer_id=u.id, company_id=_c, date=today,
+            package=r.get("package",""), location=r.get("location",""),
+            dust_control_active=bool(r.get("dust_control_active")),
+            watering_roads=bool(r.get("watering_roads")),
+            trucks_covered=bool(r.get("trucks_covered")),
+            debris_removed=bool(r.get("debris_removed")),
+            warnings_ok=bool(r.get("warnings_ok")),
+            no_runoff_to_wadi=bool(r.get("no_runoff_to_wadi")),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص أعمال الطرق.", "success")
+        return redirect(url_for("env_dashboard"))
+    return render_template("env_roads_check.html", today=today, history=history)
+
+
+@app.route("/env/pressure/", methods=["GET", "POST"])
+@environment_officer_required
+def env_pressure():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    history = EnvPressureCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvPressureCheck.date.desc()).limit(10).all()
+    if request.method == "POST":
+        r = request.form
+        rec = EnvPressureCheck(officer_id=u.id, company_id=_c, date=today,
+            package=r.get("package",""), test_item=r.get("test_item",""),
+            water_volume_m3=float(r.get("water_volume_m3") or 0) or None,
+            disposal_plan_approved=bool(r.get("disposal_plan_approved")),
+            no_direct_soil_discharge=bool(r.get("no_direct_soil_discharge")),
+            treated_before_discharge=bool(r.get("treated_before_discharge")),
+            settling_pond_used=bool(r.get("settling_pond_used")),
+            containment_berm_ok=bool(r.get("containment_berm_ok")),
+            ph_reading=float(r.get("ph_reading") or 0) or None,
+            chemical_additives=r.get("chemical_additives",""),
+            quality_ok=bool(int(r.get("quality_ok") or 0)),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص اختبار الضغط.", "success")
+        return redirect(url_for("env_dashboard"))
+    return render_template("env_pressure_check.html", today=today, history=history)
+
+
+@app.route("/env/jetting/", methods=["GET", "POST"])
+@environment_officer_required
+def env_jetting():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    history = EnvJettingCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvJettingCheck.date.desc()).limit(10).all()
+    if request.method == "POST":
+        r = request.form
+        rec = EnvJettingCheck(officer_id=u.id, company_id=_c, date=today,
+            package=r.get("package",""), location=r.get("location",""),
+            pressure_bar=int(r.get("pressure_bar") or 0) or None,
+            water_volume_m3=float(r.get("water_volume_m3") or 0) or None,
+            containment_ok=bool(r.get("containment_ok")),
+            vacuum_truck_on_site=bool(r.get("vacuum_truck_on_site")),
+            berm_around_area=bool(r.get("berm_around_area")),
+            waste_disposed=bool(r.get("waste_disposed")),
+            sludge_collected=bool(r.get("sludge_collected")),
+            hazardous_checked=bool(r.get("hazardous_checked")),
+            manifest_completed=bool(r.get("manifest_completed")),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص الضخ عالي الضغط.", "success")
+        return redirect(url_for("env_dashboard"))
+    return render_template("env_jetting_check.html", today=today, history=history)
+
+
+@app.route("/env/welding/", methods=["GET", "POST"])
+@environment_officer_required
+def env_welding():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    history = EnvWeldingCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvWeldingCheck.date.desc()).limit(10).all()
+    if request.method == "POST":
+        r = request.form
+        rec = EnvWeldingCheck(officer_id=u.id, company_id=_c, date=today,
+            package=r.get("package",""), activity_type=r.get("activity_type",""),
+            welding_rods_stored=bool(r.get("welding_rods_stored")),
+            spent_rods_collected=bool(r.get("spent_rods_collected")),
+            fume_extraction=bool(r.get("fume_extraction")),
+            no_open_burning=bool(r.get("no_open_burning")),
+            paint_waste_contained=bool(r.get("paint_waste_contained")),
+            no_paint_soil_discharge=bool(r.get("no_paint_soil_discharge")),
+            msds_available=bool(r.get("msds_available")),
+            hazwaste_labeled=bool(r.get("hazwaste_labeled")),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص اللحام والطلاء.", "success")
+        return redirect(url_for("env_dashboard"))
+    return render_template("env_welding_check.html", today=today, history=history)
+
+
+@app.route("/env/demolition/", methods=["GET", "POST"])
+@environment_officer_required
+def env_demolition():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    history = EnvDemolitionCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvDemolitionCheck.date.desc()).limit(10).all()
+    if request.method == "POST":
+        r = request.form
+        rec = EnvDemolitionCheck(officer_id=u.id, company_id=_c, date=today,
+            package=r.get("package",""), location=r.get("location",""),
+            asbestos_survey_done=bool(r.get("asbestos_survey_done")),
+            no_asbestos_found=bool(r.get("no_asbestos_found")),
+            asbestos_permit_ok=bool(r.get("asbestos_permit_ok")),
+            debris_sorted=bool(r.get("debris_sorted")),
+            no_burning_debris=bool(r.get("no_burning_debris")),
+            transport_manifest_ok=bool(r.get("transport_manifest_ok")),
+            dust_suppression=bool(r.get("dust_suppression")),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص الهدم.", "success")
+        return redirect(url_for("env_dashboard"))
+    return render_template("env_demolition_check.html", today=today, history=history)
+
+
+@app.route("/env/monitoring/")
+@environment_officer_required
+def env_monitoring():
+    return redirect(url_for("env_dashboard"))
+
+
+# ── New Welfare daily check routes (Amiral WSSM / SAEHC) ──────────────
+
+@app.route("/welfare/heat/", methods=["GET", "POST"])
+@login_required
+@welfare_officer_required
+def welfare_heat():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    existing = WelfareHeatCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
+    history = WelfareHeatCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(WelfareHeatCheck.date.desc()).limit(14).all()
+    if request.method == "POST" and not existing:
+        r = request.form
+        rec = WelfareHeatCheck(officer_id=u.id, company_id=_c, date=today,
+            package=r.get("package",""),
+            wbgt_morning=float(r.get("wbgt_morning") or 0) or None,
+            wbgt_noon=float(r.get("wbgt_noon") or 0) or None,
+            max_temp_c=float(r.get("max_temp_c") or 0) or None,
+            water_available=bool(r.get("water_available")),
+            shade_within_100m=bool(r.get("shade_within_100m")),
+            rest_breaks_enforced=bool(r.get("rest_breaks_enforced")),
+            midday_ban_enforced=bool(r.get("midday_ban_enforced")),
+            buddy_system_ok=bool(r.get("buddy_system_ok")),
+            medic_on_site=bool(r.get("medic_on_site")),
+            acclimatization_new=bool(r.get("acclimatization_new")),
+            heat_cases_count=int(r.get("heat_cases_count") or 0),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص إجهاد الحرارة.", "success")
+        return redirect(url_for("welfare_home"))
+    today_month = today.month
+    return render_template("welfare_heat_check.html", today=today, today_month=today_month,
+                           existing=existing, history=history)
+
+
+@app.route("/welfare/firstaid/", methods=["GET", "POST"])
+@login_required
+@welfare_officer_required
+def welfare_firstaid():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    existing = WelfareFirstaidCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
+    history = WelfareFirstaidCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(WelfareFirstaidCheck.date.desc()).limit(10).all()
+    if request.method == "POST" and not existing:
+        r = request.form
+        rec = WelfareFirstaidCheck(officer_id=u.id, company_id=_c, date=today,
+            package=r.get("package",""),
+            medic_present=bool(r.get("medic_present")),
+            jhah_contact_available=bool(r.get("jhah_contact_available")),
+            bls_certified_workers=bool(r.get("bls_certified_workers")),
+            first_aid_kits_ok=bool(r.get("first_aid_kits_ok")),
+            kits_stocked=bool(r.get("kits_stocked")),
+            kits_accessible=bool(r.get("kits_accessible")),
+            kit_10unit_count=int(r.get("kit_10unit_count") or 0),
+            kit_36unit_count=int(r.get("kit_36unit_count") or 0),
+            aed_available=bool(r.get("aed_available")),
+            evacuation_route_marked=bool(r.get("evacuation_route_marked")),
+            ambulance_access_ok=bool(r.get("ambulance_access_ok")),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص الإسعافات الأولية.", "success")
+        return redirect(url_for("welfare_home"))
+    return render_template("welfare_firstaid_check.html", today=today, existing=existing, history=history)
+
+
+@app.route("/welfare/sanitation/", methods=["GET", "POST"])
+@login_required
+@welfare_officer_required
+def welfare_sanitation():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    existing = WelfareSanitationCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
+    history = WelfareSanitationCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(WelfareSanitationCheck.date.desc()).limit(10).all()
+    if request.method == "POST" and not existing:
+        r = request.form
+        rec = WelfareSanitationCheck(officer_id=u.id, company_id=_c, date=today,
+            package=r.get("package",""), location=r.get("location",""),
+            worker_count=int(r.get("worker_count") or 0) or None,
+            toilet_count=int(r.get("toilet_count") or 0) or None,
+            washing_units=int(r.get("washing_units") or 0) or None,
+            toilet_ratio_met=bool(r.get("toilet_ratio_met")),
+            chlorine_ppm=float(r.get("chlorine_ppm") or 0) or None,
+            chlorine_ok=bool(int(r.get("chlorine_ok") or 0)),
+            toilets_clean=bool(r.get("toilets_clean")),
+            soap_paper_available=bool(r.get("soap_paper_available")),
+            waste_bins_emptied=bool(r.get("waste_bins_emptied")),
+            no_standing_water=bool(r.get("no_standing_water")),
+            pest_control_ok=bool(r.get("pest_control_ok")),
+            notes=r.get("notes",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ فحص الصرف الصحي.", "success")
+        return redirect(url_for("welfare_home"))
+    return render_template("welfare_sanitation_check.html", today=today, existing=existing, history=history)
+
+
+@app.route("/welfare/accommodation/", methods=["GET", "POST"])
+@login_required
+@welfare_officer_required
+def welfare_accommodation():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    records = WelfareAccommodation.query.filter_by(company_id=_c).order_by(WelfareAccommodation.inspect_date.desc()).limit(20).all()
+    if request.method == "POST":
+        r = request.form
+        rec = WelfareAccommodation(officer_id=u.id, company_id=_c,
+            inspect_date=r.get("inspect_date") or today,
+            camp_name=r.get("camp_name",""),
+            capacity=int(r.get("capacity") or 0) or None,
+            occupancy=int(r.get("occupancy") or 0) or None,
+            cleanliness=int(r.get("cleanliness") or 0) or None,
+            facilities=int(r.get("facilities") or 0) or None,
+            safety_rating=int(r.get("safety_rating") or 0) or None,
+            space_per_person_ok=bool(r.get("space_per_person_ok")),
+            no_triple_bunks=bool(r.get("no_triple_bunks")),
+            ac_24_7_working=bool(r.get("ac_24_7_working")),
+            pest_control_ok=bool(r.get("pest_control_ok")),
+            occupancy_within_capacity=bool(r.get("occupancy_within_capacity")),
+            emergency_exits_ok=bool(r.get("emergency_exits_ok")),
+            issues_found=r.get("issues_found",""),
+            action_needed=r.get("action_needed",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ تقرير الإقامة.", "success")
+        return redirect(url_for("welfare_accommodation"))
+    return render_template("welfare_accommodation.html", records=records)
+
+
+@app.route("/welfare/transport/", methods=["GET", "POST"])
+@login_required
+@welfare_officer_required
+def welfare_transport():
+    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
+    records = WelfareTransport.query.filter_by(company_id=_c).order_by(WelfareTransport.log_date.desc()).limit(30).all()
+    if request.method == "POST":
+        r = request.form
+        rec = WelfareTransport(officer_id=u.id, company_id=_c,
+            log_date=r.get("log_date") or today,
+            vehicle_id=r.get("vehicle_id",""),
+            route=r.get("route",""),
+            passengers=int(r.get("passengers") or 0) or None,
+            capacity=int(r.get("capacity") or 0) or None,
+            driver_name=r.get("driver_name",""),
+            condition_ok=bool(r.get("condition_ok")),
+            ac_working=bool(r.get("ac_working")),
+            seatbelts_ok=bool(r.get("seatbelts_ok")),
+            capacity_not_exceeded=bool(r.get("capacity_not_exceeded")),
+            driver_license_valid=bool(r.get("driver_license_valid")),
+            no_standing_passengers=bool(r.get("no_standing_passengers")),
+            issues_found=r.get("issues_found",""))
+        db.session.add(rec); db.session.commit()
+        flash("تم حفظ سجل الرحلة.", "success")
+        return redirect(url_for("welfare_transport"))
+    return render_template("welfare_transport.html", records=records)
 
 
 # نقطة دخول WSGI لاسم "application"

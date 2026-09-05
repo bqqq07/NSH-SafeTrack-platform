@@ -1,0 +1,123 @@
+{% extends "base.html" %}
+{% block title %}الصرف الصحي والمراحيض{% endblock %}
+{% block content %}
+<div style="max-width:750px;margin:auto;">
+  <p style="opacity:.6;font-size:.85rem;margin-bottom:.25rem;">الرفاهية — SAEHC S-07 Table 2 · WSSM III-5</p>
+  <h2 style="margin-top:0;">🚻 الصرف الصحي والنظافة — فحص يومي</h2>
+  <p style="font-size:.85rem;opacity:.6;">{{ today }}</p>
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">أ — الحزمة / الموقع</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div>
+          <label><strong>الحزمة *</strong></label>
+          <select name="package" required style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+            <option value="">اختر</option>
+            {% for pkg in ['PKG-01','PKG-02','PKG-03','PKG-04','PKG-05','PKG-06','PSF'] %}<option>{{ pkg }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label><strong>الموقع / المعسكر</strong></label>
+          <input type="text" name="location" placeholder="اسم المعسكر أو منطقة العمل"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+        </div>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ب — عدد المراحيض SAEHC S-07</h3>
+      <div style="padding:.6rem;background:#fef3c7;border:1px solid #fbbf24;border-radius:.5rem;margin-bottom:.75rem;font-size:.85rem;">
+        ⚠️ الحد الأدنى: مرحاض واحد لكل 20 عامل — وحدة غسيل لكل 15 عامل (SAEHC S-07 Table 2)
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;">
+        <div>
+          <label style="font-size:.85rem;">عدد العمال في الموقع</label>
+          <input type="number" name="worker_count" min="0"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+        </div>
+        <div>
+          <label style="font-size:.85rem;">عدد المراحيض المتاحة</label>
+          <input type="number" name="toilet_count" min="0"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+        </div>
+        <div>
+          <label style="font-size:.85rem;">عدد وحدات الغسيل</label>
+          <input type="number" name="washing_units" min="0"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+        </div>
+      </div>
+      <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;margin-top:.75rem;">
+        <input type="checkbox" name="toilet_ratio_met"> النسبة مستوفاة: مرحاض/20 عامل على الأقل ✓
+      </label>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ج — جودة المياه والكلور</h3>
+      <div style="padding:.6rem;background:#fef3c7;border:1px solid #fbbf24;border-radius:.5rem;margin-bottom:.75rem;font-size:.85rem;">
+        ⚠️ تركيز الكلور في مياه الشرب: 0.5 – 3.0 ppm — SAEHC S-07
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div>
+          <label style="font-size:.85rem;">قراءة الكلور (ppm)</label>
+          <input type="number" name="chlorine_ppm" step="0.1" min="0" placeholder="0.5 - 3.0"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+        </div>
+        <div>
+          <label style="font-size:.85rem;">نتيجة اختبار الكلور</label>
+          <select name="chlorine_ok" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+            <option value="">—</option>
+            <option value="1">ضمن النطاق 0.5–3.0 ppm ✓</option>
+            <option value="0">خارج النطاق — يحتاج تصحيح</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">د — النظافة العامة</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="toilets_clean"> المراحيض نظيفة وخالية من الروائح الكريهة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="soap_paper_available"> صابون ومناديل ورقية متوفرة في جميع وحدات الغسيل
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="waste_bins_emptied"> حاويات النفايات فارغة ومغطاة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="no_standing_water"> لا توجد مياه راكدة حول مناطق الصرف الصحي
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="pest_control_ok"> لا يوجد حشرات أو قوارض في المناطق الصحية
+        </label>
+      </div>
+    </div>
+    <div style="margin-bottom:1.25rem;">
+      <label><strong>ملاحظات / إجراءات</strong></label>
+      <textarea name="notes" rows="2" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary">حفظ الفحص</button>
+      <a href="{{ url_for('welfare_home') }}" class="btn btn-secondary">إلغاء</a>
+    </div>
+  </form>
+  {% if history %}
+  <h3 style="margin-top:2rem;">السجل السابق</h3>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+      <thead><tr style="border-bottom:2px solid #e5e7eb;">
+        <th style="padding:.5rem;text-align:right;">التاريخ</th><th style="padding:.5rem;">الحزمة</th>
+        <th style="padding:.5rem;">عمال</th><th style="padding:.5rem;">مراحيض</th>
+        <th style="padding:.5rem;">كلور</th><th style="padding:.5rem;">نظافة</th>
+      </tr></thead>
+      <tbody>{% for h in history %}<tr style="border-bottom:1px solid #f3f4f6;">
+        <td style="padding:.5rem;">{{ h.date }}</td><td style="padding:.5rem;">{{ h.package or '—' }}</td>
+        <td style="padding:.5rem;text-align:center;">{{ h.worker_count or '—' }}</td>
+        <td style="padding:.5rem;text-align:center;">{% if h.toilet_ratio_met %}✓{% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+        <td style="padding:.5rem;text-align:center;">{% if h.chlorine_ok %}✓ ({{ h.chlorine_ppm }} ppm){% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+        <td style="padding:.5rem;text-align:center;">{% if h.toilets_clean %}✓{% else %}✗{% endif %}</td>
+      </tr>{% endfor %}</tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

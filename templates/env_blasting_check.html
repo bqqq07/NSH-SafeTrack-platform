@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}التفجير الكاشط — البيئة{% endblock %}
+{% block content %}
+<div style="max-width:750px;margin:auto;">
+  <p style="opacity:.6;font-size:.85rem;margin-bottom:.25rem;">البيئة — CSM II-8 · GI 6.021</p>
+  <h2 style="margin-top:0;">💣 التفجير الكاشط — الفحص البيئي</h2>
+  <p style="font-size:.85rem;opacity:.6;">{{ today }}</p>
+  <div style="padding:.6rem 1rem;background:#fee2e2;border:1px solid #fca5a5;border-radius:.5rem;margin-bottom:1rem;font-weight:700;color:#991b1b;">
+    🚫 رمل السيليكا (Silica Sand) محظور تماماً — PROHIBITED — CSM II-8
+  </div>
+
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">أ — تفاصيل العملية</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div>
+          <label><strong>الحزمة *</strong></label>
+          <select name="package" required style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+            <option value="">اختر الحزمة</option>
+            {% for pkg in ['PKG-01','PKG-02','PKG-03','PKG-04','PKG-05','PKG-06','PSF'] %}
+            <option value="{{ pkg }}">{{ pkg }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div>
+          <label><strong>الموقع</strong></label>
+          <input type="text" name="location"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+        </div>
+      </div>
+      <div style="margin-top:.75rem;">
+        <label><strong>نوع المادة الكاشطة المستخدمة</strong></label>
+        <input type="text" name="abrasive_type" required placeholder="مثال: Steel Shot, Garnet, Copper Slag"
+               style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+      </div>
+    </div>
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ب — التحكم بالنفايات الكاشطة</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="no_silica_sand"> ✓ تأكيد: رمل السيليكا غير مستخدم (PROHIBITED)
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="abrasive_approved"> المادة الكاشطة معتمدة من Saudi Aramco
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="waste_collected"> نفايات المواد الكاشطة تُجمع في حاويات محكمة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="no_scatter"> لا يوجد تطاير للمواد الكاشطة خارج منطقة العمل
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="barriers_ok"> حواجز عازلة موجودة لمنع التلوث المتقاطع
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="records_updated"> سجلات إدارة نفايات التفجير محدّثة
+        </label>
+      </div>
+    </div>
+
+    <div style="margin-bottom:1.25rem;">
+      <label><strong>ملاحظات / إجراءات</strong></label>
+      <textarea name="notes" rows="2" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary">حفظ الفحص</button>
+      <a href="{{ url_for('env_dashboard') }}" class="btn btn-secondary">إلغاء</a>
+    </div>
+  </form>
+
+  {% if history %}
+  <h3 style="margin-top:2rem;">السجل السابق</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+    <thead><tr style="border-bottom:2px solid #e5e7eb;">
+      <th style="padding:.5rem;text-align:right;">التاريخ</th>
+      <th style="padding:.5rem;">الحزمة</th>
+      <th style="padding:.5rem;">لا سيليكا</th>
+      <th style="padding:.5rem;">تجميع</th>
+      <th style="padding:.5rem;">حواجز</th>
+    </tr></thead>
+    <tbody>{% for h in history %}<tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:.5rem;">{{ h.date }}</td>
+      <td style="padding:.5rem;">{{ h.package or '—' }}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.no_silica_sand %}✓{% else %}<span style="color:#dc2626;">✗ مخالفة!</span>{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.waste_collected %}✓{% else %}✗{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.barriers_ok %}✓{% else %}✗{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

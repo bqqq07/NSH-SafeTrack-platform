@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}اللحام والطلاء — البيئة{% endblock %}
+{% block content %}
+<div style="max-width:750px;margin:auto;">
+  <p style="opacity:.6;font-size:.85rem;margin-bottom:.25rem;">البيئة — CSM II-9 · CSM II-10</p>
+  <h2 style="margin-top:0;">🔥 اللحام وتحضير الأسطح — الفحص البيئي</h2>
+  <p style="font-size:.85rem;opacity:.6;">{{ today }}</p>
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">أ — بيانات الأنشطة</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div>
+          <label><strong>الحزمة *</strong></label>
+          <select name="package" required style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+            <option value="">اختر</option>
+            {% for pkg in ['PKG-01','PKG-02','PKG-03','PKG-04','PKG-05','PKG-06','PSF'] %}<option>{{ pkg }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label><strong>نوع النشاط</strong></label>
+          <select name="activity_type" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+            <option value="">اختر</option>
+            <option>لحام (Welding)</option>
+            <option>طلاء / دهان (Painting/Coating)</option>
+            <option>تحضير الأسطح (Surface Prep)</option>
+            <option>لحام + طلاء</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ب — انبعاثات اللحام CSM II-9</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="welding_rods_stored"> أقطاب اللحام مخزّنة بشكل صحيح في أماكن جافة وبعيدة عن المواد القابلة للاشتعال
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="spent_rods_collected"> بقايا أقطاب اللحام المستهلكة تُجمع في حاويات خاصة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="fume_extraction"> جهاز استخراج الدخان (Fume Extraction) مشغّل في الأماكن المغلقة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="no_open_burning"> لا يوجد حرق مكشوف لأي مخلفات لحام
+        </label>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ج — مخلفات الطلاء والمواد الكيميائية CSM II-10</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="paint_waste_contained"> مخلفات الطلاء والمذيبات محتواة في براميل محكمة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="no_paint_soil_discharge"> لا يوجد تسرب للطلاء أو المذيبات في التربة أو المصارف
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="msds_available"> MSDS لجميع المواد الكيميائية المستخدمة متوفرة في الموقع
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="hazwaste_labeled"> حاويات النفايات الخطرة موسومة بوضوح (اسم المادة + خطورتها)
+        </label>
+      </div>
+    </div>
+    <div style="margin-bottom:1.25rem;">
+      <label><strong>ملاحظات / إجراءات</strong></label>
+      <textarea name="notes" rows="2" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary">حفظ</button>
+      <a href="{{ url_for('env_dashboard') }}" class="btn btn-secondary">إلغاء</a>
+    </div>
+  </form>
+  {% if history %}
+  <h3 style="margin-top:2rem;">السجل السابق</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+    <thead><tr style="border-bottom:2px solid #e5e7eb;">
+      <th style="padding:.5rem;text-align:right;">التاريخ</th><th style="padding:.5rem;">الحزمة</th>
+      <th style="padding:.5rem;">النشاط</th><th style="padding:.5rem;">بقايا أقطاب</th><th style="padding:.5rem;">طلاء محتوى</th>
+    </tr></thead>
+    <tbody>{% for h in history %}<tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:.5rem;">{{ h.date }}</td><td style="padding:.5rem;">{{ h.package or '—' }}</td>
+      <td style="padding:.5rem;">{{ h.activity_type or '—' }}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.spent_rods_collected %}✓{% else %}✗{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.paint_waste_contained %}✓{% else %}✗{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

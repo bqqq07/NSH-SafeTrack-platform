@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}سجل النقل{% endblock %}
+{% block content %}
+<h1>سجل النقل</h1>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}<div class="alert alert-{{ cat }}">{{ msg }}</div>{% endfor %}
+{% endwith %}
+
+<section class="card">
+  <h2>تسجيل رحلة</h2>
+  <p style="font-size:.8rem;opacity:.6;margin-top:-.5rem;margin-bottom:.75rem;">WSSM I-13 · CSM §4.7 — النقل الآمن للعمال</p>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <div style="display:grid;gap:.75rem;grid-template-columns:1fr 1fr;margin-bottom:1rem;">
+      <label>التاريخ *
+        <input type="date" name="log_date" required style="display:block;width:100%;margin-top:.25rem;">
+      </label>
+      <label>رقم المركبة *
+        <input type="text" name="vehicle_id" required placeholder="مثال: BUS-07"
+               style="display:block;width:100%;margin-top:.25rem;">
+      </label>
+      <label>المسار / الوجهة
+        <input type="text" name="route" placeholder="مثال: Camp A → Site B"
+               style="display:block;width:100%;margin-top:.25rem;">
+      </label>
+      <label>عدد الركاب
+        <input type="number" name="passengers" min="0" style="display:block;width:100%;margin-top:.25rem;">
+      </label>
+      <label>سعة المركبة (أقصى ركاب)
+        <input type="number" name="capacity" min="0" style="display:block;width:100%;margin-top:.25rem;">
+      </label>
+      <label>اسم السائق
+        <input type="text" name="driver_name" style="display:block;width:100%;margin-top:.25rem;">
+      </label>
+    </div>
+
+    <div style="border-top:1px solid #e5e7eb;padding-top:1rem;margin-bottom:.75rem;">
+      <h3 style="margin:0 0 .5rem;font-size:.95rem;">متطلبات السلامة المتعلقة بالنقل</h3>
+      <div style="display:flex;flex-direction:column;gap:.55rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="condition_ok" checked> حالة المركبة العامة مقبولة (بدون أعطال ظاهرة)
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="ac_working"> التكييف يعمل بشكل سليم — ضروري في الصيف
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="seatbelts_ok"> أحزمة الأمان موجودة وتعمل لجميع المقاعد
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="capacity_not_exceeded"> عدد الركاب لا يتجاوز الطاقة الاستيعابية للمركبة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="driver_license_valid"> رخصة قيادة السائق سارية ومناسبة لنوع المركبة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="no_standing_passengers"> لا يوجد ركاب واقفون أو بدون مقاعد
+        </label>
+      </div>
+    </div>
+
+    <label style="display:block;margin-bottom:1rem;">مشاكل / ملاحظات
+      <textarea name="issues_found" rows="2" placeholder="أتركه فارغاً إن لم توجد مشاكل"
+                style="display:block;width:100%;margin-top:.25rem;"></textarea>
+    </label>
+    <button type="submit" class="btn primary">حفظ</button>
+  </form>
+</section>
+
+{% if records %}
+<div style="overflow-x:auto;margin-top:1rem;">
+  <table class="rtable">
+    <thead>
+      <tr><th>التاريخ</th><th>المركبة</th><th>المسار</th><th>الركاب</th>
+          <th>تكييف</th><th>أحزمة</th><th>طاقة OK</th><th>رخصة</th><th>الحالة</th></tr>
+    </thead>
+    <tbody>
+    {% for r in records %}
+      <tr {% if not r.condition_ok %}style="background:rgba(255,0,0,.06)"{% endif %}>
+        <td>{{ r.log_date }}</td>
+        <td>{{ r.vehicle_id }}</td>
+        <td>{{ r.route or '—' }}</td>
+        <td>{{ r.passengers or '—' }}</td>
+        <td>{% if r.ac_working %}✓{% else %}<span style="color:red">✗</span>{% endif %}</td>
+        <td>{% if r.seatbelts_ok %}✓{% else %}<span style="color:red">✗</span>{% endif %}</td>
+        <td>{% if r.capacity_not_exceeded %}✓{% else %}<span style="color:red">✗</span>{% endif %}</td>
+        <td>{% if r.driver_license_valid %}✓{% else %}<span style="color:red">✗</span>{% endif %}</td>
+        <td>{% if r.condition_ok %}✅{% else %}<span style="color:red">⚠️ مشكلة</span>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  <p class="hint" style="margin-top:1rem">لا توجد سجلات.</p>
+{% endif %}
+{% endblock %}

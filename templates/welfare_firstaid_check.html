@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}الإسعافات الأولية والطوارئ{% endblock %}
+{% block content %}
+<div style="max-width:750px;margin:auto;">
+  <p style="opacity:.6;font-size:.85rem;margin-bottom:.25rem;">الرفاهية — WSSM III-4 · Saudi Aramco JHAH</p>
+  <h2 style="margin-top:0;">🚑 الإسعافات الأولية والاستجابة الطبية — فحص يومي</h2>
+  <p style="font-size:.85rem;opacity:.6;">{{ today }}</p>
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">أ — الحزمة</h3>
+      <select name="package" required style="padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;min-width:180px;">
+        <option value="">اختر الحزمة</option>
+        {% for pkg in ['PKG-01','PKG-02','PKG-03','PKG-04','PKG-05','PKG-06','PSF'] %}<option>{{ pkg }}</option>{% endfor %}
+      </select>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ب — الكوادر الطبية والتغطية</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="medic_present"> ممرض / مسعف معتمد متواجد في الموقع طوال ساعات العمل
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="jhah_contact_available"> رقم JHAH (خدمات صحة أرامكو) معلّق ومعروف للجميع
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="bls_certified_workers"> يوجد عمال حاملون لشهادة الإسعافات الأولية / BLS (نسبة كافية)
+        </label>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ج — حقائب الإسعافات الأولية</h3>
+      <div style="padding:.6rem;background:#fef3c7;border:1px solid #fbbf24;border-radius:.5rem;margin-bottom:.75rem;font-size:.85rem;">
+        ⚠️ حقيبة 10 وحدات لكل 50 عامل / حقيبة 36 وحدة لكل 150 عامل — Saudi Aramco JHAH
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="first_aid_kits_ok"> حقائب الإسعافات الأولية متوفرة حسب نسبة العمال
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="kits_stocked"> الحقائب مكتملة المحتوى وغير منتهية الصلاحية
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="kits_accessible"> الحقائب في أماكن واضحة وسهلة الوصول
+        </label>
+      </div>
+      <div style="margin-top:.75rem;display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div>
+          <label style="font-size:.85rem;">عدد حقائب 10 وحدات</label>
+          <input type="number" name="kit_10unit_count" min="0" value="0"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+        </div>
+        <div>
+          <label style="font-size:.85rem;">عدد حقائب 36 وحدة</label>
+          <input type="number" name="kit_36unit_count" min="0" value="0"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+        </div>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">د — جهاز AED والاستجابة للطوارئ</h3>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="aed_available"> جهاز AED (مزيل رجفان) موجود وسارٍ وبطارية مشحونة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="evacuation_route_marked"> مسارات الإخلاء الطبي معلّمة وواضحة
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="ambulance_access_ok"> وصول سيارة الإسعاف إلى منطقة العمل مضمون
+        </label>
+      </div>
+    </div>
+    <div style="margin-bottom:1.25rem;">
+      <label><strong>ملاحظات / ممتلئات منتهية الصلاحية</strong></label>
+      <textarea name="notes" rows="2" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary">حفظ الفحص</button>
+      <a href="{{ url_for('welfare_home') }}" class="btn btn-secondary">إلغاء</a>
+    </div>
+  </form>
+  {% if history %}
+  <h3 style="margin-top:2rem;">السجل السابق</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+    <thead><tr style="border-bottom:2px solid #e5e7eb;">
+      <th style="padding:.5rem;text-align:right;">التاريخ</th><th style="padding:.5rem;">الحزمة</th>
+      <th style="padding:.5rem;">مسعف</th><th style="padding:.5rem;">حقائب سليمة</th><th style="padding:.5rem;">AED</th>
+    </tr></thead>
+    <tbody>{% for h in history %}<tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:.5rem;">{{ h.date }}</td><td style="padding:.5rem;">{{ h.package or '—' }}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.medic_present %}✓{% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.kits_stocked %}✓{% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.aed_available %}✓{% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

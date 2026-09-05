@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% block title %}تقارير الإقامة{% endblock %}
+{% block content %}
+<h1>تقارير الإقامة (السكن)</h1>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}<div class="alert alert-{{ cat }}">{{ msg }}</div>{% endfor %}
+{% endwith %}
+
+<section class="card">
+  <h2>تقرير تفتيش جديد</h2>
+  <p style="font-size:.8rem;opacity:.6;margin-top:-.5rem;margin-bottom:.75rem;">WSSM III-4 · CSM §4.6م²/شخص · SAEHC S-07</p>
+  <form method="post">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <div style="display:grid;gap:.75rem;grid-template-columns:1fr 1fr;margin-bottom:1rem;">
+      <label>تاريخ التفتيش *
+        <input type="date" name="inspect_date" required style="display:block;width:100%;margin-top:.25rem;">
+      </label>
+      <label>اسم المخيم *
+        <input type="text" name="camp_name" required placeholder="مثال: Camp A"
+               style="display:block;width:100%;margin-top:.25rem;">
+      </label>
+      <label>السعة (عدد الأشخاص)
+        <input type="number" name="capacity" min="0" style="display:block;width:100%;margin-top:.25rem;">
+      </label>
+      <label>الإشغال الفعلي
+        <input type="number" name="occupancy" min="0" style="display:block;width:100%;margin-top:.25rem;">
+      </label>
+      <label>تقييم النظافة (1-5)
+        <input type="number" name="cleanliness" min="1" max="5" style="display:block;width:100%;margin-top:.25rem;">
+      </label>
+      <label>تقييم المرافق (1-5)
+        <input type="number" name="facilities" min="1" max="5" style="display:block;width:100%;margin-top:.25rem;">
+      </label>
+      <label>تقييم السلامة (1-5)
+        <input type="number" name="safety_rating" min="1" max="5" style="display:block;width:100%;margin-top:.25rem;">
+      </label>
+    </div>
+
+    <div style="border-top:1px solid #e5e7eb;padding-top:1rem;margin-bottom:.75rem;">
+      <h3 style="margin:0 0 .5rem;font-size:.95rem;">متطلبات أرامكو السعودية (WSSM III-4 / CSM)</h3>
+      <div style="padding:.5rem .75rem;background:#fee2e2;border:1px solid #fca5a5;border-radius:.5rem;margin-bottom:.75rem;font-size:.82rem;font-weight:700;color:#991b1b;">
+        🚫 الأسرة الثلاثية (Triple Bunks) محظورة تماماً — WSSM III-4
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.55rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="space_per_person_ok"> مساحة لا تقل عن 4.6 م² للشخص الواحد مستوفاة ✓
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="no_triple_bunks"> لا توجد أسرة ثلاثية — فقط سريرين طابقين كحد أقصى
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="ac_24_7_working"> التكييف يعمل 24 ساعة / 7 أيام بشكل سليم
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="pest_control_ok"> لا يوجد حشرات أو قوارض — برنامج مكافحة الآفات فعّال
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="occupancy_within_capacity"> الإشغال لا يتجاوز الطاقة الاستيعابية
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="emergency_exits_ok"> مخارج الطوارئ خالية وعليها إضاءة ولافتات
+        </label>
+      </div>
+    </div>
+
+    <label style="display:block;margin-bottom:.5rem;">المشاكل المكتشفة
+      <textarea name="issues_found" rows="2" style="display:block;width:100%;margin-top:.25rem;"></textarea>
+    </label>
+    <label style="display:block;margin-bottom:1rem;">الإجراءات المطلوبة
+      <textarea name="action_needed" rows="2" style="display:block;width:100%;margin-top:.25rem;"></textarea>
+    </label>
+    <button type="submit" class="btn primary">حفظ</button>
+  </form>
+</section>
+
+{% if records %}
+<div style="overflow-x:auto;margin-top:1rem;">
+  <table class="rtable">
+    <thead>
+      <tr><th>التاريخ</th><th>المخيم</th><th>السعة</th><th>الإشغال</th>
+          <th>4.6م²</th><th>لا أسرة ثلاثية</th><th>تكييف 24/7</th>
+          <th>نظافة</th><th>مرافق</th><th>سلامة</th></tr>
+    </thead>
+    <tbody>
+    {% for r in records %}
+      <tr {% if r.occupancy and r.capacity and r.occupancy > r.capacity %}style="background:rgba(255,0,0,.06)"{% endif %}>
+        <td>{{ r.inspect_date }}</td>
+        <td>{{ r.camp_name }}</td>
+        <td>{{ r.capacity or '—' }}</td>
+        <td>{{ r.occupancy or '—' }}</td>
+        <td>{% if r.space_per_person_ok %}✓{% else %}<span style="color:red">✗</span>{% endif %}</td>
+        <td>{% if r.no_triple_bunks %}✓{% else %}<span style="color:red">✗ مخالفة!</span>{% endif %}</td>
+        <td>{% if r.ac_24_7_working %}✓{% else %}<span style="color:red">✗</span>{% endif %}</td>
+        <td>{{ r.cleanliness or '—' }}/5</td>
+        <td>{{ r.facilities or '—' }}/5</td>
+        <td>{{ r.safety_rating or '—' }}/5</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  <p class="hint" style="margin-top:1rem">لا توجد تقارير.</p>
+{% endif %}
+{% endblock %}

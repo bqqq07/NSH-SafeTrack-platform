@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}اختبار الضغط — التخلص من المياه{% endblock %}
+{% block content %}
+<div style="max-width:750px;margin:auto;">
+  <p style="opacity:.6;font-size:.85rem;margin-bottom:.25rem;">البيئة — SAEP-327 §4.5.9</p>
+  <h2 style="margin-top:0;">🔩 اختبار الضغط — التخلص من مياه الاختبار</h2>
+  <p style="font-size:.85rem;opacity:.6;">{{ today }}</p>
+  <form method="POST">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">أ — بيانات الاختبار</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div>
+          <label><strong>الحزمة *</strong></label>
+          <select name="package" required style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+            <option value="">اختر</option>
+            {% for pkg in ['PKG-01','PKG-02','PKG-03','PKG-04','PKG-05','PKG-06','PSF'] %}<option>{{ pkg }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label><strong>وصف الخط / المعدة</strong></label>
+          <input type="text" name="test_item" placeholder="مثال: Line 12-B, Tank T-03"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+        </div>
+      </div>
+      <div style="margin-top:.75rem;">
+        <label><strong>حجم مياه الاختبار المتوقع (م³)</strong></label>
+        <input type="number" name="water_volume_m3" step="0.1" min="0"
+               style="display:block;width:120px;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ب — التصريح والترشيح §4.5.9</h3>
+      <div style="padding:.6rem;background:#fef3c7;border:1px solid #fbbf24;border-radius:.5rem;margin-bottom:.75rem;font-size:.85rem;">
+        ⚠️ يُحظر التصريف المباشر في التربة أو مجاري الأودية — SAEP-327
+      </div>
+      <div style="display:flex;flex-direction:column;gap:.6rem;">
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="disposal_plan_approved"> خطة التصريف معتمدة من SA-EPD قبل بدء الاختبار
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="no_direct_soil_discharge"> لا يوجد تصريف مباشر في التربة أو المجاري
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="treated_before_discharge"> المياه تُعالج (pH / مواد كيميائية) قبل التصريف
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="settling_pond_used"> حوض ترسيب / تجميع مستخدم لتجميع مياه الاختبار
+        </label>
+        <label style="display:flex;align-items:center;gap:.6rem;cursor:pointer;">
+          <input type="checkbox" name="containment_berm_ok"> حواجز احتواء ترابية أو خراطيم موضوعة حول منطقة التصريف
+        </label>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">ج — الفحص الكيميائي</h3>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;">
+        <div>
+          <label style="font-size:.85rem;">قياس pH</label>
+          <input type="number" name="ph_reading" step="0.1" min="0" max="14" placeholder="6-9"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+        </div>
+        <div>
+          <label style="font-size:.85rem;">مضافات كيميائية</label>
+          <input type="text" name="chemical_additives" placeholder="نوع / تركيز"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+        </div>
+        <div>
+          <label style="font-size:.85rem;">نتيجة الفحص</label>
+          <select name="quality_ok" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.2rem;">
+            <option value="">—</option>
+            <option value="1">مقبول ✓</option>
+            <option value="0">يحتاج معالجة</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div style="margin-bottom:1.25rem;">
+      <label><strong>ملاحظات</strong></label>
+      <textarea name="notes" rows="2" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary">حفظ</button>
+      <a href="{{ url_for('env_dashboard') }}" class="btn btn-secondary">إلغاء</a>
+    </div>
+  </form>
+  {% if history %}
+  <h3 style="margin-top:2rem;">السجل السابق</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+    <thead><tr style="border-bottom:2px solid #e5e7eb;">
+      <th style="padding:.5rem;text-align:right;">التاريخ</th><th style="padding:.5rem;">الحزمة</th>
+      <th style="padding:.5rem;">خطة معتمدة</th><th style="padding:.5rem;">pH</th><th style="padding:.5rem;">نتيجة</th>
+    </tr></thead>
+    <tbody>{% for h in history %}<tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:.5rem;">{{ h.date }}</td><td style="padding:.5rem;">{{ h.package or '—' }}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.disposal_plan_approved %}✓{% else %}✗{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{{ h.ph_reading or '—' }}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.quality_ok %}✓{% else %}⚠{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}
