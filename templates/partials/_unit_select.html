@@ -1,0 +1,25 @@
+{#
+  Macro: unit_select
+  Usage: {% from "partials/_unit_select.html" import unit_select %}
+         {{ unit_select(units, my_loc) }}
+  Renders a pkg/unit dropdown populated from UserLocation DB data.
+  Falls back to manual text input if no units registered yet.
+#}
+{% macro unit_select(units, my_loc, field_name="package", required=true) %}
+{% if units %}
+  {%- set default_val = ("PKG" ~ my_loc.pkg ~ "/" ~ my_loc.unit) if my_loc and my_loc.pkg and my_loc.unit else "" -%}
+  <select name="{{ field_name }}" {{ "required" if required else "" }}
+          style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+    <option value="">اختر الوحدة</option>
+    {% for label, val in units %}
+    <option value="{{ val }}" {{ "selected" if val == default_val else "" }}>{{ label }}</option>
+    {% endfor %}
+  </select>
+{% else %}
+  <input type="text" name="{{ field_name }}"
+         value="{{ ('PKG' ~ my_loc.pkg ~ '/' ~ my_loc.unit) if my_loc and my_loc.pkg else '' }}"
+         placeholder="مثال: PKG2/320"
+         style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+  <p style="font-size:.75rem;opacity:.5;margin:.2rem 0 0;">لم يتم تسجيل وحدات بعد — أدخل يدوياً</p>
+{% endif %}
+{% endmacro %}

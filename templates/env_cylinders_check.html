@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/_unit_select.html" import unit_select %}
 {% block title %}فحص أسطوانات الغاز{% endblock %}
 {% block content %}
 <div style="max-width:750px;margin:auto;">
@@ -19,13 +20,8 @@
       <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">أ — الحزمة / المنطقة</h3>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
         <div>
-          <label><strong>الحزمة *</strong></label>
-          <select name="package" required style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
-            <option value="">اختر الحزمة</option>
-            {% for pkg in ['PKG-01','PKG-02','PKG-03','PKG-04','PKG-05','PKG-06','PSF'] %}
-            <option value="{{ pkg }}">{{ pkg }}</option>
-            {% endfor %}
-          </select>
+          <label><strong>الوحدة *</strong></label>
+          {{ unit_select(units, my_loc) }}
         </div>
         <div>
           <label><strong>الموقع بالموقع</strong></label>
