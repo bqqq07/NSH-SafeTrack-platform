@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}TBT & Metrics{% endblock %}
+{% block content %}
+<style>
+  .tp-wrap{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
+  .tp-col{background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden}
+  .tp-head{padding:12px 16px;border-bottom:1px solid #eef2f7;display:flex;
+           justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+  .tp-head h3{margin:0;font-size:1rem;color:#4A5568}
+  .tp-head select{padding:.4rem;border:1px solid #cbd5e1;border-radius:6px;font-size:.85rem;max-width:100%}
+  .tp-body{padding:14px}
+  .pdf-frame{width:100%;height:640px;border:none;display:block;background:#f8fafc}
+  .pdf-empty{padding:60px 20px;text-align:center;color:#94a3b8}
+
+  .kpi-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:16px}
+  .kpi{background:#f8fafc;border:1px solid #eef2f7;border-radius:10px;padding:12px}
+  .kpi .v{font-size:1.7rem;font-weight:800;color:#4A5568;line-height:1.1}
+  .kpi .l{font-size:.75rem;color:#64748b;margin-top:4px;word-break:break-word}
+  .chart-box{height:300px;position:relative}
+  .no-data{padding:40px 16px;text-align:center;color:#94a3b8;font-size:.9rem}
+  .tbl-all{margin-top:16px;width:100%;border-collapse:collapse;font-size:.85rem}
+  .tbl-all td{padding:.4rem .5rem;border-bottom:1px solid #f1f5f9}
+  .tbl-all td:last-child{text-align:right;font-weight:700;color:#4A5568}
+  details summary{cursor:pointer;font-size:.85rem;color:#6B87A3;margin-top:12px}
+
+  @media (max-width:900px){
+    .tp-wrap{grid-template-columns:1fr}
+    .pdf-frame{height:420px}
+    .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
+</style>
+
+<section class="report">
+  <header class="report-header">
+    <div class="report-head-center">
+      <h1>TBT &amp; Metrics</h1>
+      <p class="muted">ملف التوعية على اليسار والمؤشرات على اليمين</p>
+    </div>
+  </header>
+
+  <div class="tp-wrap">
+    <!-- ── اليسار: TBT PDF ── -->
+    <div class="tp-col">
+      <div class="tp-head">
+        <h3>📄 TBT</h3>
+        <form method="get" style="margin:0">
+          {% if snap %}<input type="hidden" name="snap_id" value="{{ snap.id }}">{% endif %}
+          <select name="doc_id" onchange="this.form.submit()">
+            {% for d in docs %}
+            <option value="{{ d.id }}" {% if doc and doc.id == d.id %}selected{% endif %}>
+              {{ d.doc_date }} — {{ d.title|truncate(38) }}
+            </option>
+            {% else %}
+            <option>لا توجد ملفات</option>
+            {% endfor %}
+          </select>
+        </form>
+      </div>
+      {% if doc %}
+      <iframe class="pdf-frame" src="{{ url_for('hse_tbt_file', doc_id=doc.id) }}"
+              title="TBT PDF"></iframe>
+      <div class="tp-body" style="padding:10px 16px;border-top:1px solid #eef2f7">
+        <a class="btn" href="{{ url_for('hse_tbt_file', doc_id=doc.id) }}" target="_blank">
+          فتح في نافذة جديدة
+        </a>
+      </div>
+      {% else %}
+      <div class="pdf-empty">
+        <p>لم يُرفع أي ملف TBT بعد.</p>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- ── اليمين: المؤشرات ── -->
+    <div class="tp-col">
+      <div class="tp-head">
+        <h3>📊 المؤشرات</h3>
+        <form method="get" style="margin:0">
+          {% if doc %}<input type="hidden" name="doc_id" value="{{ doc.id }}">{% endif %}
+          <select name="snap_id" onchange="this.form.submit()">
+            {% for s in snaps %}
+            <option value="{{ s.id }}" {% if snap and snap.id == s.id %}selected{% endif %}>
+              {{ s.snap_date }} — {{ s.label|truncate(30) }}
+            </option>
+            {% else %}
+            <option>لا توجد بيانات</option>
+            {% endfor %}
+          </select>
+        </form>
+      </div>
+
+      <div class="tp-body">
+        {% if metrics %}
+          <div class="kpi-grid">
+            {% for k, v in headline %}
+            <div class="kpi">
+              <div class="v">{{ v }}</div>
+              <div class="l">{{ k }}</div>
+            </div>
+            {% endfor %}
+          </div>
+
+          {% if chart %}
+          <div class="chart-box"><canvas id="mChart"></canvas></div>
+          {% endif %}
+
+          <details>
+            <summary>عرض كل المؤشرات ({{ metrics|length }})</summary>
+            <table class="tbl-all">
+              {% for k, v in metrics.items() %}
+              <tr><td>{{ k }}</td><td>{{ v }}</td></tr>
+              {% endfor %}
+            </table>
+          </details>
+        {% else %}
+          <div class="no-data">
+            لم تُرفع أي مؤشرات بعد، أو لم يتعرّف النظام على أرقام في الملف.
+          </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="no-print actions">
+    <a class="btn" href="{{ url_for('safety_manager_dashboard') }}">رجوع للوحة</a>
+  </div>
+</section>
+
+{% if chart %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+  new Chart(document.getElementById('mChart'), {
+    type: 'bar',
+    data: {
+      labels: {{ chart|map(attribute=0)|list|tojson }},
+      datasets: [{
+        label: {{ (snap.label if snap else 'Metrics')|tojson }},
+        data: {{ chart|map(attribute=1)|list|tojson }},
+        backgroundColor: '#8FA8B8',
+        borderRadius: 5,
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { display: false } },
+      scales: {
+        y: { beginAtZero: true, grid: { color: '#f1f5f9' } },
+        x: { grid: { display: false }, ticks: { autoSkip: false, maxRotation: 60, minRotation: 0 } }
+      }
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}

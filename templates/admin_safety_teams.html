@@ -1,0 +1,112 @@
+﻿{% extends "base.html" %}
+{% block title %}Safety Teams{% endblock %}
+{% block content %}
+<div style="max-width:900px;margin:0 auto">
+
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:20px">
+    <h2 style="margin:0">👷 Safety Teams</h2>
+    <a href="{{ url_for('admin_users') }}" style="color:#475569;text-decoration:none;font-size:.9rem">← Admin Users</a>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div style="padding:10px 14px;border-radius:10px;margin-bottom:12px;font-weight:600;
+                  background:{% if cat=='success' %}#dcfce7{% else %}#fee2e2{% endif %};
+                  color:{% if cat=='success' %}#166534{% else %}#991b1b{% endif %}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {% if not supervisors %}
+    <div style="padding:24px;text-align:center;color:#94a3b8;border:1px dashed #e2e8f0;border-radius:12px">
+      No safety supervisors found. Add a user with role <strong>safety_supervisor</strong> first.
+    </div>
+  {% endif %}
+
+  {% for sup in supervisors %}
+  <div style="border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin-bottom:16px">
+
+    {# Supervisor header #}
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:14px">
+      <div>
+        <span style="font-size:1.05rem;font-weight:800;color:#0f172a">{{ sup.name or sup.supervisor_code }}</span>
+        <span style="margin-left:8px;font-size:.8rem;color:#64748b;background:#f1f5f9;padding:2px 8px;border-radius:6px">
+          {{ sup.supervisor_code }} · Safety Supervisor
+        </span>
+      </div>
+      <span style="font-size:.85rem;color:#475569">
+        {{ teams[sup.id]|length }} officer(s) assigned
+      </span>
+    </div>
+
+    {# Assigned officers #}
+    {% if teams[sup.id] %}
+    <div style="margin-bottom:14px">
+      {% for team_row, officer in teams[sup.id] %}
+      <div style="display:flex;justify-content:space-between;align-items:center;
+                  padding:8px 12px;background:#f8fafc;border-radius:8px;margin-bottom:6px">
+        <div>
+          <span style="font-weight:600">{{ officer.name or officer.supervisor_code }}</span>
+          <span style="margin-left:8px;font-size:.78rem;padding:2px 8px;border-radius:12px;font-weight:700;
+                       background:{% if officer.role=='safety_officer' %}#dbeafe{% elif officer.role=='safety_welfare' %}#f0f9ff{% else %}#dcfce7{% endif %};
+                       color:{% if officer.role=='safety_officer' %}#1e40af{% elif officer.role=='safety_welfare' %}#0369a1{% else %}#065f46{% endif %}">
+            {{ officer.role.replace('_',' ').title() }}
+          </span>
+          <span style="font-size:.78rem;color:#94a3b8;margin-left:6px">{{ officer.supervisor_code }}</span>
+        </div>
+        <form method="post" onsubmit="return confirm('Remove this officer?')">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="action" value="remove">
+          <input type="hidden" name="team_id" value="{{ team_row.id }}">
+          <button style="padding:4px 12px;border:1px solid #fca5a5;background:#fff1f2;color:#991b1b;
+                         border-radius:6px;font-size:.8rem;cursor:pointer">Remove</button>
+        </form>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    <div style="color:#94a3b8;font-size:.88rem;margin-bottom:14px;padding:8px 0">No officers assigned yet.</div>
+    {% endif %}
+
+    {# Add officer form #}
+    <form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="assign">
+      <input type="hidden" name="sup_id" value="{{ sup.id }}">
+      <select name="off_id"
+              style="flex:1;padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:.9rem;min-width:200px">
+        <option value="">— Select officer to assign —</option>
+        {% for o in all_officers %}
+          {% set already = (o.id in teams[sup.id]|map(attribute='OfficerTeam.officer_id')|list) %}
+          <option value="{{ o.id }}"
+                  {% if already %}disabled style="color:#94a3b8"{% endif %}>
+            [{{ o.role.replace('_',' ').title() }}] {{ o.name or o.supervisor_code }} ({{ o.supervisor_code }})
+            {% if already %} ✓{% endif %}
+          </option>
+        {% endfor %}
+      </select>
+      <button style="padding:8px 18px;background:#0f172a;color:#fff;border:0;border-radius:8px;font-weight:700;cursor:pointer">
+        + Assign
+      </button>
+    </form>
+  </div>
+  {% endfor %}
+
+  {# Unassigned officers #}
+  {% if unassigned %}
+  <div style="border:1px dashed #e2e8f0;border-radius:14px;padding:16px;margin-top:8px">
+    <div style="font-weight:700;color:#64748b;margin-bottom:10px;font-size:.9rem">
+      ⚠ Not yet assigned to any supervisor ({{ unassigned|length }})
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap">
+      {% for o in unassigned %}
+      <span style="padding:4px 12px;border-radius:20px;font-size:.8rem;font-weight:600;
+                   background:#f1f5f9;color:#475569">
+        {{ o.name or o.supervisor_code }} · {{ o.role.replace('_',' ').title() }}
+      </span>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+{% endblock %}

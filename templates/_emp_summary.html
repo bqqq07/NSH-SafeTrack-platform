@@ -1,0 +1,12 @@
+<div>
+  <h3>{{ emp.name }} <small>({{ emp.emp_number }})</small></h3>
+  <p><b>Department:</b> {{ emp.department or '—' }} — <b>Site:</b> {{ emp.site or '—' }}</p>
+  <h4>Attendance ({{ s.period_from }} → {{ s.period_to }})</h4>
+  <ul>
+    <li>Total days marked: {{ s.total }}</li>
+    <li>Present: {{ s.present }}, Leave: {{ s.leave }}, Absent: {{ s.absent }}</li>
+    <li>Attendance %: <b>{{ s.att_pct }}%</b></li>
+  </ul>
+  <h4>Evaluation average (last {{ s.samples }} weeks)</h4>
+  <p><b>{{ s.avg_score }}</b> / 100</p>
+</div>

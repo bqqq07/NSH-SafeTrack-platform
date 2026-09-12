@@ -2,7 +2,8 @@
 {% block content %}
 <h1>Reports</h1>
 <section class="card">
-  <form method="get" action="{{ url_for('report_supervisor') }}" class="grid3">
+  <form method="post" action="{{ url_for('admin_report_picker') }}" class="grid3"> 
+  <!-- هذا يرسل POST لنفس الراوت، وهو بدوره يعمل redirect إلى admin_reports_all -->
     <label>Week Start (Sunday)
       <input type="date" name="week_start" value="{{ ws.isoformat() }}" required>
     </label>

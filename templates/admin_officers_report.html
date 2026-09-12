@@ -1,0 +1,172 @@
+﻿{% extends "base.html" %}
+{% block title %}Officers Report{% endblock %}
+{% block content %}
+<div style="max-width:900px;margin:0 auto">
+
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:20px">
+    <h2 style="margin:0">📋 Officers Activity Report</h2>
+    <a href="{{ url_for('admin_users') }}" style="color:#475569;text-decoration:none;font-size:.9rem">← Admin</a>
+  </div>
+
+  {# ── Selection form ── #}
+  <form method="post" id="reportForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    {# Date range #}
+    <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:flex-end">
+      <label style="display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:.88rem">
+        From
+        <input type="date" name="date_from"
+               value="{{ date_from.isoformat() if date_from else '' }}"
+               style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:.9rem">
+      </label>
+      <label style="display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:.88rem">
+        To
+        <input type="date" name="date_to"
+               value="{{ date_to.isoformat() if date_to else '' }}"
+               style="padding:8px 10px;border:1px solid #e2e8f0;border-radius:8px;font-size:.9rem">
+      </label>
+    </div>
+
+    {# Role filter buttons (JS filter — no server round-trip) #}
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+      <button type="button" onclick="filterRole('all')"
+              style="padding:7px 16px;border:2px solid #0f172a;background:#0f172a;color:#fff;border-radius:8px;font-weight:700;cursor:pointer;font-size:.85rem">
+        All
+      </button>
+      <button type="button" onclick="filterRole('safety_officer')"
+              style="padding:7px 16px;border:2px solid #3b82f6;background:#dbeafe;color:#1e40af;border-radius:8px;font-weight:700;cursor:pointer;font-size:.85rem">
+        Safety Officer
+      </button>
+      <button type="button" onclick="filterRole('safety_welfare')"
+              style="padding:7px 16px;border:2px solid #38bdf8;background:#f0f9ff;color:#0369a1;border-radius:8px;font-weight:700;cursor:pointer;font-size:.85rem">
+        Welfare Officer
+      </button>
+      <button type="button" onclick="filterRole('environment_officer')"
+              style="padding:7px 16px;border:2px solid #10b981;background:#dcfce7;color:#065f46;border-radius:8px;font-weight:700;cursor:pointer;font-size:.85rem">
+        Environment Officer
+      </button>
+      <button type="button" onclick="selectNone()"
+              style="padding:7px 16px;border:1px solid #e2e8f0;background:#fff;color:#475569;border-radius:8px;font-weight:600;cursor:pointer;font-size:.85rem">
+        Clear
+      </button>
+    </div>
+
+    {# Officer checkboxes #}
+    <div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:14px;max-height:320px;overflow-y:auto">
+      {% set prev_role = namespace(r='') %}
+      {% for o in all_officers %}
+        {% if o.role != prev_role.r %}
+          {% set prev_role.r = o.role %}
+          <div style="font-size:.75rem;font-weight:800;color:#64748b;text-transform:uppercase;
+                      letter-spacing:.06em;margin:{% if loop.first %}0{% else %}12px{% endif %} 0 6px">
+            {{ o.role.replace('_',' ').title() }}
+          </div>
+        {% endif %}
+        <label style="display:flex;align-items:center;gap:10px;padding:7px 8px;border-radius:8px;cursor:pointer;
+                      transition:background .15s"
+               onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''"
+               data-role="{{ o.role }}">
+          <input type="checkbox" name="officer_ids" value="{{ o.id }}"
+                 {% if not selected_ids or o.id in selected_ids %}checked{% endif %}
+                 style="width:16px;height:16px;accent-color:#0f172a">
+          <span>
+            <strong style="font-size:.9rem">{{ o.name or o.supervisor_code }}</strong>
+            <span style="font-size:.8rem;color:#94a3b8;margin-left:6px">{{ o.supervisor_code }}</span>
+          </span>
+        </label>
+      {% else %}
+        <div style="color:#94a3b8;text-align:center;padding:20px">No officers found.</div>
+      {% endfor %}
+    </div>
+
+    <button type="submit"
+            style="width:100%;padding:14px;background:#0f172a;color:#fff;border:0;border-radius:10px;font-weight:800;font-size:1rem;cursor:pointer">
+      Generate Report
+    </button>
+  </form>
+
+  {# ── Results ── #}
+  {% if rows %}
+  <div style="margin-top:24px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+      <div style="font-weight:800;font-size:1.05rem">
+        Results — {{ date_from.strftime('%d %b %Y') }} → {{ date_to.strftime('%d %b %Y') }}
+        <span style="font-weight:400;font-size:.88rem;color:#64748b;margin-left:8px">{{ rows|length }} officer(s)</span>
+      </div>
+      <button onclick="window.print()"
+              style="padding:8px 16px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:8px;cursor:pointer;font-weight:600;font-size:.85rem">
+        🖨 Print
+      </button>
+    </div>
+
+    <div style="border:1px solid #e2e8f0;border-radius:12px;overflow:hidden">
+      <table style="width:100%;border-collapse:collapse;font-size:.9rem">
+        <thead>
+          <tr style="background:#f8fafc">
+            <th style="padding:10px 14px;text-align:left;font-weight:700;color:#475569;border-bottom:2px solid #e2e8f0">Name</th>
+            <th style="padding:10px 14px;text-align:left;font-weight:700;color:#475569;border-bottom:2px solid #e2e8f0">Role</th>
+            <th style="padding:10px 14px;text-align:center;font-weight:700;color:#475569;border-bottom:2px solid #e2e8f0">Submissions</th>
+            <th style="padding:10px 14px;text-align:center;font-weight:700;color:#475569;border-bottom:2px solid #e2e8f0">Findings</th>
+            <th style="padding:10px 14px;text-align:left;font-weight:700;color:#475569;border-bottom:2px solid #e2e8f0">Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr style="border-bottom:1px solid #f1f5f9">
+            <td style="padding:10px 14px;font-weight:600">
+              {{ r.user.name or r.user.supervisor_code }}
+              <div style="font-size:.78rem;color:#94a3b8">{{ r.user.supervisor_code }}</div>
+            </td>
+            <td style="padding:10px 14px">
+              <span style="padding:3px 10px;border-radius:12px;font-size:.78rem;font-weight:700;
+                           background:{% if r.user.role=='safety_officer' %}#dbeafe{% elif r.user.role=='safety_welfare' %}#f0f9ff{% else %}#dcfce7{% endif %};
+                           color:{% if r.user.role=='safety_officer' %}#1e40af{% elif r.user.role=='safety_welfare' %}#0369a1{% else %}#065f46{% endif %}">
+                {{ r.role_label }}
+              </span>
+            </td>
+            <td style="padding:10px 14px;text-align:center;font-weight:700;
+                       color:{{ '#166534' if r.submissions > 0 else '#94a3b8' }}">
+              {{ r.submissions }}
+            </td>
+            <td style="padding:10px 14px;text-align:center;font-weight:700;
+                       color:{{ '#991b1b' if r.findings > 0 else '#94a3b8' }}">
+              {{ r.findings }}
+            </td>
+            <td style="padding:10px 14px;color:#64748b;font-size:.85rem">{{ r.detail }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr style="background:#f8fafc;font-weight:700">
+            <td colspan="2" style="padding:10px 14px;color:#0f172a">Total</td>
+            <td style="padding:10px 14px;text-align:center">{{ rows|sum(attribute='submissions') }}</td>
+            <td style="padding:10px 14px;text-align:center">{{ rows|sum(attribute='findings') }}</td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+  {% endif %}
+
+</div>
+
+<script>
+function filterRole(role) {
+  document.querySelectorAll('label[data-role]').forEach(function(lbl) {
+    var cb = lbl.querySelector('input[type=checkbox]');
+    if (role === 'all') {
+      cb.checked = true;
+    } else {
+      cb.checked = (lbl.dataset.role === role);
+    }
+  });
+}
+function selectNone() {
+  document.querySelectorAll('input[name=officer_ids]').forEach(function(cb) {
+    cb.checked = false;
+  });
+}
+</script>
+{% endblock %}

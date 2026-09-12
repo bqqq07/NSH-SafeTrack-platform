@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Incident Register</h1>
+<a href="{{ url_for('incident_report_new') }}" class="btn primary">+ Report Incident</a>
+
+<form method="get" style="display:flex;gap:.5rem;flex-wrap:wrap;margin:1rem 0">
+  <select name="status">
+    <option value="" {% if not status_filter %}selected{% endif %}>All Statuses</option>
+    <option value="open"          {% if status_filter=='open' %}selected{% endif %}>Open</option>
+    <option value="investigating" {% if status_filter=='investigating' %}selected{% endif %}>Investigating</option>
+    <option value="closed"        {% if status_filter=='closed' %}selected{% endif %}>Closed</option>
+  </select>
+  <select name="type">
+    <option value="" {% if not type_filter %}selected{% endif %}>All Types</option>
+    {% for val, label in types %}
+      <option value="{{ val }}" {% if type_filter==val %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn">Filter</button>
+</form>
+
+{% if incidents %}
+<table class="table">
+  <thead>
+    <tr>
+      <th>#</th><th>Date</th><th>Location</th><th>Type</th>
+      <th>Severity</th><th>Status</th><th>Reported By</th><th></th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for i in incidents %}
+    <tr>
+      <td>{{ i.id }}</td>
+      <td>{{ i.incident_date }}</td>
+      <td>{{ i.location }}</td>
+      <td>{{ i.incident_type }}</td>
+      <td>
+        {% if i.severity == 'H' %}<span style="color:var(--danger)">High</span>
+        {% elif i.severity == 'M' %}<span style="color:var(--warning)">Medium</span>
+        {% elif i.severity == 'C' %}<span style="color:darkred;font-weight:600">Critical</span>
+        {% elif i.severity == 'L' %}<span style="color:var(--success)">Low</span>
+        {% else %}<span>{{ i.severity or '—' }}</span>{% endif %}
+      </td>
+      <td>
+        {% if i.status == 'open' %}<span style="color:var(--muted)">⏳ Open</span>
+        {% elif i.status == 'investigating' %}<span style="color:var(--warning)">🔍 Investigating</span>
+        {% else %}<span style="color:var(--success)">✔ Closed</span>{% endif %}
+      </td>
+      <td>{{ i.reporter.name if i.reporter else '—' }}</td>
+      <td><a href="{{ url_for('incident_detail', inc_id=i.id) }}" class="btn small">View</a></td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="hint" style="margin-top:1rem">No incidents recorded.</p>
+{% endif %}
+{% endblock %}

@@ -2,12 +2,57 @@
 {% block content %}
 <section class="card small">
   <h1>Sign in</h1>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="alert {{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  {% if not login_mode or login_mode == 'code' %}
+  {# ── Supervisor code login (NSH legacy) ── #}
   <form method="post">
+    <input type="hidden" name="mode" value="code">
     <label>Supervisor ID
-      <input type="text" name="code" placeholder="e.g. 2540" required>
+      <input type="text" name="code" placeholder="e.g. 2540" required autofocus>
     </label>
     <button type="submit" class="btn primary">Sign in</button>
   </form>
-  <p class="hint">Only IDs added by Admin can access.</p>
+  <p class="hint" style="margin-top:1rem;font-size:0.85rem;color:#64748b;">
+    Company account? <a href="#" onclick="document.getElementById('email-form').style.display='block';this.parentElement.style.display='none';">Sign in with email →</a>
+  </p>
+  <div id="email-form" style="display:none;margin-top:1rem;border-top:1px solid #e2e8f0;padding-top:1rem;">
+    <form method="post">
+      <input type="hidden" name="mode" value="email">
+      <label>Email
+        <input type="email" name="email" placeholder="you@company.com" required>
+      </label>
+      <label>Password
+        <input type="password" name="password" placeholder="Password" required>
+      </label>
+      <button type="submit" class="btn primary">Sign in</button>
+    </form>
+  </div>
+
+  {% else %}
+  {# ── Email login shown after redirect ── #}
+  <form method="post">
+    <input type="hidden" name="mode" value="email">
+    <label>Email
+      <input type="email" name="email" value="{{ request.form.get('email','') }}" required autofocus>
+    </label>
+    <label>Password
+      <input type="password" name="password" required>
+    </label>
+    <button type="submit" class="btn primary">Sign in</button>
+  </form>
+  <p class="hint" style="margin-top:1rem;font-size:0.85rem;">
+    <a href="{{ url_for('login') }}">← Sign in with Supervisor ID</a>
+  </p>
+  {% endif %}
+
+  <p class="hint" style="margin-top:1.25rem;border-top:1px solid #f1f5f9;padding-top:1rem;">
+    New company? <a href="{{ url_for('register_choose') }}">Register →</a>
+  </p>
 </section>
 {% endblock %}

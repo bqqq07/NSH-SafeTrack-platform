@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.wrap{max-width:900px;margin:0 auto;padding:0 4px}
+.page-title{font-size:20px;font-weight:700;margin-bottom:20px}
+.sup-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:18px}
+.sup-card h3{font-size:15px;font-weight:700;margin:0 0 12px;color:var(--text)}
+.sup-code{font-size:11px;color:var(--muted);margin-bottom:10px}
+.off-row{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)}
+.off-row:last-child{border-bottom:none}
+.off-name{flex:1;font-size:13px}
+.badge-assigned{background:#dcfce7;color:#16a34a;border-radius:5px;padding:1px 7px;font-size:11px;font-weight:600}
+</style>
+
+<div class="wrap">
+  <div class="page-title">🛡️ Safety Supervisor — Officer Assignments</div>
+
+  {% if safety_sups %}
+  {% for sup in safety_sups %}
+  {% set assigned_ids = map_dict.get(sup.id, []) %}
+  <div class="sup-card">
+    <h3>{{ sup.name or sup.supervisor_code }}</h3>
+    <div class="sup-code">Code: {{ sup.supervisor_code }}</div>
+
+    <!-- Assigned officers -->
+    {% set assigned_offs = officers | selectattr('id', 'in', assigned_ids) | list %}
+    {% if assigned_offs %}
+    <p style="font-size:12px;font-weight:600;color:var(--muted);margin:0 0 6px">Assigned:</p>
+    {% for o in assigned_offs %}
+    <div class="off-row">
+      <span class="off-name">{{ o.name or o.supervisor_code }} <span style="color:var(--muted);font-size:11px">{{ o.supervisor_code }}</span></span>
+      <span class="badge-assigned">✓ Assigned</span>
+      <form method="post" style="margin:0">
+        <input type="hidden" name="action" value="remove">
+        <input type="hidden" name="sup_id" value="{{ sup.id }}">
+        <input type="hidden" name="officer_id" value="{{ o.id }}">
+        <button class="btn danger" style="font-size:11px;padding:3px 10px">Remove</button>
+      </form>
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    <!-- Unassigned officers -->
+    {% set unassigned_offs = officers | rejectattr('id', 'in', assigned_ids) | list %}
+    {% if unassigned_offs %}
+    <p style="font-size:12px;font-weight:600;color:var(--muted);margin:10px 0 6px">Add Officer:</p>
+    <form method="post" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <input type="hidden" name="action" value="add">
+      <input type="hidden" name="sup_id" value="{{ sup.id }}">
+      <select name="officer_id" class="form-control" style="flex:1;min-width:180px;font-size:13px;padding:6px 8px">
+        {% for o in unassigned_offs %}
+        <option value="{{ o.id }}">{{ o.name or o.supervisor_code }} ({{ o.supervisor_code }})</option>
+        {% endfor %}
+      </select>
+      <button class="btn primary" style="font-size:13px;padding:6px 16px">Assign</button>
+    </form>
+    {% else %}
+    <p class="muted" style="font-size:12px;margin:8px 0 0">All officers assigned.</p>
+    {% endif %}
+  </div>
+  {% endfor %}
+  {% else %}
+  <div class="card" style="text-align:center;padding:40px">
+    <p class="muted">No safety supervisors found. Create users with role <strong>safety_supervisor</strong> first.</p>
+    <a href="{{ url_for('admin_users') }}" class="btn primary" style="margin-top:12px">Manage Users →</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

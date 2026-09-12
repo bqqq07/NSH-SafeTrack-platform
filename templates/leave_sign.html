@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .form-card { max-width: 780px; margin: 0 auto; }
+  .form-header { text-align: center; padding: 24px 0 12px; border-bottom: 2px solid #2563eb; margin-bottom: 20px; }
+  .form-header h2 { margin: 4px 0; color: #1a1f3a; }
+  .form-header small { color: #888; }
+  .info-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; direction: rtl; }
+  .info-table td { padding: 10px 14px; border: 1px solid #e0e0e0; font-size: 14px; }
+  .info-table td:first-child { background: #f0f4ff; font-weight: 600; color: #2563eb; width: 160px; }
+  .sig-area { border: 2px dashed #2563eb; border-radius: 12px; background: #fafbff;
+              padding: 16px; margin-bottom: 16px; text-align: center; }
+  #sig-canvas { border: 1px solid #c0d0ff; border-radius: 8px; background: #fff;
+                cursor: crosshair; touch-action: none; width: 100%; max-width: 600px; height: 160px; display: block; margin: 0 auto; }
+  .sig-hint { color: #aaa; font-size: 13px; margin: 6px 0 10px; }
+  .signed-box { background: #d5f5e3; border-radius: 10px; padding: 16px; text-align: center; color: #1a7a3a; }
+  .signed-box h3 { margin: 0 0 4px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
+</style>
+
+<div class="form-card">
+  <section class="card">
+    <div class="form-header">
+      <img src="{{ url_for('static', filename='logo.png') }}" alt="Logo"
+           style="height:56px; object-fit:contain; margin-bottom:8px;"
+           onerror="this.style.display='none'">
+      <h2>نموذج طلب إجازة &nbsp;|&nbsp; Leave Request Form</h2>
+      <small>الرقم: {{ req.id }}</small>
+    </div>
+
+    <!-- بيانات الطلب -->
+    <table class="info-table">
+      <tr><td>اسم الموظف</td><td>{{ req.employee.name if req.employee else '—' }}</td></tr>
+      <tr><td>رقم الموظف</td><td>{{ req.employee.emp_number if req.employee else '—' }}</td></tr>
+      {% if req.employee and req.employee.department %}
+      <tr><td>القسم</td><td>{{ req.employee.department }}</td></tr>
+      {% endif %}
+      {% if req.employee and req.employee.site %}
+      <tr><td>الموقع</td><td>{{ req.employee.site }}</td></tr>
+      {% endif %}
+      <tr><td>المشرف المباشر</td><td>{{ req.supervisor.name if req.supervisor else '—' }}</td></tr>
+      <tr><td>نوع الإجازة</td><td>إجازة اعتيادية</td></tr>
+      <tr><td>من تاريخ</td><td class="mono">{{ req.start_date or '—' }}</td></tr>
+      <tr><td>إلى تاريخ</td><td class="mono">{{ req.end_date or '—' }}</td></tr>
+      {% if req.start_date and req.end_date %}
+      <tr><td>عدد الأيام</td><td class="mono">{{ (req.end_date - req.start_date).days + 1 }}</td></tr>
+      {% endif %}
+      <tr><td>السبب</td><td>{{ req.reason or '—' }}</td></tr>
+      {% if req.decided_at %}
+      <tr><td>تاريخ الموافقة</td><td class="mono">{{ req.decided_at.strftime('%Y-%m-%d') }}</td></tr>
+      {% endif %}
+    </table>
+
+    <!-- حالة التوقيع -->
+    {% if sig %}
+    <div class="signed-box">
+      <h3>✓ تم التوقيع</h3>
+      <p>{{ sig.employee_name }} — {{ sig.signed_at.strftime('%Y-%m-%d %H:%M') if sig.signed_at else '' }}</p>
+      {% if lf %}
+      <a href="{{ url_for('web_leave_pdf', req_id=req.id) }}"
+         class="btn primary" target="_blank">⬇ تحميل PDF</a>
+      {% endif %}
+    </div>
+    {% elif req.status == 'approved' %}
+    <!-- لوحة التوقيع -->
+    <div class="sig-area">
+      <p class="sig-hint">وقّع الموظف بإصبعه أو الماوس داخل المربع</p>
+      <canvas id="sig-canvas" width="600" height="160"></canvas>
+      <div class="btn-row">
+        <button type="button" class="btn" onclick="clearSig()">مسح</button>
+      </div>
+    </div>
+
+    <form method="post">
+      <input type="hidden" name="signature" id="sig-input">
+      <div style="margin-bottom:12px; direction:rtl">
+        <label style="font-weight:600">اسم الموظف (للتأكيد):</label>
+        <input name="employee_name" value="{{ req.employee.name if req.employee else '' }}"
+               style="width:100%;padding:8px;border:1px solid #ddd;border-radius:6px;margin-top:6px;font-size:14px">
+      </div>
+      <button type="submit" class="btn primary" onclick="return submitSig()" style="width:100%;padding:12px;font-size:16px">
+        حفظ التوقيع
+      </button>
+    </form>
+    {% else %}
+    <div style="background:#fff3cd;border-radius:10px;padding:14px;text-align:center;color:#856404;">
+      الطلب لم يُوافَق عليه بعد — التوقيع متاح بعد الموافقة فقط
+    </div>
+    {% endif %}
+  </section>
+</div>
+
+<script>
+const canvas = document.getElementById('sig-canvas');
+if (canvas) {
+  const ctx = canvas.getContext('2d');
+  let drawing = false;
+
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    const scaleX = canvas.width  / r.width;
+    const scaleY = canvas.height / r.height;
+    const src = e.touches ? e.touches[0] : e;
+    return { x: (src.clientX - r.left) * scaleX, y: (src.clientY - r.top) * scaleY };
+  }
+
+  canvas.addEventListener('mousedown',  e => { drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); });
+  canvas.addEventListener('mousemove',  e => { if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.strokeStyle='#1a1f3a'; ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.stroke(); });
+  canvas.addEventListener('mouseup',    () => drawing = false);
+  canvas.addEventListener('mouseleave', () => drawing = false);
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing = true; const p = getPos(e); ctx.beginPath(); ctx.moveTo(p.x, p.y); }, {passive:false});
+  canvas.addEventListener('touchmove',  e => { e.preventDefault(); if (!drawing) return; const p = getPos(e); ctx.lineTo(p.x, p.y); ctx.strokeStyle='#1a1f3a'; ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.stroke(); }, {passive:false});
+  canvas.addEventListener('touchend',   () => drawing = false);
+}
+
+function clearSig() {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+}
+
+function submitSig() {
+  if (!canvas) return true;
+  document.getElementById('sig-input').value = canvas.toDataURL('image/png');
+  return true;
+}
+</script>
+{% endblock %}

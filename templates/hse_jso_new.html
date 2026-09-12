@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>New JSO Closure</h2>
+<div class="card" style="max-width:580px">
+  <form method="post" enctype="multipart/form-data">
+    <label>JSO Number *
+      <input type="text" name="jso_number" required placeholder="e.g. JSO-2024-001">
+    </label>
+
+    <label>Date
+      <input type="date" name="date" value="{{ today.isoformat() }}" required>
+    </label>
+
+    <label>Location
+      <input type="text" name="location" id="locationInput"
+             value="{{ today_location }}" list="locationList" placeholder="Site area / location">
+      <datalist id="locationList">
+        {% for loc in locations %}<option value="{{ loc }}">{% endfor %}
+      </datalist>
+    </label>
+
+    <label>Action Taken
+      <textarea name="action_taken" rows="3"
+                placeholder="Describe what was done to close this JSO..."></textarea>
+    </label>
+
+    <label>Evidence Photo
+      <input type="file" name="photo" accept="image/*">
+    </label>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button type="submit" class="btn primary">Save</button>
+      <a href="{{ url_for('hse_jso_list') }}" class="btn">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block head_extra %}
+  {# لو عندك نفس CSS للطباعة في الأسبوعي فعّله هنا #}
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/weekly-print.css') }}">
+  <style>
+    /* تحسينات بسيطة للطباعة ولو ما كان فيه ملف CSS جاهز */
+    .report-header{display:flex;justify-content:space-between;align-items:flex-start;gap:1rem;margin-bottom:1rem}
+    .report-meta div{margin:.15rem 0}
+    .kpis{display:flex;gap:1rem;flex-wrap:wrap;margin-top:.5rem}
+    .kpi{padding:.5rem .75rem;border:1px solid #ddd;border-radius:.5rem}
+    .sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-top:1.25rem}
+    .sig-box{border:1px dashed #bbb;padding:.75rem;border-radius:.5rem;min-height:80px}
+    .actions-print{display:flex;gap:.5rem;margin-bottom:1rem}
+    @media print{
+      .no-print,.actions,.actions-print,nav,.filters{display:none !important}
+      .card{box-shadow:none;border:none}
+      body{background:#fff}
+    }
+    .table.compact th, .table.compact td{padding:.4rem .5rem}
+  </style>
+{% endblock %}
+
+{% block content %}
+<div class="actions-print no-print">
+  <a class="btn" href="{{ url_for('daily_reports_picker', d=de.eval_date.isoformat()) }}">Back</a>
+  <button class="btn primary" onclick="window.print()">Print</button>
+</div>
+
+<section class="card">
+  <div class="report-header">
+    <div>
+      <h1>Daily Evaluation Report</h1>
+      <div class="report-meta">
+        <div><strong>Employee:</strong> {{ employee.name }} ({{ employee.emp_number }})</div>
+        {% if employee.department %}<div><strong>Department:</strong> {{ employee.department }}</div>{% endif %}
+        {% if employee.site %}<div><strong>Site:</strong> {{ employee.site }}</div>{% endif %}
+        <div><strong>Date:</strong> {{ de.eval_date.strftime('%Y-%m-%d') }}</div>
+      </div>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><strong>Targets</strong><div>{{ '%.1f' % (de.targets_score or 0) }} / 40</div></div>
+      <div class="kpi"><strong>Performance</strong><div>{{ '%.1f' % (de.performance_score or 0) }} / 60</div></div>
+      <div class="kpi"><strong>Total</strong><div>{{ '%.1f' % (de.total_score or 0) }} / 100</div></div>
+      <div class="kpi"><strong>Band</strong><div>{{ de.overall_band or de.band }}</div></div>
+    </div>
+  </div>
+
+  <h2>1) Daily Targets (40 pts)</h2>
+  <table class="table compact">
+    <thead>
+      <tr><th>#</th><th>Target / Task</th><th>Achieved %</th><th>Remarks</th></tr>
+    </thead>
+    <tbody>
+      {% for i in range(1,5) %}
+      <tr>
+  <td>{{ i }}</td>
+  <td>{{ de|attr('t%s_text' % i) | default('', true) }}</td>
+  <td>{{ de|attr('t%s_percent' % i) | default('', true) }}</td>
+  <td>{{ de|attr('t%s_remarks' % i) | default('', true) }}</td>
+</tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <h2>2) Performance Evaluation (60 pts)</h2>
+  <table class="table compact">
+    <thead>
+      <tr><th>Criteria</th><th>Rating (1–5)</th><th>Comments</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Punctuality & Attendance</td><td>{{ de.p_punctuality or '' }}</td><td>{{ de.c_punctuality or '' }}</td></tr>
+      <tr><td>Quality of Work</td><td>{{ de.p_quality or '' }}</td><td>{{ de.c_quality or '' }}</td></tr>
+      <tr><td>Productivity</td><td>{{ de.p_productivity or '' }}</td><td>{{ de.c_productivity or '' }}</td></tr>
+      <tr><td>Communication & Teamwork</td><td>{{ de.p_communication or '' }}</td><td>{{ de.c_communication or '' }}</td></tr>
+      <tr><td>Problem-Solving</td><td>{{ de.p_problemsolving or '' }}</td><td>{{ de.c_problemsolving or '' }}</td></tr>
+      <tr><td>Compliance with Safety/Rules</td><td>{{ de.p_compliance or '' }}</td><td>{{ de.c_compliance or '' }}</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Manager Notes</h2>
+  <table class="table compact">
+    <tbody>
+      <tr><th style="width:260px">Strengths observed</th><td>{{ de.strengths or '' }}</td></tr>
+      <tr><th>Areas for improvement</th><td>{{ de.improvements or '' }}</td></tr>
+      <tr><th>Training/Support required</th><td>{{ de.training_needed or '' }}</td></tr>
+    </tbody>
+  </table>
+
+  <div class="sig-grid">
+    <div class="sig-box">
+      <strong>Evaluator</strong><br>
+      {% if evaluator_name %}{{ evaluator_name }}{% else %}&nbsp;{% endif %}<br>
+      {% if evaluator_code %}Code: {{ evaluator_code }}{% endif %}
+    </div>
+    <div class="sig-box">
+      <strong>Employee Acknowledgment</strong><br>
+      &nbsp;
+    </div>
+  </div>
+</section>
+{% endblock %}

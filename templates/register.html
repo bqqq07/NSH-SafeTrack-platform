@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Register Company — z NSH_</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+      background: #f1f5f9;
+      color: #1e293b;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+    a { text-decoration: none; }
+
+    .container { width: 100%; max-width: 480px; }
+
+    .back {
+      display: inline-block;
+      color: #64748b;
+      font-size: 0.88rem;
+      margin-bottom: 1.5rem;
+    }
+    .back:hover { color: #1e293b; }
+
+    .card {
+      background: #fff;
+      border-radius: 16px;
+      padding: 2rem 2.25rem;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    }
+
+    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .subtitle { color: #64748b; font-size: 0.9rem; margin-bottom: 1.75rem; }
+
+    .alert {
+      padding: 0.7rem 1rem;
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      font-size: 0.88rem;
+    }
+    .alert.danger  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+    .alert.success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    .alert.warning { background: #fffbeb; color: #92400e; border: 1px solid #fcd34d; }
+
+    .section-label {
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #94a3b8;
+      margin: 1.25rem 0 0.75rem;
+    }
+    .section-label:first-of-type { margin-top: 0; }
+
+    .form-group { margin-bottom: 1rem; }
+    label {
+      display: block;
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #374151;
+      margin-bottom: 0.35rem;
+    }
+    input {
+      width: 100%;
+      padding: 0.65rem 0.85rem;
+      border: 1.5px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 0.93rem;
+      outline: none;
+      background: #f9fafb;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    input:focus { border-color: #2563eb; background: #fff; }
+
+    hr { border: none; border-top: 1px solid #e2e8f0; margin: 1.25rem 0; }
+
+    .btn {
+      width: 100%;
+      padding: 0.8rem;
+      background: #2563eb;
+      color: #fff;
+      border: none;
+      border-radius: 9px;
+      font-size: 0.97rem;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: #1d4ed8; }
+
+    .footer-hint {
+      text-align: center;
+      margin-top: 1.25rem;
+      font-size: 0.88rem;
+      color: #64748b;
+    }
+    .footer-hint a { color: #2563eb; }
+
+    .info-box {
+      background: #eff6ff;
+      border: 1px solid #bfdbfe;
+      border-radius: 8px;
+      padding: 0.65rem 0.9rem;
+      font-size: 0.83rem;
+      color: #1d4ed8;
+      margin-bottom: 1.25rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="{{ url_for('register_choose') }}" class="back">← Back</a>
+
+    <div class="card">
+      <h1>Register Your Company</h1>
+      <p class="subtitle">Your account will be reviewed and activated within 24 hours.</p>
+
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in messages %}
+          <div class="alert {{ cat }}">{{ msg }}</div>
+        {% endfor %}
+      {% endwith %}
+
+      <div class="info-box">
+        ℹ️ After approval you will be the <strong>Admin</strong> of your company and can add employees and team members.
+      </div>
+
+      <form method="post" autocomplete="off">
+
+        <p class="section-label">Company</p>
+
+        <div class="form-group">
+          <label for="company_name">Company Name <span style="color:#dc2626">*</span></label>
+          <input id="company_name" type="text" name="company_name"
+                 value="{{ company_name }}" placeholder="e.g. Al-Hajri Construction" required>
+        </div>
+
+        <hr>
+        <p class="section-label">Your Account</p>
+
+        <div class="form-group">
+          <label for="your_name">Full Name <span style="color:#dc2626">*</span></label>
+          <input id="your_name" type="text" name="your_name"
+                 value="{{ your_name }}" placeholder="Your full name" required>
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email Address <span style="color:#dc2626">*</span></label>
+          <input id="email" type="email" name="email"
+                 value="{{ email }}" placeholder="you@company.com" required>
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password <span style="color:#dc2626">*</span></label>
+          <input id="password" type="password" name="password"
+                 placeholder="At least 6 characters" required minlength="6">
+        </div>
+
+        <div class="form-group">
+          <label for="password2">Confirm Password <span style="color:#dc2626">*</span></label>
+          <input id="password2" type="password" name="password2"
+                 placeholder="Repeat your password" required>
+        </div>
+
+        <button type="submit" class="btn">Submit Registration</button>
+      </form>
+
+      <p class="footer-hint">
+        Already have an account? <a href="{{ url_for('login') }}">Sign in</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>

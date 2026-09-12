@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Site · Attendance</h1>
+<p class="muted">Date: {{ att_date.strftime("%d/%m/%Y") }}</p>
+
+<div class="card no-print" style="margin-bottom:1.5rem;">
+  <form method="get" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
+    <div>
+      <label>Date</label>
+      <input type="date" name="d" value="{{ att_date.isoformat() }}">
+    </div>
+    <button class="btn primary" type="submit">Open</button>
+  </form>
+</div>
+
+<div class="card">
+  <table style="width:100%; border-collapse:collapse;">
+    <thead>
+      <tr style="background:#f4f7fb;">
+        <th style="padding:.6rem;">Supervisor</th>
+        <th style="padding:.6rem;">Employee</th>
+        <th style="padding:.6rem;">Emp No</th>
+        <th style="padding:.6rem; text-align:center;">Status</th>
+        <th style="padding:.6rem;">Remarks</th>
+      </tr>
+    </thead>
+    <tbody>
+      {# rows = (Attendance, Employee, User) #}
+      {% for att, emp, u in rows %}
+      <tr style="border-top:1px solid #edf0f4;">
+        <td style="padding:.5rem .6rem;">{{ u.name }}{% if u.supervisor_code %} ({{ u.supervisor_code }}){% endif %}</td>
+        <td style="padding:.5rem .6rem;">{{ emp.name }}</td>
+        <td style="padding:.5rem .6rem;">{{ emp.emp_number }}</td>
+        <td style="padding:.5rem .6rem; text-align:center;">
+          {{ att.status or 'Present' }}
+        </td>
+        <td style="padding:.5rem .6rem;">{{ att.remarks or '' }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="5" style="padding:1rem; text-align:center;">No attendance records for this date.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

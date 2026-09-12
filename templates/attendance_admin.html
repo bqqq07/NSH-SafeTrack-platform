@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block content %}
+
+<section class="page-head">
+  <h1>Attendance • Admin</h1>
+  <p class="muted">Select a <b>day</b> or a <b>week</b> (Sun→Thu) to view attendance.</p>
+</section>
+
+<!-- Filter card -->
+<div class="card" style="margin-bottom:16px">
+  <form method="post" class="toolbar" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+    <input type="hidden" name="mode" id="mode" value="{{ mode }}">
+
+    <div style="display:flex;gap:12px;align-items:center">
+      <label><input type="radio" name="mode_radio" value="day" {% if mode=='day' %}checked{% endif %}
+                    onchange="switchMode(this.value)"> Day</label>
+      <label><input type="radio" name="mode_radio" value="week" {% if mode=='week' %}checked{% endif %}
+                    onchange="switchMode(this.value)"> Week</label>
+    </div>
+
+    <!-- Day controls -->
+    <div id="day-controls" {% if mode!='day' %}style="display:none"{% endif %}>
+      <label class="muted">Date</label>
+      <input type="date" name="day_date" value="{{ (day_date or date.today()).isoformat() if mode=='day' else '' }}">
+      <button type="submit" class="btn">Show</button>
+      {% if mode=='day' %}
+      <a class="btn ghost" target="_blank"
+         href="{{ url_for('attendance_print', mode='day', d=day_date.isoformat()) }}">Print</a>
+      {% endif %}
+    </div>
+
+    <!-- Week controls -->
+    <div id="week-controls" {% if mode!='week' %}style="display:none"{% endif %}>
+      <label class="muted">Week start (Sun)</label>
+      <input type="date" name="week_start" value="{{ ws.isoformat() if mode=='week' else '' }}">
+      <label class="muted">End (Thu)</label>
+      <input type="date" name="week_end" value="{{ we.isoformat() if mode=='week' else '' }}">
+      <button type="submit" class="btn">Show</button>
+      {% if mode=='week' %}
+      <a class="btn ghost" target="_blank"
+         href="{{ url_for('attendance_print', mode='week', ws=ws.isoformat(), we=we.isoformat()) }}">Print</a>
+      {% endif %}
+    </div>
+  </form>
+</div>
+
+{% if mode=='day' %}
+  <!-- KPI -->
+  <div class="grid two" style="margin-bottom:12px">
+    <div class="card"><div class="stat"><div class="label muted">Marked today</div><div class="value">{{ kpi.total_days }}</div></div></div>
+    <div class="card"><div class="stat"><div class="label muted">Present</div><div class="value">{{ kpi.total_present }}</div></div></div>
+  </div>
+
+  <!-- Day table -->
+  <div class="card">
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th style="width:110px">ID</th>
+            <th>Name</th>
+            <th>Job</th>
+            <th>Supervisor</th>
+            <th style="width:140px">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          {% set sup_name = r.marked_by.name if r.marked_by else '' %}
+          <tr>
+            <td class="muted">{{ r.emp.emp_number }}</td>
+            <td><strong>{{ r.emp.name }}</strong></td>
+            <td class="muted">{{ r.emp.department or '—' }}</td>
+            <td class="muted">
+              {% if r.marked_by %}
+                {{ sup_name or '—' }} ({{ r.sup.supervisor_code }})
+              {% else %}
+                —
+              {% endif %}
+            </td>
+            <td>
+              {% if r.status == 'present' %}
+                <span class="pill success">Present</span>
+              {% elif r.status == 'absent' %}
+                <span class="pill danger">Absent</span>
+              {% elif r.status == 'leave' %}
+                <span class="pill warning">Leave</span>
+              {% else %}
+                <span class="muted">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+{% else %}
+  <!-- Week KPI -->
+  <div class="grid three" style="margin-bottom:12px">
+    <div class="card"><div class="stat"><div class="label muted">Total days</div><div class="value">{{ kpi.total_days }}</div></div></div>
+    <div class="card"><div class="stat"><div class="label muted">Total present</div><div class="value">{{ kpi.total_present }}</div></div></div>
+    <div class="card"><div class="stat"><div class="label muted">Attendance %</div>
+      <div class="value">{{ '%.1f'|format((kpi.total_present/kpi.total_days*100) if kpi.total_days else 0) }}%</div></div></div>
+  </div>
+
+  <!-- Week table -->
+  <div class="card">
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th style="width:110px">ID</th>
+            <th>Name</th>
+            <th>Job</th>
+            <th>Supervisor</th>
+            <th style="text-align:center">Present</th>
+            <th style="text-align:center">Leave</th>
+            <th style="text-align:center">Absent</th>
+            <th style="text-align:center">Days</th>
+            <th style="text-align:center">%</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td class="muted">{{ r.emp.emp_number }}</td>
+            <td><strong>{{ r.emp.name }}</strong></td>
+            <td class="muted">{{ r.emp.department or '—' }}</td>
+            <td class="muted">{{ r.sup.supervisor_code }}</td>
+            <td style="text-align:center">{{ r.present }}</td>
+            <td style="text-align:center">{{ r.leave }}</td>
+            <td style="text-align:center">{{ r.absent }}</td>
+            <td style="text-align:center">{{ r.total }}</td>
+            <td style="text-align:center">{{ '%.1f'|format(r.percent) }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endif %}
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  function switchMode(v){
+    document.getElementById('mode').value = v;
+    document.getElementById('day-controls').style.display  = (v==='day')  ? '' : 'none';
+    document.getElementById('week-controls').style.display = (v==='week') ? '' : 'none';
+  }
+</script>
+{% endblock %}

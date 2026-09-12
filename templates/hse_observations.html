@@ -1,0 +1,294 @@
+﻿{% extends "base.html" %}
+{% block title %}Observations{% endblock %}
+{% block content %}
+<style>
+.obs-card {
+  background: var(--card-bg, #fff);
+  border: 1px solid var(--border, #e2e8f0);
+  border-radius: 12px;
+  margin-bottom: 10px;
+  overflow: hidden;
+}
+.obs-card-hdr {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 15px;
+  cursor: pointer;
+  user-select: none;
+}
+.obs-card-hdr::after {
+  content: "▾";
+  color: #94a3b8;
+  flex-shrink: 0;
+  font-size: 1rem;
+  margin-top: 3px;
+  transition: transform .2s;
+}
+.obs-card.expanded .obs-card-hdr::after { transform: rotate(180deg); }
+.obs-card-body {
+  display: none;
+  padding: 0 15px 13px;
+}
+.obs-card.expanded .obs-card-body { display: block; }
+.obs-divider { border: none; border-top: 1px solid var(--border, #f1f5f9); margin: 0 0 12px; }
+.obs-field-label {
+  font-size: .72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 3px;
+}
+.obs-field-val {
+  font-size: .88rem;
+  color: #0f172a;
+  white-space: pre-wrap;
+  line-height: 1.6;
+}
+.obs-field-box {
+  background: #f8fafc;
+  border-radius: 7px;
+  padding: 9px 11px;
+  margin-bottom: 10px;
+}
+.obs-field-box.green { background: #f0fdf4; border: 1px solid #bbf7d0; }
+.photo-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.photo-thumb {
+  width: 90px; height: 70px;
+  object-fit: cover; border-radius: 7px;
+  border: 1px solid #e2e8f0; cursor: pointer;
+}
+.badge { padding: 2px 8px; border-radius: 99px; font-size: .73rem; font-weight: 700; }
+.badge-H  { background: #fee2e2; color: #b91c1c; }
+.badge-M  { background: #fef3c7; color: #92400e; }
+.badge-L  { background: #dcfce7; color: #166534; }
+.badge-act { background: #fef2f2; color: #b91c1c; }
+.badge-cond { background: #fffbeb; color: #92400e; }
+.badge-pos  { background: #f0fdf4; color: #166534; }
+.badge-open   { color: #dc2626; font-size: .73rem; font-weight: 700; }
+.badge-closed { color: #16a34a; font-size: .73rem; font-weight: 700; }
+</style>
+
+<!-- Header -->
+<div style="display:flex;align-items:center;justify-content:space-between;
+            flex-wrap:wrap;gap:8px;margin-bottom:12px">
+  <div>
+    <h2 style="margin:0 0 2px">Observations</h2>
+    {% if is_supervisor %}
+    <p style="margin:0;color:#64748b;font-size:.82rem">All officers — click a card to expand full details</p>
+    {% else %}
+    <p style="margin:0;color:#64748b;font-size:.82rem">Click a card to expand full details</p>
+    {% endif %}
+  </div>
+  {% if cur_role in ('safety_officer','safety_welfare','environment_officer') %}
+  <a href="{{ url_for('hse_observation_new') if cur_role == 'safety_officer' else
+             (url_for('welfare_observation_new') if cur_role == 'safety_welfare' else url_for('env_observation_new')) }}"
+     class="btn primary">+ New Observation</a>
+  {% endif %}
+</div>
+
+<!-- Status filter -->
+<div class="card" style="padding:10px;margin-bottom:12px">
+  <a href="{{ url_for('hse_observations', status='all') }}"
+     class="btn {{ 'primary' if status_filter not in ('open','closed') else '' }}" style="margin-right:6px">All</a>
+  <a href="{{ url_for('hse_observations', status='open') }}"
+     class="btn {{ 'primary' if status_filter=='open' else '' }}" style="margin-right:6px">Open</a>
+  <a href="{{ url_for('hse_observations', status='closed') }}"
+     class="btn {{ 'primary' if status_filter=='closed' else '' }}">Closed</a>
+</div>
+
+{% if obs %}
+{% for o in obs %}
+{% set photos = obs_photos.get(o.id, []) %}
+<div class="obs-card" id="obs-card-{{ o.id }}"
+     onclick="obsToggle({{ o.id }})"
+     style="border-left:4px solid {{ '#C62828' if o.risk_level=='H' else '#EDB458' if o.risk_level=='M' else '#3A7CA5' if o.risk_level=='L' else '#94a3b8' }}">
+
+  <!-- Card header (summary, always visible) -->
+  <div class="obs-card-hdr">
+    <div style="flex:1;min-width:0">
+
+      <!-- Row 1: date + type + risk + status -->
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-bottom:5px">
+        <strong style="font-size:.9rem">{{ o.date.strftime('%d %b %Y') }}</strong>
+        <span class="badge {% if o.obs_type=='unsafe_act' %}badge-act{% elif o.obs_type=='unsafe_condition' %}badge-cond{% else %}badge-pos{% endif %}">
+          {% if o.obs_type=='unsafe_act' %}Unsafe Act{% elif o.obs_type=='unsafe_condition' %}Unsafe Condition{% else %}Positive{% endif %}
+        </span>
+        {% if o.risk_level %}<span class="badge badge-{{ o.risk_level }}">Risk: {{ o.risk_level }}</span>{% endif %}
+        {% if o.status == 'open' %}
+          <span class="badge-open">● OPEN</span>
+        {% else %}
+          <span class="badge-closed">✔ CLOSED</span>
+        {% endif %}
+      </div>
+
+      <!-- Row 2 (supervisor only): officer name + ID + role -->
+      {% if is_supervisor and o.officer %}
+      <div style="font-size:.82rem;color:#6366f1;font-weight:600;margin-bottom:4px">
+        👤 {{ o.officer.name }}
+        <span style="color:#94a3b8;font-weight:400">
+          (ID #{{ o.officer_id }} · {{ o.officer.role.replace('_officer','') | title }})
+        </span>
+      </div>
+      {% endif %}
+
+      <!-- Row 3: location + category + description snippet -->
+      <div style="font-size:.83rem;color:#64748b;display:flex;flex-wrap:wrap;gap:8px">
+        {% if o.location %}<span>📍 {{ o.location }}</span>{% endif %}
+        {% if o.category %}<span>🏷 {{ o.category }}</span>{% endif %}
+        {% if o.description %}
+        <span style="color:#374151">{{ o.description[:100] }}{% if o.description|length > 100 %}…{% endif %}</span>
+        {% endif %}
+      </div>
+
+    </div>
+  </div><!-- end header -->
+
+  <!-- Expandable body -->
+  <div class="obs-card-body" onclick="event.stopPropagation()">
+    <hr class="obs-divider">
+
+    <!-- Meta grid -->
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:12px">
+      <div>
+        <div class="obs-field-label">Observation #</div>
+        <div class="obs-field-val">#{{ o.id }}</div>
+      </div>
+      <div>
+        <div class="obs-field-label">Date</div>
+        <div class="obs-field-val">{{ o.date.strftime('%d %b %Y') }}</div>
+      </div>
+      <div>
+        <div class="obs-field-label">Location</div>
+        <div class="obs-field-val">{{ o.location or '—' }}</div>
+      </div>
+      <div>
+        <div class="obs-field-label">Category</div>
+        <div class="obs-field-val">{{ o.category or '—' }}</div>
+      </div>
+      {% if is_supervisor and o.officer %}
+      <div style="grid-column:1/-1">
+        <div class="obs-field-label">Submitted by</div>
+        <div class="obs-field-val">
+          {{ o.officer.name }} — ID #{{ o.officer_id }}
+          ({{ o.officer.role.replace('_officer','') | title }})
+        </div>
+      </div>
+      {% endif %}
+    </div>
+
+    <!-- Description -->
+    {% if o.description %}
+    <div class="obs-field-box" style="margin-bottom:10px">
+      <div class="obs-field-label">Description</div>
+      <div class="obs-field-val">{{ o.description }}</div>
+    </div>
+    {% endif %}
+
+    <!-- Action taken -->
+    {% if o.action_taken %}
+    <div class="obs-field-box green" style="margin-bottom:10px">
+      <div class="obs-field-label">Action Taken</div>
+      <div class="obs-field-val">{{ o.action_taken }}</div>
+    </div>
+    {% endif %}
+
+    <!-- Closure -->
+    {% if o.status == 'closed' and o.closure_action %}
+    <div class="obs-field-box green" style="margin-bottom:10px">
+      <div class="obs-field-label">
+        Closure Note{% if o.closed_at %} · {{ o.closed_at.strftime('%d %b %Y') }}{% endif %}
+      </div>
+      <div class="obs-field-val">{{ o.closure_action }}</div>
+    </div>
+    {% endif %}
+
+    <!-- Photos -->
+    {% if photos %}
+    <div style="margin-bottom:10px">
+      <div class="obs-field-label">Photos</div>
+      <div class="photo-row">
+        {% for ph in photos %}
+        <img src="{{ url_for('hse_photo', filename=ph.photo_path) }}"
+             class="photo-thumb"
+             alt="{{ ph.photo_type }}"
+             title="{{ ph.photo_type | title }} photo"
+             onclick="window.open(this.src,'_blank')">
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Action buttons -->
+    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid #f1f5f9">
+
+      {% if o.status == 'open' and o.officer_id == cur_user_id %}
+      <a href="{{ url_for('hse_observation_close', obs_id=o.id) }}"
+         style="padding:6px 16px;background:#065f46;color:#fff;border-radius:8px;
+                text-decoration:none;font-weight:700;font-size:.85rem">
+        ✔ Close This Observation
+      </a>
+      {% endif %}
+
+      {% if not photos and o.officer_id == cur_user_id %}
+      <a href="{{ url_for('hse_observation_edit', obs_id=o.id) }}"
+         style="padding:6px 14px;background:#fef9c3;color:#92400e;border:1px solid #fbbf24;
+                border-radius:8px;text-decoration:none;font-weight:600;font-size:.85rem">
+        📷 Add Photo
+      </a>
+      {% endif %}
+
+      {% if o.officer_id == cur_user_id and cur_role == 'safety_officer' %}
+      <a href="{{ url_for('hse_observation_edit', obs_id=o.id) }}"
+         style="padding:6px 14px;background:#f8fafc;color:#374151;border:1px solid #e2e8f0;
+                border-radius:8px;text-decoration:none;font-size:.85rem">
+        Edit
+      </a>
+      <form method="post" action="{{ url_for('hse_observation_delete', obs_id=o.id) }}"
+            onsubmit="return confirm('Delete this observation?')" style="margin:0">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button type="submit"
+                style="padding:6px 14px;background:#fef2f2;color:#b91c1c;border:1px solid #fca5a5;
+                       border-radius:8px;font-size:.85rem;font-weight:600;cursor:pointer">
+          Delete
+        </button>
+      </form>
+      {% endif %}
+
+    </div>
+  </div><!-- end body -->
+</div>
+{% endfor %}
+
+<!-- Pagination -->
+{% if pagination and pagination.pages > 1 %}
+<div style="display:flex;justify-content:center;gap:6px;margin-top:12px;flex-wrap:wrap">
+  {% if pagination.has_prev %}
+  <a href="{{ url_for('hse_observations', status=status_filter, page=pagination.prev_num) }}" class="btn">‹ Prev</a>
+  {% endif %}
+  {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+    {% if p %}
+    <a href="{{ url_for('hse_observations', status=status_filter, page=p) }}"
+       class="btn {{ 'primary' if p == pagination.page else '' }}">{{ p }}</a>
+    {% else %}
+    <span style="padding:8px 6px;color:var(--muted)">…</span>
+    {% endif %}
+  {% endfor %}
+  {% if pagination.has_next %}
+  <a href="{{ url_for('hse_observations', status=status_filter, page=pagination.next_num) }}" class="btn">Next ›</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="card"><p class="muted">No observations found.</p></div>
+{% endif %}
+
+<script>
+function obsToggle(id) {
+  var card = document.getElementById('obs-card-' + id);
+  if (card) card.classList.toggle('expanded');
+}
+</script>
+{% endblock %}

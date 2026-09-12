@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <title>Attendance • Print</title>
+  <style>
+    :root{--ink:#0f172a;--muted:#64748b;--grid:#e2e8f0}
+    @media print {.no-print{display:none!important}}
+    body{font-family:system-ui,Segoe UI,Tahoma,Arial;color:var(--ink);margin:24px}
+    h1{margin:0 0 8px}
+    .muted{color:var(--muted)}
+    table{width:100%;border-collapse:collapse;margin-top:12px;font-size:13px}
+    th,td{border:1px solid var(--grid);padding:7px}
+    th{background:#f8fafc;text-align:left}
+    .pill{padding:2px 8px;border-radius:999px;font-weight:600}
+    .success{background:#dcfce7;color:#065f46}
+    .danger{background:#fee2e2;color:#7f1d1d}
+    .warning{background:#fef9c3;color:#854d0e}
+    button{padding:8px 12px;border-radius:8px;border:1px solid var(--grid);background:#fff;cursor:pointer}
+  </style>
+</head>
+<body>
+  <div class="no-print" style="margin-bottom:12px">
+    <button onclick="window.print()">Print / Save as PDF</button>
+  </div>
+
+  {% if mode == 'day' %}
+    <h1>Attendance — {{ day_date }}</h1>
+    <table>
+      <tr>
+        <th style="width:110px">ID</th>
+        <th>Name</th>
+        <th>Job</th>
+        <th>Supervisor</th>
+        <th style="width:140px">Status</th>
+      </tr>
+      {% for r in rows %}
+      {% set sup_name = r.marked_by.name if r.marked_by else '' %}
+      <tr>
+        <td class="muted">{{ r.emp.emp_number }}</td>
+        <td>{{ r.emp.name }}</td>
+        <td class="muted">{{ r.emp.department or '—' }}</td>
+        <td class="muted">
+          {% if r.marked_by %}{{ sup_name or '—' }} ({{ r.sup.supervisor_code }}){% else %}—{% endif %}
+        </td>
+        <td>
+          {% if r.status == 'present' %}
+            <span class="pill success">Present</span>
+          {% elif r.status == 'absent' %}
+            <span class="pill danger">Absent</span>
+          {% elif r.status == 'leave' %}
+            <span class="pill warning">Leave</span>
+          {% else %}
+            —
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </table>
+
+  {% else %}
+    <h1>Weekly Attendance — {{ ws }} → {{ we }}</h1>
+    <table>
+      <tr>
+        <th style="width:110px">ID</th>
+        <th>Name</th>
+        <th>Job</th>
+        <th>Supervisor</th>
+        <th style="text-align:center">Present</th>
+        <th style="text-align:center">Leave</th>
+        <th style="text-align:center">Absent</th>
+        <th style="text-align:center">Days</th>
+        <th style="text-align:center">%</th>
+      </tr>
+      {% for r in rows %}
+      <tr>
+        <td class="muted">{{ r.emp.emp_number }}</td>
+        <td>{{ r.emp.name }}</td>
+        <td class="muted">{{ r.emp.department or '—' }}</td>
+        <td class="muted">{{ r.sup.supervisor_code }}</td>
+        <td style="text-align:center">{{ r.present }}</td>
+        <td style="text-align:center">{{ r.leave }}</td>
+        <td style="text-align:center">{{ r.absent }}</td>
+        <td style="text-align:center">{{ r.total }}</td>
+        <td style="text-align:center">{{ '%.1f'|format(r.percent) }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  {% endif %}
+</body>
+</html>

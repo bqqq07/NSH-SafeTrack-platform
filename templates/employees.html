@@ -1,34 +1,109 @@
 {% extends "base.html" %}
+{% block title %}Employees{% endblock %}
 {% block content %}
 <h1>Employees</h1>
 
 <section class="card">
-  <form method="post" class="grid4auto">
-    <label>Employee Number<input name="emp_number" required></label>
-    <label>Full Name<input name="name" required></label>
-    <label>Department<input name="department"></label>
-    <label>Site<input name="site"></label>
+  <form method="post"
+        action="{{ url_for('employees_add') }}"
+        class="grid4auto"
+        autocomplete="off">
+    <label>Employee Number
+      <input name="emp_number"
+             required
+             inputmode="numeric"
+             pattern="\d+"
+             title="Digits only (0-9)">
+    </label>
+
+    <label>Full Name
+      <input name="name" required>
+    </label>
+
+    <label>Department
+      <input name="department">
+    </label>
+
+    <label>Site
+      <input name="site">
+    </label>
 
     <button type="submit" class="btn primary self-end">Add Employee</button>
   </form>
 </section>
 
 <section class="card">
-  <table class="table">
-    <thead><tr><th>Emp. No</th><th>Name</th><th>Department</th><th>Site</th><th class="no-print">Actions</th></tr></thead>
-    <tbody>
-    {% for e in employees %}
-      <tr>
-        <td>{{ e.emp_number }}</td>
-        <td>{{ e.name }}</td>
-        <td>{{ e.department }}</td>
-        <td>{{ e.site }}</td>
-        <td class="no-print">
-          <a class="btn" href="{{ url_for('evaluate_new', emp_id=e.id) }}">New Evaluation</a>
-        </td>
-      </tr>
-    {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table class="table compact">
+      <!-- أعمدة ثابتة العرض + نص لا يلف، والسحب أفقي عند الحاجة -->
+      <colgroup>
+        <col style="width:140px">  {# Emp. No #}
+        <col style="width:300px">  {# Name #}
+        <col style="width:220px">  {# Department #}
+        <col style="width:180px">  {# Site #}
+        <col style="width:320px">  {# Actions #}
+      </colgroup>
+      <thead>
+        <tr>
+          <th class="nowrap">Emp. No</th>
+          <th class="nowrap">Name</th>
+          <th class="nowrap">Department</th>
+          <th class="nowrap">Site</th>
+          <th class="no-print nowrap">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+      {% for e in employees %}
+        <tr>
+          <td class="mono nowrap">{{ e.emp_number }}</td>
+          <td class="nowrap">{{ e.name }}</td>
+          <td class="nowrap">{{ e.department or '—' }}</td>
+          <td class="nowrap">{{ e.site or '—' }}</td>
+          <td class="no-print nowrap">
+            <div class="actions" style="display:flex; flex-wrap:wrap; gap:6px;">
+              <!-- Weekly evaluation -->
+              <a class="btn"
+                 href="{{ url_for('evaluate_new', emp_id=e.id) }}">
+                Weekly Eval
+              </a>
+
+              <!-- Request -->
+              <a class="btn"
+                 href="{{ url_for('request_new', emp_id=e.id) }}">
+                New Request
+              </a>
+
+              <!-- Reports (full history + average) -->
+              <a class="btn"
+                 href="{{ url_for('employee_reports_all', emp_id=e.id) }}">
+                Reports
+              </a>
+
+              <!-- Edit (name / ID number / ID expiry date) -->
+              <a class="btn"
+                 href="{{ url_for('employee_edit', emp_id=e.id) }}">
+                ✏️ تعديل
+              </a>
+
+              <!-- Soft delete (deactivate) - للسوبرفايزر فقط -->
+              {% if user.role == 'supervisor' %}
+                <form method="post"
+                      action="{{ url_for('employees_deactivate', emp_id=e.id) }}"
+                      style="display:inline"
+                      onsubmit="return confirm('Are you sure you want to deactivate this employee?');">
+                  <button type="submit" class="btn danger">Delete</button>
+                </form>
+              {% endif %}
+            </div>
+          </td>
+        </tr>
+      {% else %}
+        <tr>
+          <td colspan="5" class="center muted">No employees yet.</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
 {% endblock %}

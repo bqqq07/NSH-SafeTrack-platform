@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>My Requests</h1>
+<section class="card">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>#</th><th>Created</th><th>Employee</th><th>Type</th><th>Title</th><th>Date</th><th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for req, emp in rows %}
+      <tr>
+        <td class="mono">{{ req.id }}</td>
+        <td class="mono">{{ req.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ emp.name }} <span class="muted mono">({{ emp.emp_number }})</span></td>
+        <td>{{ req.req_type }}</td>
+        <td>{{ req.title }}</td>
+        <td class="mono">{{ req.target_date }}</td>
+        <td><span class="badge {{ req.status }}">{{ req.status.title() }}</span></td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="center muted">No requests yet.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

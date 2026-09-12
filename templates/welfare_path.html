@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}My Path{% endblock %}
+{% block content %}
+<div style="max-width:680px;margin:0 auto">
+  <h2>My Training Path</h2>
+
+  {% set module_names = {
+    'M1': 'Drinking Water & Rest Areas',
+    'M2': 'Camp Management',
+    'M3': 'Heat Stress Management',
+    'M4': 'Medical Welfare',
+    'M5': 'Documentation & Reporting'
+  } %}
+  {% set module_icons = {
+    'M1': '💧', 'M2': '🏕️', 'M3': '🌡️', 'M4': '🩺', 'M5': '📋'
+  } %}
+
+  {% set ns = namespace(cur_mod='') %}
+  {% for lv in levels %}
+    {% set p = progs.get(lv.code) %}
+
+    {% if ns.cur_mod != lv.module %}
+      {% set ns.cur_mod = lv.module %}
+
+      {% if not loop.first %}</div>{% endif %}
+
+      <!-- Module header -->
+      <div style="display:flex;align-items:center;gap:10px;margin:{% if loop.first %}0{% else %}20px{% endif %} 0 10px">
+        <span style="font-size:1.4rem">{{ module_icons[lv.module] }}</span>
+        <div>
+          <div style="font-size:.75rem;font-weight:700;color:#94a3b8;letter-spacing:.08em;text-transform:uppercase">
+            {{ lv.module }}
+          </div>
+          <div style="font-weight:800;color:#0f172a;font-size:1rem">{{ module_names[lv.module] }}</div>
+        </div>
+      </div>
+      <div>
+    {% endif %}
+
+    {% set locked = (p is none or p.status == 'locked') %}
+    {% set is_pending = (p and p.status == 'pending') %}
+    {% set is_active = (p and p.status == 'active') %}
+    {% set is_done = (p and p.status == 'done') %}
+
+    <a href="{{ '#' if locked else url_for('welfare_level', code=lv.code) }}"
+       style="display:flex;align-items:center;gap:12px;text-decoration:none;color:inherit;
+              border:1px solid {% if is_active %}#bae6fd{% elif is_pending %}#fcd34d{% elif is_done %}#86efac{% else %}#e2e8f0{% endif %};
+              border-radius:12px;padding:12px 14px;margin-bottom:8px;
+              background:{% if is_active %}#f0f9ff{% elif is_pending %}#fffbeb{% elif is_done %}#f0fdf4{% else %}#f8fafc{% endif %};
+              opacity:{{ '0.55' if locked else '1' }}">
+
+      <!-- Status icon -->
+      <div style="width:34px;height:34px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;
+                  justify-content:center;font-size:1.1rem;font-weight:800;
+                  background:{% if is_done %}#22c55e{% elif is_active %}#38bdf8{% elif is_pending %}#fbbf24{% else %}#e2e8f0{% endif %};
+                  color:{% if locked %}#94a3b8{% else %}#fff{% endif %}">
+        {% if is_done %}✓
+        {% elif is_pending %}⏳
+        {% elif is_active %}▶
+        {% else %}🔒{% endif %}
+      </div>
+
+      <!-- Text -->
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap">
+          <span style="font-size:.72rem;font-weight:700;padding:2px 7px;border-radius:20px;
+                       background:#0f172a;color:#e2e8f0;letter-spacing:.04em;white-space:nowrap">
+            Ch {{ lv.chapter }}
+          </span>
+          <span style="font-weight:700;color:#0f172a;font-size:.95rem">{{ lv.title }}</span>
+        </div>
+        <div style="font-size:.78rem;color:#64748b;margin-top:3px">{{ lv.ref }}</div>
+      </div>
+
+      <!-- Arrow if clickable -->
+      {% if not locked %}
+        <span style="color:#94a3b8;font-size:1rem">›</span>
+      {% endif %}
+    </a>
+  {% endfor %}
+  </div>{# close last module div #}
+
+  <!-- Legend -->
+  <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:20px;padding:12px;
+              background:#f8fafc;border-radius:10px;font-size:.8rem;color:#475569">
+    <span><span style="color:#22c55e;font-weight:800">✓</span> Approved</span>
+    <span>▶ Active chapter</span>
+    <span>⏳ Awaiting approval</span>
+    <span>🔒 Locked</span>
+  </div>
+</div>
+{% endblock %}

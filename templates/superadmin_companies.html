@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>الشركات — Super Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f1f5f9; color: #1e293b; direction: rtl; }
+    a { text-decoration: none; color: #2563eb; }
+    nav { background: #1e293b; padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; color: #fff; }
+    .nav-brand { font-weight: 700; font-size: 1.1rem; }
+    .badge-sa { background: #7c3aed; color: #fff; font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 20px; margin-right: 0.5rem; }
+    .nav-links a { color: #94a3b8; margin-right: 1rem; font-size: 0.9rem; }
+    .nav-links a:hover { color: #fff; }
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 1.5rem; }
+
+    .toolbar { display: flex; gap: 1rem; align-items: center; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .search-box { display: flex; gap: 0.5rem; flex: 1; min-width: 200px; }
+    .search-box input { flex: 1; padding: 0.6rem 0.9rem; border: 1.5px solid #d1d5db; border-radius: 8px; font-size: 0.9rem; outline: none; }
+    .search-box input:focus { border-color: #2563eb; }
+    .btn { padding: 0.6rem 1.2rem; background: #2563eb; color: #fff; border: none; border-radius: 8px; font-size: 0.9rem; font-weight: 600; cursor: pointer; }
+    .btn:hover { background: #1d4ed8; }
+    .btn-outline { background: #fff; color: #374151; border: 1.5px solid #d1d5db; }
+    .btn-outline:hover { background: #f9fafb; }
+
+    /* Create company modal toggle */
+    .btn-create { background: #16a34a; }
+    .btn-create:hover { background: #15803d; }
+
+    .table-wrap { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f8fafc; padding: 0.75rem 1rem; text-align: right; font-size: 0.82rem; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+    td { padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
+    tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+    .badge-active { background: #dcfce7; color: #16a34a; }
+    .badge-pending { background: #fef9c3; color: #a16207; }
+    .btn-sm { padding: 0.3rem 0.75rem; border-radius: 6px; font-size: 0.8rem; font-weight: 600; border: none; cursor: pointer; display: inline-block; }
+
+    .flash { padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem; }
+    .flash-success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    .flash-warning { background: #fffbeb; color: #92400e; border: 1px solid #fcd34d; }
+    .flash-danger  { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+
+    /* Modal */
+    .modal-backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 200; align-items: center; justify-content: center; }
+    .modal-backdrop.open { display: flex; }
+    .modal { background: #fff; border-radius: 14px; padding: 2rem; width: 100%; max-width: 440px; }
+    .modal h2 { font-size: 1.2rem; font-weight: 700; margin-bottom: 1.2rem; }
+    .form-group { margin-bottom: 1rem; }
+    label { display: block; font-size: 0.85rem; font-weight: 600; color: #374151; margin-bottom: 0.35rem; }
+    input[type="text"], input[type="email"], input[type="password"] { width: 100%; padding: 0.65rem 0.85rem; border: 1.5px solid #d1d5db; border-radius: 7px; font-size: 0.92rem; outline: none; direction: ltr; text-align: right; }
+    input:focus { border-color: #2563eb; }
+    .modal-footer { display: flex; gap: 0.75rem; justify-content: flex-end; margin-top: 1.5rem; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand"><span class="badge-sa">Super Admin</span> z NSH_ Platform</div>
+  <div class="nav-links">
+    <a href="{{ url_for('superadmin_dashboard') }}">لوحة التحكم</a>
+    <a href="{{ url_for('superadmin_companies') }}">الشركات</a>
+    <a href="{{ url_for('logout') }}">خروج</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <h1>إدارة الشركات</h1>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="flash flash-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="toolbar">
+    <form class="search-box" method="get">
+      <input type="text" name="q" value="{{ q }}" placeholder="بحث باسم الشركة...">
+      <button type="submit" class="btn">بحث</button>
+      {% if q %}<a href="{{ url_for('superadmin_companies') }}" class="btn btn-outline">مسح</a>{% endif %}
+    </form>
+    <button class="btn btn-create" onclick="document.getElementById('createModal').classList.add('open')">+ إنشاء شركة</button>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>اسم الشركة</th>
+          <th>البريد الإلكتروني</th>
+          <th>المستخدمون</th>
+          <th>الخطة</th>
+          <th>تاريخ التسجيل</th>
+          <th>الحالة</th>
+          <th>إجراءات</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for co in companies %}
+        <tr>
+          <td>{{ co.id }}</td>
+          <td><a href="{{ url_for('superadmin_company_detail', company_id=co.id) }}"><strong>{{ co.name }}</strong></a></td>
+          <td>{{ co.owner_email or '—' }}</td>
+          <td>{{ co._user_count }}</td>
+          <td><span style="text-transform:uppercase;font-size:0.8rem;color:#64748b;">{{ co.plan }}</span></td>
+          <td>{{ co.created_at.strftime('%Y-%m-%d') if co.created_at else '—' }}</td>
+          <td>
+            {% if co.is_active %}
+              <span class="badge badge-active">نشط</span>
+            {% else %}
+              <span class="badge badge-pending">معلّق</span>
+            {% endif %}
+          </td>
+          <td style="display:flex;gap:0.4rem;">
+            <a href="{{ url_for('superadmin_company_detail', company_id=co.id) }}" class="btn-sm" style="background:#f1f5f9;color:#374151;">عرض</a>
+            {% if co.is_active %}
+              <form method="post" action="{{ url_for('superadmin_deactivate', company_id=co.id) }}" onsubmit="return confirm('تعطيل هذه الشركة؟')">
+                <button class="btn-sm" style="background:#fef2f2;color:#dc2626;">تعطيل</button>
+              </form>
+            {% else %}
+              <form method="post" action="{{ url_for('superadmin_activate', company_id=co.id) }}">
+                <button class="btn-sm" style="background:#dcfce7;color:#16a34a;">تفعيل</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="8" style="text-align:center;color:#94a3b8;padding:2rem;">لا توجد شركات</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Create Company Modal -->
+<div class="modal-backdrop" id="createModal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <h2>إنشاء شركة جديدة</h2>
+    <form method="post" action="{{ url_for('superadmin_create_company') }}">
+      <div class="form-group">
+        <label>اسم الشركة *</label>
+        <input type="text" name="company_name" required placeholder="مثال: شركة الخليج للإنشاءات">
+      </div>
+      <div class="form-group">
+        <label>اسم المسؤول *</label>
+        <input type="text" name="admin_name" required placeholder="الاسم الكامل">
+      </div>
+      <div class="form-group">
+        <label>البريد الإلكتروني *</label>
+        <input type="email" name="admin_email" required placeholder="admin@company.com">
+      </div>
+      <div class="form-group">
+        <label>كلمة المرور *</label>
+        <input type="password" name="admin_password" required minlength="6" placeholder="6 أحرف على الأقل">
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline" onclick="document.getElementById('createModal').classList.remove('open')">إلغاء</button>
+        <button type="submit" class="btn">إنشاء الشركة</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+</body>
+</html>

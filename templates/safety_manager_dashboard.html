@@ -1,0 +1,496 @@
+﻿{% extends "base.html" %}
+{% block title %}Safety Manager — KPI Dashboard{% endblock %}
+{% block content %}
+<style>
+/* ── Safety Manager Dashboard ── */
+.sm-header{background:linear-gradient(135deg,#0f172a 0%,#1e3a5f 100%);
+  color:#fff;border-radius:14px;padding:22px 24px;margin-bottom:20px;
+  display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.sm-header h2{margin:0 0 4px;font-size:22px;font-weight:700}
+.sm-header .sub{font-size:13px;opacity:.7}
+.sm-period-btns{display:flex;gap:6px}
+.sm-period-btns a,.sm-period-btns .period-label,.sm-period-btns .arrow-btn{
+  padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;
+  text-decoration:none;border:1px solid rgba(255,255,255,.3);color:rgba(255,255,255,.8);
+  transition:all .2s;display:inline-flex;align-items:center}
+.sm-period-btns a.active,.sm-period-btns .period-label,
+.sm-period-btns a:hover{background:#fff;color:#0f172a}
+.sm-period-btns .arrow-btn{padding:6px 10px;cursor:pointer}
+.sm-period-btns .arrow-btn.disabled{opacity:.3;cursor:default;pointer-events:none}
+.sm-period-btns .period-label{background:#fff;color:#0f172a;font-size:11px;
+  min-width:120px;justify-content:center;letter-spacing:.3px}
+
+/* KPI tiles */
+.sm-kpi-row{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
+@media(max-width:900px){.sm-kpi-row{grid-template-columns:repeat(3,1fr)}}
+@media(max-width:560px){.sm-kpi-row{grid-template-columns:repeat(2,1fr)}}
+
+.sm-kpi{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px 18px;
+  position:relative;overflow:hidden}
+.sm-kpi-icon{position:absolute;right:14px;top:14px;font-size:22px;opacity:.15}
+.sm-kpi-label{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+  color:#64748b;margin-bottom:6px}
+.sm-kpi-val{font-size:28px;font-weight:800;line-height:1;margin-bottom:4px}
+.sm-kpi-sub{font-size:11px;color:#94a3b8}
+.sm-kpi.blue .sm-kpi-val{color:#2563eb}
+.sm-kpi.green .sm-kpi-val{color:#16a34a}
+.sm-kpi.red .sm-kpi-val{color:#dc2626}
+.sm-kpi.amber .sm-kpi-val{color:#d97706}
+.sm-kpi.purple .sm-kpi-val{color:#7c3aed}
+
+/* Main grid */
+.sm-grid{display:grid;grid-template-columns:1fr 290px;gap:16px;margin-bottom:16px}
+@media(max-width:1100px){.sm-grid{grid-template-columns:1fr}}
+
+/* Officer table */
+.sm-table-wrap{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden}
+.sm-table-head{padding:10px 14px;border-bottom:1px solid #f1f5f9;
+  display:flex;align-items:center;justify-content:space-between}
+.sm-table-head h3{margin:0;font-size:13px;font-weight:700}
+.sm-table{width:100%;border-collapse:collapse;font-size:11px;table-layout:fixed}
+.sm-table thead tr{background:#f8fafc}
+.sm-table th{padding:7px 6px;text-align:left;font-weight:700;color:#475569;
+  font-size:10px;text-transform:uppercase;letter-spacing:.2px;white-space:nowrap;
+  border-bottom:2px solid #e2e8f0;overflow:hidden}
+.sm-table td{padding:7px 6px;border-bottom:1px solid #f1f5f9;vertical-align:middle;
+  overflow:hidden}
+.sm-table tr:last-child td{border-bottom:none}
+.sm-table tr:hover td{background:#f8fafc}
+
+/* fixed column widths */
+.sm-table col.c-rank  {width:30px}
+.sm-table col.c-name  {width:110px}
+.sm-table col.c-ci    {width:52px}
+.sm-table col.c-obs   {width:36px}
+.sm-table col.c-types {width:70px}
+.sm-table col.c-hrisk {width:44px}
+.sm-table col.c-tbt   {width:36px}
+.sm-table col.c-nm    {width:52px}
+.sm-table col.c-bbs   {width:36px}
+.sm-table col.c-insp  {width:44px}
+.sm-table col.c-ca    {width:52px}
+.sm-table col.c-score {width:100px}
+
+/* rank badge */
+.rank{display:inline-flex;align-items:center;justify-content:center;
+  width:22px;height:22px;border-radius:50%;font-size:11px;font-weight:700}
+.rank.gold{background:#fef3c7;color:#d97706}
+.rank.silver{background:#f1f5f9;color:#475569}
+.rank.bronze{background:#fde8d8;color:#c2410c}
+.rank.rest{background:#f1f5f9;color:#94a3b8}
+
+/* trend arrow */
+.trend-up{color:#16a34a;font-weight:700}
+.trend-dn{color:#dc2626;font-weight:700}
+.trend-eq{color:#94a3b8}
+
+/* score bar */
+.score-bar-wrap{display:flex;align-items:center;gap:6px;min-width:110px}
+.score-bar-bg{flex:1;background:#e2e8f0;border-radius:4px;height:8px;min-width:70px}
+.score-bar-fill{height:8px;border-radius:4px;transition:width .4s}
+
+/* obs type pills */
+.pill{display:inline-block;padding:1px 5px;border-radius:8px;font-size:9px;font-weight:700}
+.pill-ua{background:#fee2e2;color:#b91c1c}
+.pill-uc{background:#fef9c3;color:#92400e}
+.pill-po{background:#dcfce7;color:#166534}
+
+/* right panel */
+.sm-panel{display:flex;flex-direction:column;gap:16px}
+.sm-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;padding:16px}
+.sm-card h4{margin:0 0 12px;font-size:13px;font-weight:700;color:#0f172a}
+
+/* alert items */
+.alert-item{padding:8px 0;border-bottom:1px solid #f1f5f9;font-size:12px}
+.alert-item:last-child{border-bottom:none;padding-bottom:0}
+.alert-item .al-title{font-weight:600;color:#0f172a;margin-bottom:2px}
+.alert-item .al-meta{color:#64748b;font-size:11px}
+.badge-H{background:#fee2e2;color:#b91c1c;padding:1px 7px;border-radius:6px;
+  font-size:10px;font-weight:700}
+.badge-overdue{background:#fef3c7;color:#92400e;padding:1px 7px;border-radius:6px;
+  font-size:10px;font-weight:700}
+.badge-inactive{background:#f1f5f9;color:#64748b;padding:2px 8px;border-radius:6px;
+  font-size:11px}
+
+/* chart containers */
+.chart-wrap{position:relative;height:180px}
+
+/* empty state */
+.empty-state{text-align:center;padding:20px;color:#94a3b8;font-size:12px}
+</style>
+
+<!-- Header -->
+<div class="sm-header">
+  <div>
+    <h2>Safety Manager — KPI Dashboard</h2>
+    <div class="sub">{{ period_lbl }}  ·  {{ total_officers }} officers tracked</div>
+  </div>
+  <div>
+    <div class="sm-period-btns">
+      {% if period == 'week' %}
+        <a href="?period=week&week_offset={{ week_offset - 1 }}" class="arrow-btn" title="Previous week">&#8592;</a>
+        <span class="active period-label">{{ period_lbl }}</span>
+        {% if week_offset < 0 %}
+        <a href="?period=week&week_offset={{ week_offset + 1 }}" class="arrow-btn" title="Next week">&#8594;</a>
+        {% else %}
+        <span class="arrow-btn disabled">&#8594;</span>
+        {% endif %}
+        <a href="?period=week&week_offset=0" class="{{ 'active' if week_offset==0 }}" style="margin-left:6px">This Week</a>
+      {% else %}
+        <a href="?period=week&week_offset=0">This Week</a>
+      {% endif %}
+      <a href="?period=month" class="{{ 'active' if period=='month' }}">This Month</a>
+    </div>
+  </div>
+</div>
+
+<!-- KPI tiles -->
+<div class="sm-kpi-row">
+  <div class="sm-kpi green">
+    <div class="sm-kpi-icon">👷</div>
+    <div class="sm-kpi-label">Active Officers</div>
+    <div class="sm-kpi-val">{{ active_officers }}<span style="font-size:14px;font-weight:500;color:#94a3b8">/{{ total_officers }}</span></div>
+    <div class="sm-kpi-sub">{{ compliance_pct }}% compliance</div>
+  </div>
+  <div class="sm-kpi blue">
+    <div class="sm-kpi-icon">👁</div>
+    <div class="sm-kpi-label">Total Observations</div>
+    <div class="sm-kpi-val">{{ total_obs }}</div>
+    <div class="sm-kpi-sub">UA {{ total_ua }}  ·  UC {{ total_uc }}  ·  Pos {{ total_pos }}</div>
+  </div>
+  <div class="sm-kpi {{ 'red' if high_risk_open|length > 0 else 'green' }}">
+    <div class="sm-kpi-icon">⚠</div>
+    <div class="sm-kpi-label">High Risk Open</div>
+    <div class="sm-kpi-val">{{ high_risk_open|length }}</div>
+    <div class="sm-kpi-sub">observations pending</div>
+  </div>
+  <div class="sm-kpi purple">
+    <div class="sm-kpi-icon">📊</div>
+    <div class="sm-kpi-label">Avg Team Score</div>
+    <div class="sm-kpi-val">{{ avg_score }}</div>
+    <div class="sm-kpi-sub">points this period</div>
+  </div>
+  <div class="sm-kpi {{ 'red' if ca_overdue|length > 0 else 'green' }}">
+    <div class="sm-kpi-icon">📋</div>
+    <div class="sm-kpi-label">Overdue CAs</div>
+    <div class="sm-kpi-val">{{ ca_overdue|length }}</div>
+    <div class="sm-kpi-sub">corrective actions</div>
+  </div>
+</div>
+
+<!-- Main grid: table + right panel -->
+<div class="sm-grid">
+
+  <!-- Officer performance table -->
+  <div class="sm-table-wrap">
+    <div class="sm-table-head">
+      <h3>Officer Performance Ranking</h3>
+      <span style="font-size:11px;color:#94a3b8">Sorted by score ↓</span>
+    </div>
+    <div style="overflow-x:auto">
+    <table class="sm-table">
+      <colgroup>
+        <col class="c-rank"><col class="c-name"><col class="c-ci"><col class="c-obs">
+        <col class="c-types"><col class="c-hrisk"><col class="c-tbt"><col class="c-nm">
+        <col class="c-bbs"><col class="c-insp"><col class="c-ca"><col class="c-score">
+      </colgroup>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Officer</th>
+          <th style="text-align:center">Check-ins</th>
+          <th style="text-align:center">Obs</th>
+          <th>Types</th>
+          <th style="text-align:center">H-Risk</th>
+          <th style="text-align:center">TBT</th>
+          <th style="text-align:center">Near Miss</th>
+          <th style="text-align:center">BBS</th>
+          <th style="text-align:center">Insp%</th>
+          <th style="text-align:center">Open CAs</th>
+          <th>Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        {% set rank_cls = 'gold' if loop.index==1 else 'silver' if loop.index==2 else 'bronze' if loop.index==3 else 'rest' %}
+        <tr>
+          <td><span class="rank {{ rank_cls }}">{{ loop.index }}</span></td>
+          <td>
+            <a href="{{ url_for('hse_officer_detail', officer_id=r.officer_id) }}"
+               style="font-weight:600;color:#0f172a;text-decoration:none;font-size:13px">
+              {{ r.officer_name }}
+            </a>
+            {% if r.is_trainee %}
+            <span style="background:#ede9fe;color:#5b21b6;font-size:10px;padding:1px 5px;border-radius:4px;margin-left:4px;font-weight:600">In Training</span>
+            {% elif r.checkin_days == 0 %}
+            <span class="badge-inactive" style="margin-left:4px">No check-in</span>
+            {% endif %}
+          </td>
+          <td style="text-align:center;font-weight:600">{{ r.checkin_days }}</td>
+          <td style="text-align:center;font-weight:700;font-size:14px">{{ r.obs_total }}</td>
+          <td>
+            {% if r.obs_unsafe_act > 0 %}<span class="pill pill-ua">UA {{ r.obs_unsafe_act }}</span> {% endif %}
+            {% if r.obs_unsafe_cond > 0 %}<span class="pill pill-uc">UC {{ r.obs_unsafe_cond }}</span> {% endif %}
+            {% if r.obs_positive > 0 %}<span class="pill pill-po">✓ {{ r.obs_positive }}</span>{% endif %}
+            {% if r.obs_total == 0 %}<span style="color:#cbd5e1">—</span>{% endif %}
+          </td>
+          <td style="text-align:center">
+            {% if r.obs_high > 0 %}
+            <span style="background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">{{ r.obs_high }}</span>
+            {% else %}<span style="color:#cbd5e1">—</span>{% endif %}
+          </td>
+          <td style="text-align:center;font-weight:600">{{ r.tbt or '—' }}</td>
+          <td style="text-align:center">
+            {% if r.nm > 0 %}<span style="color:#dc2626;font-weight:700">{{ r.nm }}</span>
+            {% else %}<span style="color:#cbd5e1">0</span>{% endif %}
+          </td>
+          <td style="text-align:center">{{ r.bbs or '—' }}</td>
+          <td style="text-align:center">
+            {% if r.avg_insp is not none %}{{ r.avg_insp }}%
+            {% else %}<span style="color:#cbd5e1">—</span>{% endif %}
+          </td>
+          <td style="text-align:center">
+            {% if r.ca_open > 0 %}
+            <span style="background:#fef3c7;color:#92400e;padding:2px 7px;border-radius:6px;font-size:11px;font-weight:700">{{ r.ca_open }}</span>
+            {% else %}<span style="color:#cbd5e1">—</span>{% endif %}
+          </td>
+          <td>
+            <div style="display:flex;flex-direction:column;gap:3px">
+              <div style="display:flex;align-items:center;gap:4px">
+                <span style="font-weight:700;font-size:12px;min-width:18px">{{ r.score }}</span>
+                {% if r.trend > 0 %}<span class="trend-up" style="font-size:10px">▲+{{ r.trend }}</span>
+                {% elif r.trend < 0 %}<span class="trend-dn" style="font-size:10px">▼{{ r.trend }}</span>
+                {% else %}<span class="trend-eq" style="font-size:10px">—</span>{% endif %}
+              </div>
+              <div style="background:#e2e8f0;border-radius:3px;height:5px;width:100%">
+                <div style="height:5px;border-radius:3px;width:{{ [r.score / 30 * 100, 100]|min|int }}%;
+                            background:{% if r.score>=20 %}#22c55e{% elif r.score>=10 %}#f59e0b{% else %}#ef4444{% endif %}">
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="12" class="empty-state">No officers found for this period.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="sm-panel">
+
+    <!-- Obs type donut -->
+    <div class="sm-card">
+      <h4>Observation Types</h4>
+      <div class="chart-wrap"><canvas id="obsDonut"></canvas></div>
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:8px;font-size:11px">
+        <span><span style="display:inline-block;width:10px;height:10px;background:#ef4444;border-radius:2px;margin-right:3px"></span>Unsafe Act {{ total_ua }}</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#f59e0b;border-radius:2px;margin-right:3px"></span>Unsafe Cond {{ total_uc }}</span>
+        <span><span style="display:inline-block;width:10px;height:10px;background:#22c55e;border-radius:2px;margin-right:3px"></span>Positive {{ total_pos }}</span>
+      </div>
+    </div>
+
+    <!-- High risk alerts -->
+    <div class="sm-card">
+      <h4>⚠ High Risk — Open ({{ high_risk_open|length }})</h4>
+      {% if high_risk_open %}
+        {% for obs in high_risk_open[:6] %}
+        <div class="alert-item">
+          <div class="al-title">
+            <span class="badge-H">H</span>
+            {{ obs.category or obs.obs_type.replace('_',' ').title() }}
+          </div>
+          <div class="al-meta">
+            {{ oid_name.get(obs.officer_id, '—') }}  ·  {{ obs.date.strftime('%d %b') }}
+            {% if obs.location %}· {{ obs.location }}{% endif %}
+          </div>
+          {% if obs.description %}
+          <div style="margin-top:2px;font-size:11px;color:#475569">{{ obs.description[:80] }}{% if obs.description|length > 80 %}…{% endif %}</div>
+          {% endif %}
+        </div>
+        {% endfor %}
+        {% if high_risk_open|length > 6 %}
+        <div style="text-align:center;font-size:11px;color:#94a3b8;margin-top:6px">
+          + {{ high_risk_open|length - 6 }} more
+        </div>
+        {% endif %}
+      {% else %}
+        <div class="empty-state">No open high-risk observations ✓</div>
+      {% endif %}
+    </div>
+
+    <!-- Overdue CAs -->
+    {% if ca_overdue %}
+    <div class="sm-card">
+      <h4>⏰ Overdue Corrective Actions ({{ ca_overdue|length }})</h4>
+      {% for ca in ca_overdue %}
+      <div class="alert-item">
+        <div class="al-title">
+          <span class="badge-overdue">Overdue</span>
+          {{ ca.action_required[:60] }}{% if ca.action_required|length > 60 %}…{% endif %}
+        </div>
+        <div class="al-meta">
+          Due: {{ ca.due_date.strftime('%d %b %Y') }}
+          {% if ca.assigned_to %} · {{ ca.assigned_to }}{% endif %}
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Inactive officers -->
+    {% if inactive_officers %}
+    <div class="sm-card">
+      <h4>😴 No Activity This Period ({{ inactive_officers|length }})</h4>
+      {% for r in inactive_officers %}
+      <div style="padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:12px">
+        <a href="{{ url_for('hse_officer_detail', officer_id=r.officer_id) }}"
+           style="color:#0f172a;font-weight:600;text-decoration:none">{{ r.officer_name }}</a>
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+
+  </div><!-- /right panel -->
+</div>
+
+<!-- ── Welfare Summary ── -->
+{% if wlf_rows %}
+<div class="sm-table-wrap" style="margin-bottom:16px">
+  <div class="sm-table-head">
+    <h3>Welfare Officers — {{ period_lbl }}</h3>
+    <a href="{{ url_for('welfare_supervisor') }}"
+       style="font-size:11px;color:#0369a1;font-weight:600;text-decoration:none">
+      Full Report →
+    </a>
+  </div>
+  <div style="overflow-x:auto">
+  <table class="sm-table" style="table-layout:auto">
+    <thead>
+      <tr>
+        <th>Officer</th>
+        <th style="text-align:center">Rounds</th>
+        <th style="text-align:center">Avg Score</th>
+        <th style="text-align:center">Findings Closed</th>
+        <th style="text-align:center">Findings Open</th>
+        <th style="text-align:center">Complaints</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in wlf_rows %}
+      <tr {% if r.zero %}style="background:#fef2f2"{% endif %}>
+        <td>
+          <a href="{{ url_for('welfare_home') }}"
+             style="font-weight:600;color:#0f172a;text-decoration:none;font-size:13px">
+            {{ r.officer_name }}
+          </a>
+          {% if r.zero %}<span class="badge-inactive" style="margin-left:4px">No rounds</span>{% endif %}
+        </td>
+        <td style="text-align:center;font-weight:{% if r.rounds > 0 %}700{% else %}400{% endif %}">
+          {% if r.rounds > 0 %}{{ r.rounds }}{% else %}<span style="color:#cbd5e1">0</span>{% endif %}
+        </td>
+        <td style="text-align:center">
+          {% if r.avg_score is not none %}
+            <span style="font-weight:700;color:{% if r.avg_score >= 80 %}#16a34a{% elif r.avg_score >= 60 %}#d97706{% else %}#dc2626{% endif %}">
+              {{ r.avg_score }}%
+            </span>
+          {% else %}<span style="color:#cbd5e1">—</span>{% endif %}
+        </td>
+        <td style="text-align:center">
+          {% if r.finds_closed > 0 %}
+            <span style="color:#16a34a;font-weight:700">{{ r.finds_closed }}</span>
+          {% else %}<span style="color:#cbd5e1">—</span>{% endif %}
+        </td>
+        <td style="text-align:center">
+          {% if r.finds_open > 0 %}
+            <span style="background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">{{ r.finds_open }}</span>
+          {% else %}<span style="color:#16a34a;font-weight:700">✓</span>{% endif %}
+        </td>
+        <td style="text-align:center">
+          {% if r.complaints > 0 %}
+            <span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700">{{ r.complaints }}</span>
+          {% else %}<span style="color:#cbd5e1">—</span>{% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6" class="empty-state">No welfare officers found.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Bottom charts row -->
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+  <!-- 6-week team trend -->
+  <div class="sm-card">
+    <h4>Team Score — 6 Week Trend</h4>
+    <div class="chart-wrap"><canvas id="teamTrend"></canvas></div>
+  </div>
+  <!-- Top 5 officers trend -->
+  <div class="sm-card">
+    <h4>Top 5 Officers — Weekly Score</h4>
+    <div class="chart-wrap"><canvas id="topOfficers"></canvas></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+  const COLORS = ['#2563eb','#16a34a','#d97706','#7c3aed','#0891b2','#db2777'];
+
+  // Obs donut
+  new Chart(document.getElementById('obsDonut'), {
+    type: 'doughnut',
+    data: {
+      labels: ['Unsafe Act', 'Unsafe Condition', 'Positive'],
+      datasets:[{ data:[{{ total_ua }},{{ total_uc }},{{ total_pos }}],
+        backgroundColor:['#ef4444','#f59e0b','#22c55e'],
+        borderWidth:2, borderColor:'#fff' }]
+    },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } } }
+  });
+
+  // 6-week team trend
+  const wLabels = {{ weekly_labels|safe }};
+  const wAvg   = {{ weekly_avg|safe }};
+  new Chart(document.getElementById('teamTrend'), {
+    type:'line',
+    data:{ labels:wLabels, datasets:[{
+      label:'Avg Score', data:wAvg,
+      borderColor:'#2563eb', backgroundColor:'rgba(37,99,235,.1)',
+      fill:true, tension:.35, pointRadius:4, pointBackgroundColor:'#2563eb'
+    }]},
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ display:false } },
+      scales:{ y:{ beginAtZero:true, grid:{ color:'#f1f5f9' } },
+               x:{ grid:{ display:false } } } }
+  });
+
+  // Top 5 officers
+  const officerData = {{ officer_trend_data|safe }};
+  new Chart(document.getElementById('topOfficers'), {
+    type:'line',
+    data:{
+      labels: wLabels,
+      datasets: officerData.map((o,i)=>({
+        label: o.name,
+        data: o.data,
+        borderColor: COLORS[i % COLORS.length],
+        backgroundColor: 'transparent',
+        tension:.35, pointRadius:3,
+        borderWidth:2
+      }))
+    },
+    options:{ responsive:true, maintainAspectRatio:false,
+      plugins:{ legend:{ position:'bottom', labels:{ font:{ size:10 }, boxWidth:12 } } },
+      scales:{ y:{ beginAtZero:true, grid:{ color:'#f1f5f9' } },
+               x:{ grid:{ display:false } } } }
+  });
+})();
+</script>
+{% endblock %}

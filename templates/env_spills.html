@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>سجل الانسكابات</h1>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}<div class="alert alert-{{ cat }}">{{ msg }}</div>{% endfor %}
+{% endwith %}
+
+<section class="card">
+  <h2>تسجيل انسكاب</h2>
+  <form method="post" style="display:grid;gap:.5rem;grid-template-columns:1fr 1fr">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <input type="hidden" name="action" value="add">
+    <label>تاريخ الانسكاب *
+      <input type="date" name="spill_date" required>
+    </label>
+    <label>المادة المنسكبة *
+      <input type="text" name="substance" required placeholder="مثال: زيت هيدروليكي">
+    </label>
+    <label>الكمية (لتر)
+      <input type="number" name="quantity_l" step="0.1" min="0">
+    </label>
+    <label>الموقع *
+      <input type="text" name="location" required placeholder="وصف الموقع">
+    </label>
+    <label>رمز المنطقة
+      <input type="text" name="area_code">
+    </label>
+    <label style="display:flex;align-items:center;gap:.5rem">
+      <input type="checkbox" name="contained"> تم الاحتواء
+    </label>
+    <label style="display:flex;align-items:center;gap:.5rem">
+      <input type="checkbox" name="reported_to_env"> أُبلغت الجهة البيئية
+    </label>
+    <label style="grid-column:1/-1">إجراء التنظيف
+      <textarea name="cleanup_action" rows="2"></textarea>
+    </label>
+    <div style="grid-column:1/-1">
+      <button type="submit" class="btn primary">حفظ</button>
+    </div>
+  </form>
+</section>
+
+{% if spills %}
+<table class="rtable" style="margin-top:1rem">
+  <thead>
+    <tr><th>التاريخ</th><th>المادة</th><th>الكمية (ل)</th><th>الموقع</th><th>محتوى</th><th>الحالة</th><th></th></tr>
+  </thead>
+  <tbody>
+  {% for s in spills %}
+    <tr>
+      <td>{{ s.spill_date }}</td>
+      <td>{{ s.substance }}</td>
+      <td>{{ s.quantity_l or '—' }}</td>
+      <td>{{ s.location }}</td>
+      <td>{{ '✅' if s.contained else '❌' }}</td>
+      <td>{% if s.status == 'closed' %}<span style="color:green">مغلق</span>{% else %}<span style="color:red">مفتوح</span>{% endif %}</td>
+      <td>
+        {% if s.status != 'closed' %}
+        <form method="post">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+          <input type="hidden" name="action" value="close">
+          <input type="hidden" name="spill_id" value="{{ s.id }}">
+          <button type="submit" class="btn small">إغلاق</button>
+        </form>
+        {% endif %}
+      </td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="hint" style="margin-top:1rem">لا توجد انسكابات مسجلة.</p>
+{% endif %}
+{% endblock %}

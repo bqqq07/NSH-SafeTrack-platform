@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+  <h2 style="margin:0">Near Miss Reports</h2>
+  <a href="{{ url_for('hse_nearmiss_new') }}" class="btn primary">+ New Near Miss</a>
+</div>
+
+{% if items %}
+{% for item in items %}
+<div class="card" style="border-left:4px solid var(--danger)">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:6px">
+    <strong>{{ item.date.strftime('%d %b %Y') }}</strong>
+    <div style="display:flex;align-items:center;gap:6px">
+      {% if item.reported_to %}
+      <span style="font-size:12px;color:var(--muted)">Reported to: {{ item.reported_to }}</span>
+      {% endif %}
+      <a href="{{ url_for('hse_nearmiss_edit', nm_id=item.id) }}" class="btn" style="padding:3px 10px;font-size:12px">Edit</a>
+      <form method="post" action="{{ url_for('hse_nearmiss_delete', nm_id=item.id) }}"
+            onsubmit="return confirm('Delete this near miss report?')" style="display:inline">
+        <button type="submit" class="btn danger" style="padding:3px 10px;font-size:12px">Delete</button>
+      </form>
+    </div>
+  </div>
+  {% if item.location %}<p style="margin:4px 0 0;font-size:13px;color:var(--muted)">📍 {{ item.location }}</p>{% endif %}
+  {% if item.description %}<p style="margin:6px 0 0"><strong>Description:</strong> {{ item.description }}</p>{% endif %}
+  {% if item.immediate_cause %}<p style="margin:4px 0 0;font-size:13px"><strong>Immediate cause:</strong> {{ item.immediate_cause }}</p>{% endif %}
+  {% if item.action_taken %}<p style="margin:4px 0 0;font-size:13px"><strong>Action taken:</strong> {{ item.action_taken }}</p>{% endif %}
+  {% if item.photo_path %}
+  <div style="margin-top:8px">
+    <a href="{{ url_for('hse_photo', filename=item.photo_path) }}" target="_blank">
+      <img src="{{ url_for('hse_photo', filename=item.photo_path) }}"
+           style="width:100px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+    </a>
+  </div>
+  {% else %}
+  <div style="margin-top:8px">
+    <a href="{{ url_for('hse_nearmiss_edit', nm_id=item.id) }}"
+       style="display:inline-flex;align-items:center;gap:5px;font-size:12px;
+              color:#92400e;background:#fef9c3;border:1px solid #fbbf24;
+              padding:3px 10px;border-radius:6px;text-decoration:none">
+      📷 Add Photo
+    </a>
+  </div>
+  {% endif %}
+</div>
+{% endfor %}
+
+{% if pagination and pagination.pages > 1 %}
+<div style="display:flex;justify-content:center;gap:6px;margin-top:12px;flex-wrap:wrap">
+  {% if pagination.has_prev %}
+  <a href="{{ url_for('hse_nearmiss_list', page=pagination.prev_num) }}" class="btn">‹ Prev</a>
+  {% endif %}
+  {% for p in pagination.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+    {% if p %}
+    <a href="{{ url_for('hse_nearmiss_list', page=p) }}"
+       class="btn {{ 'primary' if p == pagination.page else '' }}">{{ p }}</a>
+    {% else %}
+    <span style="padding:8px 6px;color:var(--muted)">…</span>
+    {% endif %}
+  {% endfor %}
+  {% if pagination.has_next %}
+  <a href="{{ url_for('hse_nearmiss_list', page=pagination.next_num) }}" class="btn">Next ›</a>
+  {% endif %}
+</div>
+{% endif %}
+
+{% else %}
+<div class="card"><p class="muted">No near miss reports recorded yet.</p></div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Site · Supervisors Requests</h1>
+<p class="muted">Requests created by your supervisors.</p>
+
+<div class="card">
+  <table style="width:100%; border-collapse:collapse;">
+    <thead>
+      <tr style="background:#f4f7fb;">
+        <th style="padding:.6rem;">Supervisor</th>
+        <th style="padding:.6rem;">Title</th>
+        <th style="padding:.6rem;">Status</th>
+        <th style="padding:.6rem;">Created at</th>
+      </tr>
+    </thead>
+    <tbody>
+      {# requests = list of RequestItem joined with creator User in the route, or just request.created_by #}
+      {% for r in requests %}
+      <tr style="border-top:1px solid #edf0f4;">
+        <td style="padding:.5rem .6rem;">
+          {{ r.creator.name if r.creator else '—' }}
+          {% if r.creator and r.creator.supervisor_code %} ({{ r.creator.supervisor_code }}){% endif %}
+        </td>
+        <td style="padding:.5rem .6rem;">{{ r.title or r.subject or 'Request' }}</td>
+        <td style="padding:.5rem .6rem;">{{ r.status or 'Pending' }}</td>
+        <td style="padding:.5rem .6rem;">{{ r.created_at.strftime("%d/%m/%Y %H:%M") if r.created_at else '' }}</td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="4" style="padding:1rem; text-align:center;">No requests found.</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

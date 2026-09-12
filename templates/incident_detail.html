@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+  <h1>حادثة #{{ inc.id }}</h1>
+  {% if inc.status != 'closed' %}
+  <form method="post" action="{{ url_for('incident_close', inc_id=inc.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <button type="submit" class="btn danger" onclick="return confirm('إغلاق الحادثة؟')">إغلاق الحادثة</button>
+  </form>
+  {% endif %}
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}<div class="alert alert-{{ cat }}">{{ msg }}</div>{% endfor %}
+{% endwith %}
+
+<!-- معلومات الحادثة -->
+<section class="card">
+  <h2>تفاصيل الحادثة</h2>
+  <table class="rtable">
+    <tr><th>التاريخ</th><td>{{ inc.incident_date }} {% if inc.incident_time %}{{ inc.incident_time }}{% endif %}</td></tr>
+    <tr><th>الموقع</th><td>{{ inc.location }} {% if inc.area_code %}({{ inc.area_code }}){% endif %}</td></tr>
+    <tr><th>النوع</th><td>{{ inc.incident_type }}</td></tr>
+    <tr><th>الخطورة</th><td>{{ inc.severity or '—' }}</td></tr>
+    <tr><th>الحالة</th><td>{{ inc.status }}</td></tr>
+    <tr><th>المُبلِّغ</th><td>{{ inc.reporter.name if inc.reporter else '—' }}</td></tr>
+    {% if inc.injured_name %}<tr><th>المصاب</th><td>{{ inc.injured_name }} {% if inc.injured_company %}/ {{ inc.injured_company }}{% endif %}</td></tr>{% endif %}
+    {% if inc.witness_names %}<tr><th>الشهود</th><td>{{ inc.witness_names }}</td></tr>{% endif %}
+  </table>
+  <div style="margin-top:.75rem">
+    <strong>الوصف:</strong>
+    <p style="margin:.25rem 0">{{ inc.description }}</p>
+    {% if inc.immediate_cause %}
+    <strong>السبب المباشر:</strong>
+    <p style="margin:.25rem 0">{{ inc.immediate_cause }}</p>
+    {% endif %}
+  </div>
+</section>
+
+<!-- تحليل 5 أسباب -->
+<section class="card">
+  <h2>تحليل 5 أسباب (Why Analysis)</h2>
+  {% if inc.why_analysis and inc.why_analysis.why_1 %}
+  <table class="rtable">
+    {% for n in [1,2,3,4,5] %}
+      {% set why = inc.why_analysis['why_' ~ n] %}
+      {% if why %}<tr><th>لماذا {{ n }}</th><td>{{ why }}</td></tr>{% endif %}
+    {% endfor %}
+    {% if inc.why_analysis.root_cause %}
+    <tr><th>السبب الجذري</th><td><strong>{{ inc.why_analysis.root_cause }}</strong></td></tr>
+    {% endif %}
+  </table>
+  {% endif %}
+
+  {% if inc.status != 'closed' %}
+  <form method="post" action="{{ url_for('incident_investigate', inc_id=inc.id) }}" style="margin-top:.75rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <div style="display:grid;gap:.5rem">
+      {% for n in [1,2,3,4,5] %}
+      <label>لماذا {{ n }}
+        <input type="text" name="why_{{ n }}"
+               value="{{ inc.why_analysis['why_' ~ n] if inc.why_analysis else '' }}"
+               placeholder="أدخل السبب {{ n }}">
+      </label>
+      {% endfor %}
+      <label>السبب الجذري
+        <textarea name="root_cause" rows="2" placeholder="ملخص السبب الجذري">{{ inc.why_analysis.root_cause if inc.why_analysis else '' }}</textarea>
+      </label>
+    </div>
+    <button type="submit" class="btn primary" style="margin-top:.5rem">حفظ التحليل</button>
+  </form>
+  {% endif %}
+</section>
+
+<!-- الإجراءات التصحيحية -->
+<section class="card">
+  <h2>الإجراءات التصحيحية</h2>
+  {% if inc.actions %}
+  <table class="rtable">
+    <thead><tr><th>الوصف</th><th>المسؤول</th><th>الموعد</th><th>الحالة</th><th></th></tr></thead>
+    <tbody>
+    {% for a in inc.actions %}
+      <tr>
+        <td>{{ a.description }}</td>
+        <td>{{ a.assignee.name if a.assignee else '—' }}</td>
+        <td>{{ a.due_date or '—' }}</td>
+        <td>{% if a.status == 'closed' %}<span style="color:green">✅</span>{% else %}مفتوح{% endif %}</td>
+        <td>
+          {% if a.status != 'closed' %}
+          <form method="post" action="{{ url_for('incident_action_close', inc_id=inc.id, act_id=a.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+            <button type="submit" class="btn small">إغلاق</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if inc.status != 'closed' %}
+  <form method="post" action="{{ url_for('incident_action_add', inc_id=inc.id) }}" style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem;align-items:flex-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <label style="flex:2;min-width:200px">وصف الإجراء *
+      <input type="text" name="description" required placeholder="الإجراء المطلوب...">
+    </label>
+    <label>المسؤول
+      <select name="assigned_to">
+        <option value="">—</option>
+        {% for u in users %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>الموعد النهائي
+      <input type="date" name="due_date">
+    </label>
+    <button type="submit" class="btn primary">إضافة</button>
+  </form>
+  {% endif %}
+</section>
+
+<!-- الدروس المستفادة -->
+<section class="card">
+  <h2>الدروس المستفادة</h2>
+  {% for l in inc.lessons %}
+  <div style="padding:.5rem;border-bottom:1px solid var(--border,#ddd)">
+    <p style="margin:0">{{ l.lesson }}</p>
+    {% if l.shared_with %}<small style="color:var(--muted,#666)">مشارك مع: {{ l.shared_with }}</small>{% endif %}
+  </div>
+  {% endfor %}
+  {% if not inc.lessons %}<p class="hint">لا توجد دروس مستفادة بعد.</p>{% endif %}
+
+  {% if inc.status != 'closed' %}
+  <form method="post" action="{{ url_for('incident_lesson_add', inc_id=inc.id) }}" style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem;align-items:flex-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <label style="flex:2;min-width:200px">الدرس المستفاد
+      <textarea name="lesson" rows="2" required placeholder="ما الذي تعلمناه؟"></textarea>
+    </label>
+    <label>مشارك مع
+      <input type="text" name="shared_with" placeholder="مثال: safety_officer,safety_supervisor">
+    </label>
+    <button type="submit" class="btn primary">إضافة</button>
+  </form>
+  {% endif %}
+</section>
+{% endblock %}

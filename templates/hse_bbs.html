@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>BBS Daily Count</h2>
+
+<div class="card" style="max-width:480px">
+  <h3 style="margin-top:0">{{ 'Update Today\'s Count' if existing else 'Enter Today\'s Count' }}</h3>
+  {% if existing %}
+  <p style="color:var(--success)">✓ Today: <strong>{{ existing.card_count }}</strong> BBS cards
+    {% if existing.notes %} — {{ existing.notes }}{% endif %}
+  </p>
+  {% endif %}
+  <form method="post">
+    <label>Date
+      <input type="date" name="date" value="{{ today.isoformat() }}" required>
+    </label>
+    <label>Number of BBS Cards Completed *
+      <input type="number" name="card_count" min="0"
+             value="{{ existing.card_count if existing else '' }}" required>
+    </label>
+    <label>Notes (optional)
+      <textarea name="notes" rows="2" placeholder="Optional notes...">{{ existing.notes or '' }}</textarea>
+    </label>
+    <button type="submit" class="btn primary" style="width:100%;margin-top:8px">
+      {{ 'Update' if existing else 'Save' }}
+    </button>
+  </form>
+</div>
+
+{% if history %}
+<div class="card" style="max-width:480px">
+  <h3 style="margin-top:0">Recent History (last 30 days)</h3>
+  <table style="width:100%;border-collapse:collapse">
+    <thead>
+      <tr style="background:var(--bg)">
+        <th style="padding:8px;text-align:left;font-size:13px">Date</th>
+        <th style="padding:8px;text-align:right;font-size:13px">Cards</th>
+        <th style="padding:8px;text-align:left;font-size:13px">Notes</th>
+        <th style="padding:8px;font-size:13px"></th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for rec in history %}
+    <tr style="border-top:1px solid var(--border)">
+      <td style="padding:8px;font-size:13px">{{ rec.date.strftime('%d %b %Y') }}</td>
+      <td style="padding:8px;text-align:right;font-weight:600">{{ rec.card_count }}</td>
+      <td style="padding:8px;font-size:13px;color:var(--muted)">{{ rec.notes or '' }}</td>
+      <td style="padding:6px;text-align:right">
+        <form method="post" action="{{ url_for('hse_bbs_delete', bbs_id=rec.id) }}"
+              onsubmit="return confirm('Delete this BBS record?')" style="display:inline">
+          <button type="submit" class="btn danger" style="padding:2px 8px;font-size:11px">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr style="border-top:2px solid var(--border)">
+        <td style="padding:8px;font-weight:600;font-size:13px">Total</td>
+        <td style="padding:8px;text-align:right;font-weight:600">
+          {{ history | sum(attribute='card_count') }}
+        </td>
+        <td colspan="2"></td>
+      </tr>
+    </tfoot>
+  </table>
+</div>
+{% endif %}
+{% endblock %}

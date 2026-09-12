@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ sup.name }}{% endblock %}
+{% block content %}
+{% include "partials/_rtable.html" %}
+<section class="report">
+  <header class="report-header">
+    <div class="report-head-left">
+      <img class="report-logo" src="{{ url_for('static', filename='img/logo.png') }}" alt="Company logo">
+    </div>
+    <div class="report-head-center">
+      <h1>{{ sup.name }} <span class="muted mono">({{ sup.supervisor_code }})</span></h1>
+      <p class="muted">Week: {{ ws }} → {{ we }}</p>
+      <div class="no-print" style="display:flex;gap:8px;align-items:center;justify-content:center;margin-top:6px">
+        <a class="btn" href="{{ url_for('site_supervisor_detail', sup_id=sup.id, ws=prev_ws.isoformat()) }}">‹ Previous week</a>
+        {% if not is_current_week %}
+        <a class="btn" href="{{ url_for('site_supervisor_detail', sup_id=sup.id) }}">This week</a>
+        {% endif %}
+        <a class="btn" href="{{ url_for('site_supervisor_detail', sup_id=sup.id, ws=next_ws.isoformat()) }}">Next week ›</a>
+      </div>
+    </div>
+    <div class="report-head-right"></div>
+  </header>
+
+  <section class="card">
+    <div class="grid4">
+      <div>
+        <div class="muted">Employees</div>
+        <div style="font-size:22px;font-weight:700">{{ kpi_target }}</div>
+      </div>
+      <div>
+        <div class="muted">Evaluated (this week)</div>
+        <div style="font-size:22px;font-weight:700">{{ kpi_done }} / {{ kpi_target }}</div>
+      </div>
+      <div>
+        <div class="muted">Coverage%</div>
+        <div style="font-size:22px;font-weight:700">{% if kpi_coverage is not none %}{{ '%.0f'|format(kpi_coverage) }}%{% else %}—{% endif %}</div>
+      </div>
+      <div>
+        <div class="muted">Avg Score (this week)</div>
+        <div style="font-size:22px;font-weight:700">{{ avg_score if avg_score is not none else '—' }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Not Evaluated Yet ({{ not_done|length }})</h2>
+    <div class="table-wrap"><table class="table rtable">
+      <thead><tr><th>Name</th><th>Emp. No</th><th>Department</th></tr></thead>
+      <tbody>
+        {% for e in not_done %}
+        <tr>
+          <td class="name" data-l="Name">
+            <a href="{{ url_for('site_employee_profile', emp_id=e.id) }}"
+               style="color:#1d4ed8;text-decoration:none;font-weight:700">{{ e.name }}</a>
+          </td>
+          <td class="mono" data-l="Emp. No">{{ e.emp_number }}</td>
+          <td data-l="Department">{{ e.department or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="center muted empty-row" data-l="">All employees evaluated this week.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+
+  <section class="card">
+    <h2>Evaluated ({{ done|length }})</h2>
+    <div class="table-wrap"><table class="table rtable">
+      <thead><tr><th>Name</th><th>Emp. No</th><th>Department</th></tr></thead>
+      <tbody>
+        {% for e in done %}
+        <tr>
+          <td class="name" data-l="Name">
+            <a href="{{ url_for('site_employee_profile', emp_id=e.id) }}"
+               style="color:#1d4ed8;text-decoration:none;font-weight:700">{{ e.name }}</a>
+          </td>
+          <td class="mono" data-l="Emp. No">{{ e.emp_number }}</td>
+          <td data-l="Department">{{ e.department or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="center muted empty-row" data-l="">No evaluations yet this week.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+
+  <div class="no-print actions">
+    <a class="btn" href="{{ url_for('site_supervisors') }}">Back</a>
+    <a class="btn primary" href="{{ url_for('site_manage_employees', sup_id=sup.id) }}">Manage Employees</a>
+  </div>
+</section>
+{% endblock %}

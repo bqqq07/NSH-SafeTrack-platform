@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}Monthly Card — {{ d.u.name }}{% endblock %}
+{% block content %}
+<style>
+  @media print {
+    .no-print { display:none !important }
+    body { background:#fff }
+    .card-wrap { box-shadow:none;border:1px solid #ccc }
+  }
+  .m-tile{flex:1;min-width:90px;border-radius:10px;padding:12px;text-align:center}
+  .m-tile .v{font-size:1.6rem;font-weight:900}
+  .m-tile .l{font-size:.75rem;color:#64748b;margin-top:3px}
+</style>
+
+<div style="max-width:700px;margin:0 auto">
+  <!-- Actions bar (no-print) -->
+  <div class="no-print" style="display:flex;justify-content:space-between;align-items:center;
+                               margin-bottom:12px;flex-wrap:wrap;gap:8px">
+    <a href="{{ url_for('welfare_monthly_overview', month=month_str) }}"
+       style="color:#64748b;text-decoration:none;font-size:.9rem">← Back to overview</a>
+    <button onclick="window.print()"
+            style="padding:9px 18px;border:0;background:#0f172a;color:#fff;
+                   border-radius:9px;font-weight:700;font-size:.9rem;cursor:pointer">
+      🖨️ Print card
+    </button>
+  </div>
+
+  <!-- Card -->
+  <div class="card-wrap"
+       style="border:1px solid #e2e8f0;border-radius:16px;padding:24px;background:#fff;
+              box-shadow:0 4px 16px rgba(0,0,0,.07)">
+
+    <!-- Header row -->
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;
+                flex-wrap:wrap;gap:12px;margin-bottom:20px">
+      <div>
+        <div style="font-size:1.4rem;font-weight:900;color:#0f172a">{{ d.u.name }}</div>
+        <div style="color:#64748b;font-size:.9rem;margin-top:2px">
+          {{ month_start.strftime('%B %Y') }}
+        </div>
+        {% if d.level %}
+          <div style="margin-top:6px">
+            <span style="background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;
+                         border-radius:20px;padding:4px 12px;font-size:.82rem;font-weight:700">
+              🎯 Level {{ d.level_no }} / {{ d.level_total }} — {{ d.level.title }}
+            </span>
+          </div>
+        {% endif %}
+      </div>
+
+      {% if d.avg_score is not none %}
+        <div style="text-align:center;background:{{ '#dcfce7' if d.avg_score >= 80 else ('#fef9c3' if d.avg_score >= 60 else '#fee2e2') }};
+                    border-radius:14px;padding:14px 22px">
+          <div style="font-size:2rem;font-weight:900;
+                      color:{{ '#166534' if d.avg_score >= 80 else ('#854d0e' if d.avg_score >= 60 else '#991b1b') }}">
+            {{ d.avg_score }}%
+          </div>
+          <div style="font-size:.78rem;color:#64748b">Avg score</div>
+        </div>
+      {% endif %}
+    </div>
+
+    <!-- Main stats grid -->
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px">
+      <div class="m-tile" style="background:#f8fafc">
+        <div class="v">{{ d.rounds }}</div>
+        <div class="l">Rounds</div>
+      </div>
+      {% if d.best_score is not none %}
+      <div class="m-tile" style="background:#f0fdf4">
+        <div class="v" style="color:#166534">{{ d.best_score }}%</div>
+        <div class="l">Best round</div>
+      </div>
+      {% endif %}
+      {% if d.worst_score is not none and d.worst_score != d.best_score %}
+      <div class="m-tile" style="background:#fff7f7">
+        <div class="v" style="color:#991b1b">{{ d.worst_score }}%</div>
+        <div class="l">Lowest round</div>
+      </div>
+      {% endif %}
+      <div class="m-tile" style="background:#f8fafc">
+        <div class="v">{{ d.finds_new }}</div>
+        <div class="l">Findings logged</div>
+      </div>
+      <div class="m-tile" style="background:{{ '#f0fdf4' if d.finds_closed > 0 else '#f8fafc' }}">
+        <div class="v" style="color:{{ '#166534' if d.finds_closed > 0 else '#0f172a' }}">{{ d.finds_closed }}</div>
+        <div class="l">Closed</div>
+      </div>
+      <div class="m-tile" style="background:{{ '#fee2e2' if d.finds_open > 0 else '#f8fafc' }}">
+        <div class="v" style="color:{{ '#991b1b' if d.finds_open > 0 else '#94a3b8' }}">{{ d.finds_open }}</div>
+        <div class="l">Still open</div>
+      </div>
+      <div class="m-tile" style="background:#f8fafc">
+        <div class="v">{{ d.complaints }}</div>
+        <div class="l">Complaints</div>
+      </div>
+      <div class="m-tile" style="background:#f8fafc">
+        <div class="v">{{ d.weekly_shared }}</div>
+        <div class="l">Weekly reports</div>
+      </div>
+    </div>
+
+    <!-- On-time closure -->
+    {% if d.on_time_pct is not none %}
+    <div style="margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;
+                  font-size:.85rem;font-weight:700;color:#475569">
+        <span>On-time finding closure</span>
+        <span style="color:{{ '#166534' if d.on_time_pct >= 80 else '#991b1b' }}">{{ d.on_time_pct }}%</span>
+      </div>
+      <div style="background:#e2e8f0;border-radius:8px;height:10px;overflow:hidden">
+        <div style="height:100%;border-radius:8px;width:{{ d.on_time_pct }}%;
+                    background:{{ '#22c55e' if d.on_time_pct >= 80 else '#f97316' if d.on_time_pct >= 50 else '#ef4444' }}">
+        </div>
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Units covered -->
+    {% if d.units_covered %}
+    <div style="margin-bottom:16px">
+      <div style="font-size:.85rem;font-weight:700;color:#475569;margin-bottom:6px">Units covered</div>
+      <div>
+        {% for unit, count in d.units_covered.items() %}
+          <span style="display:inline-block;background:#f1f5f9;border-radius:6px;
+                       padding:4px 10px;margin:3px;font-size:.85rem;font-weight:600;color:#0f172a">
+            {{ unit }}
+            {% if count > 1 %}<span style="color:#64748b">×{{ count }}</span>{% endif %}
+          </span>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+
+    <!-- Divider + footer -->
+    <div style="border-top:1px solid #e2e8f0;margin-top:8px;padding-top:12px;
+                display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div style="font-size:.8rem;color:#94a3b8">
+        NSH SafeTrack — generated {{ month_start.strftime('%B %Y') }}
+      </div>
+      {% if d.level_status %}
+        <span style="padding:3px 10px;border-radius:10px;font-size:.8rem;font-weight:700;
+                     background:{{ '#dcfce7' if d.level_status=='active' else ('#fef3c7' if d.level_status=='pending_gate' else '#f1f5f9') }};
+                     color:{{ '#166534' if d.level_status=='active' else ('#92400e' if d.level_status=='pending_gate' else '#475569') }}">
+          {{ d.level_status | replace('_',' ') | title }}
+        </span>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

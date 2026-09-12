@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NSH — Offline</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #0f172a;
+      color: #e2e8f0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+      text-align: center;
+    }
+    .icon { font-size: 56px; margin-bottom: 20px; }
+    h1 { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+    p  { font-size: 15px; color: #94a3b8; line-height: 1.6; max-width: 320px; margin: 0 auto 24px; }
+    .links { display: flex; flex-direction: column; gap: 10px; width: 100%; max-width: 280px; }
+    a {
+      display: block;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      text-decoration: none;
+      padding: 13px 16px;
+      border-radius: 10px;
+      font-size: 14px;
+      font-weight: 500;
+    }
+    a:hover { background: #334155; }
+    .note {
+      margin-top: 28px;
+      font-size: 12px;
+      color: #475569;
+      max-width: 300px;
+    }
+    .queue-count {
+      display: inline-block;
+      background: #92400e;
+      color: #fef9c3;
+      font-size: 12px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 20px;
+      margin-top: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="icon">📡</div>
+  <h1>No Connection</h1>
+  <p>
+    You're offline. You can still fill forms — they'll be saved on your device and uploaded automatically when you reconnect.
+  </p>
+
+  <div id="queueNote"></div>
+
+  <div class="links">
+    <a href="/location">📍 Register Location</a>
+    <a href="/hse/observation/new">👁 New Observation</a>
+    <a href="/hse/tbt/new">📋 New TBT / SGL</a>
+    <a href="/hse/nearmiss/new">⚠️ New Near Miss</a>
+    <a href="/ptw-training">📚 PTW Training</a>
+    <a href="/hse/observations">My Observations</a>
+    <a href="/hse/tbt">My TBT List</a>
+    <a href="/hse/nearmiss">Near Miss List</a>
+  </div>
+
+  <p class="note">
+    These pages must have been visited at least once while online to load offline.
+  </p>
+
+  <script>
+    try {
+      var q = JSON.parse(localStorage.getItem('nsh_offline_queue') || '[]');
+      if (q.length) {
+        var el = document.getElementById('queueNote');
+        el.innerHTML = '<span class="queue-count">⏳ ' + q.length + ' record' +
+          (q.length > 1 ? 's' : '') + ' waiting to sync</span>';
+      }
+    } catch(e) {}
+  </script>
+</body>
+</html>

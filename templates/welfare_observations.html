@@ -1,0 +1,225 @@
+﻿{% extends "base.html" %}
+{% block title %}Observations{% endblock %}
+{% block content %}
+<style>
+.obs-card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;
+  margin-bottom:12px;overflow:hidden;transition:box-shadow .15s}
+.obs-card:hover{box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.obs-card-header{display:flex;align-items:flex-start;justify-content:space-between;
+  gap:10px;padding:14px 16px;cursor:pointer;user-select:none}
+.obs-card-body{padding:0 16px 14px;display:none}
+.obs-card.expanded .obs-card-body{display:block}
+.obs-card-header::after{content:"▾";font-size:1.1rem;color:#94a3b8;flex-shrink:0;margin-top:2px;transition:transform .2s}
+.obs-card.expanded .obs-card-header::after{transform:rotate(180deg)}
+.badge-open{color:#dc2626;font-size:.75rem;font-weight:700}
+.badge-closed{color:#16a34a;font-size:.75rem;font-weight:700}
+.risk-H{background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:700}
+.risk-M{background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:700}
+.risk-L{background:#dcfce7;color:#166534;padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:700}
+.type-unsafe_act{background:#fef2f2;color:#b91c1c;padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:600}
+.type-unsafe_condition{background:#fffbeb;color:#92400e;padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:600}
+.type-positive{background:#f0fdf4;color:#166534;padding:2px 8px;border-radius:6px;font-size:.75rem;font-weight:600}
+.photo-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.photo-thumb{width:90px;height:70px;object-fit:cover;border-radius:8px;border:1px solid #e2e8f0;cursor:pointer}
+</style>
+
+<div style="max-width:860px;margin:0 auto">
+
+  <!-- Header -->
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-bottom:16px">
+    <div>
+      <h2 style="margin:0 0 2px">My Observations</h2>
+      <p style="margin:0;color:#64748b;font-size:.88rem">Click any card to expand full details</p>
+    </div>
+    <a href="{{ url_for('welfare_observation_new') if g.role == 'safety_welfare' else url_for('env_observation_new') }}"
+       class="btn primary" style="font-size:.9rem">+ New Observation</a>
+  </div>
+
+  <!-- Status filter -->
+  <div style="display:flex;gap:8px;margin-bottom:18px">
+    <a href="{{ url_for('welfare_observation_list', status='open') }}"
+       style="padding:7px 18px;border-radius:8px;font-weight:700;font-size:.88rem;text-decoration:none;
+              {% if status_filter == 'open' %}background:#dc2626;color:#fff{% else %}background:#f8fafc;color:#374151;border:1px solid #e2e8f0{% endif %}">
+      Open
+    </a>
+    <a href="{{ url_for('welfare_observation_list', status='closed') }}"
+       style="padding:7px 18px;border-radius:8px;font-weight:700;font-size:.88rem;text-decoration:none;
+              {% if status_filter == 'closed' %}background:#16a34a;color:#fff{% else %}background:#f8fafc;color:#374151;border:1px solid #e2e8f0{% endif %}">
+      Closed
+    </a>
+    <a href="{{ url_for('welfare_observation_list') }}"
+       style="padding:7px 18px;border-radius:8px;font-weight:700;font-size:.88rem;text-decoration:none;
+              {% if status_filter not in ('open','closed') %}background:#1e40af;color:#fff{% else %}background:#f8fafc;color:#374151;border:1px solid #e2e8f0{% endif %}">
+      All
+    </a>
+  </div>
+
+  {% if obs_list %}
+    {% for obs in obs_list %}
+    {% set photos = obs_photos.get(obs.id, []) %}
+    <div class="obs-card" id="obs-{{ obs.id }}" onclick="toggleCard({{ obs.id }})"
+         style="border-left:4px solid {% if obs.obs_type == 'unsafe_act' %}#ef4444{% elif obs.obs_type == 'unsafe_condition' %}#f59e0b{% else %}#22c55e{% endif %}">
+
+      <div class="obs-card-header">
+        <div style="flex:1;min-width:0">
+          <!-- Top row: date + badges -->
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-bottom:6px">
+            <span style="font-weight:700;font-size:.9rem;color:#0f172a">{{ obs.date.strftime('%d %b %Y') }}</span>
+            <span class="type-{{ obs.obs_type }}">
+              {% if obs.obs_type == 'unsafe_act' %}Unsafe Act
+              {% elif obs.obs_type == 'unsafe_condition' %}Unsafe Condition
+              {% else %}Positive{% endif %}
+            </span>
+            {% if obs.risk_level %}<span class="risk-{{ obs.risk_level }}">Risk: {{ obs.risk_level }}</span>{% endif %}
+            {% if obs.status == 'open' %}
+              <span class="badge-open">● OPEN</span>
+            {% else %}
+              <span class="badge-closed">✔ CLOSED</span>
+            {% endif %}
+          </div>
+          <!-- Officer name (for supervisors) -->
+          {% if g.role not in ('safety_welfare','environment_officer') %}
+          <div style="font-size:.82rem;color:#6366f1;font-weight:600;margin-bottom:4px">
+            👤 {{ obs.officer.name if obs.officer else '—' }}
+            <span style="color:#94a3b8;font-weight:400">(ID #{{ obs.officer_id }}
+            {% if obs.officer %} · {{ obs.officer.role.replace('_officer','') | title }}{% endif %})</span>
+          </div>
+          {% endif %}
+          <!-- Summary: location + category + short description -->
+          <div style="font-size:.85rem;color:#64748b;display:flex;flex-wrap:wrap;gap:10px">
+            {% if obs.location %}<span>📍 {{ obs.location }}</span>{% endif %}
+            {% if obs.category %}<span>🏷 {{ obs.category }}</span>{% endif %}
+            {% if obs.description %}
+              <span style="color:#374151">{{ obs.description[:120] }}{% if obs.description|length > 120 %}…{% endif %}</span>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Expanded body -->
+      <div class="obs-card-body" onclick="event.stopPropagation()">
+        <hr style="border:none;border-top:1px solid #f1f5f9;margin:0 0 14px">
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+          <div>
+            <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:3px">Location</div>
+            <div style="font-size:.9rem;color:#0f172a">{{ obs.location or '—' }}</div>
+          </div>
+          <div>
+            <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:3px">Category</div>
+            <div style="font-size:.9rem;color:#0f172a">{{ obs.category or '—' }}</div>
+          </div>
+          <div>
+            <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:3px">Observation #</div>
+            <div style="font-size:.9rem;color:#0f172a">#{{ obs.id }}</div>
+          </div>
+          <div>
+            <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:3px">Submitted</div>
+            <div style="font-size:.9rem;color:#0f172a">{{ obs.created_at.strftime('%d %b %Y %H:%M') if obs.created_at else obs.date.strftime('%d %b %Y') }}</div>
+          </div>
+          {% if obs.officer and g.role not in ('safety_welfare','environment_officer') %}
+          <div style="grid-column:1/-1">
+            <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:3px">Officer</div>
+            <div style="font-size:.9rem;color:#0f172a">{{ obs.officer.name }} — ID #{{ obs.officer_id }}
+              ({{ obs.officer.role.replace('_officer','') | title }})</div>
+          </div>
+          {% endif %}
+        </div>
+
+        {% if obs.description %}
+        <div style="margin-bottom:12px">
+          <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:4px">Description</div>
+          <div style="font-size:.9rem;color:#0f172a;line-height:1.6;white-space:pre-wrap;
+                      background:#f8fafc;border-radius:8px;padding:10px 12px">{{ obs.description }}</div>
+        </div>
+        {% endif %}
+
+        {% if obs.action_taken %}
+        <div style="margin-bottom:12px">
+          <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:4px">Action Taken</div>
+          <div style="font-size:.9rem;color:#0f172a;line-height:1.6;white-space:pre-wrap;
+                      background:#f0fdf4;border-radius:8px;padding:10px 12px">{{ obs.action_taken }}</div>
+        </div>
+        {% endif %}
+
+        {% if obs.closure_action %}
+        <div style="margin-bottom:12px">
+          <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:4px">
+            Closure Note <span style="color:#16a34a">(Closed {{ obs.closed_at.strftime('%d %b %Y') if obs.closed_at else '' }})</span>
+          </div>
+          <div style="font-size:.9rem;color:#0f172a;line-height:1.6;white-space:pre-wrap;
+                      background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:10px 12px">{{ obs.closure_action }}</div>
+        </div>
+        {% endif %}
+
+        {% if photos %}
+        <div style="margin-bottom:12px">
+          <div style="font-size:.75rem;font-weight:700;text-transform:uppercase;color:#94a3b8;margin-bottom:6px">Photos</div>
+          <div class="photo-row">
+            {% for p in photos %}
+            <img src="/hse/photo/{{ p.photo_path }}"
+                 class="photo-thumb"
+                 alt="{{ p.photo_type }}"
+                 onclick="window.open(this.src,'_blank')"
+                 title="{{ p.photo_type|title }} photo">
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Action buttons -->
+        {% if obs.status == 'open' %}
+          {% set can_close = (g.role in ('safety_welfare','environment_officer') and obs.officer_id == g.user.id)
+                             or g.role in ('welfare_supervisor','safety_supervisor','safety_manager','admin','super_admin') %}
+          {% if can_close %}
+          <div style="margin-top:14px;padding-top:12px;border-top:1px solid #f1f5f9">
+            <a href="{{ url_for('welfare_observation_close', obs_id=obs.id) }}"
+               style="display:inline-block;padding:7px 18px;background:#065f46;color:#fff;
+                      border-radius:8px;text-decoration:none;font-weight:700;font-size:.88rem">
+              ✔ Close This Observation
+            </a>
+          </div>
+          {% endif %}
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+
+    <!-- Pagination -->
+    {% if pagination.pages > 1 %}
+    <div style="display:flex;justify-content:center;gap:8px;margin-top:20px">
+      {% if pagination.has_prev %}
+      <a href="{{ url_for('welfare_observation_list', status=status_filter, page=pagination.prev_num) }}"
+         class="btn" style="font-size:.85rem">← Prev</a>
+      {% endif %}
+      <span style="padding:7px 16px;color:#64748b;font-size:.85rem">
+        Page {{ pagination.page }} of {{ pagination.pages }}
+      </span>
+      {% if pagination.has_next %}
+      <a href="{{ url_for('welfare_observation_list', status=status_filter, page=pagination.next_num) }}"
+         class="btn" style="font-size:.85rem">Next →</a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+  {% else %}
+    <div style="text-align:center;padding:60px 20px;color:#94a3b8">
+      <div style="font-size:2.5rem;margin-bottom:10px">📋</div>
+      <div style="font-size:1rem;font-weight:600">No {{ status_filter if status_filter in ('open','closed') else '' }} observations yet</div>
+    </div>
+  {% endif %}
+
+</div>
+
+<script>
+function toggleCard(id) {
+  var card = document.getElementById('obs-' + id);
+  card.classList.toggle('expanded');
+}
+// Auto-expand if only one card
+document.addEventListener('DOMContentLoaded', function() {
+  var cards = document.querySelectorAll('.obs-card');
+  if (cards.length === 1) cards[0].classList.add('expanded');
+});
+</script>
+{% endblock %}

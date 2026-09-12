@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Edit Near Miss Report</h2>
+<div class="card" style="max-width:580px">
+  <form method="post" enctype="multipart/form-data">
+    <label>Date
+      <input type="date" name="date" value="{{ nm.date.isoformat() }}" required>
+    </label>
+
+    <label>Location *
+      <input type="text" name="location" value="{{ nm.location or '' }}"
+             list="locationList" placeholder="Site area / location" required>
+      <datalist id="locationList">
+        {% for loc in locations %}<option value="{{ loc }}">{% endfor %}
+      </datalist>
+    </label>
+
+    <label>Description *
+      <textarea name="description" rows="3" required>{{ nm.description or '' }}</textarea>
+    </label>
+
+    <label>Immediate Cause *
+      <textarea name="immediate_cause" rows="2" required>{{ nm.immediate_cause or '' }}</textarea>
+    </label>
+
+    <label>Action Taken *
+      <textarea name="action_taken" rows="2" required>{{ nm.action_taken or '' }}</textarea>
+    </label>
+
+    <label>Reported To *
+      <input type="text" name="reported_to" value="{{ nm.reported_to or '' }}" required>
+    </label>
+
+    {% if nm.photo_path %}
+    <div style="margin:8px 0">
+      <p style="margin:0 0 4px;font-size:13px;color:var(--muted)">Current photo:</p>
+      <a href="{{ url_for('hse_photo', filename=nm.photo_path) }}" target="_blank">
+        <img src="{{ url_for('hse_photo', filename=nm.photo_path) }}"
+             style="width:120px;height:90px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+      </a>
+    </div>
+    {% endif %}
+
+    <label>Replace Photo (optional)
+      <input type="file" name="photo" accept="image/*">
+    </label>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button type="submit" class="btn primary">Save Changes</button>
+      <a href="{{ url_for('hse_nearmiss_list') }}" class="btn">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,148 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .form-card { max-width: 780px; margin: 0 auto; }
+  .form-header { text-align: center; padding: 24px 0 12px; border-bottom: 2px solid #e74c3c; margin-bottom: 20px; }
+  .form-header h2 { margin: 4px 0; color: #1a1f3a; }
+
+  .hdr-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; direction: rtl; }
+  .hdr-table th, .hdr-table td { border: 1px solid #999; padding: 8px 6px; font-size: 13px; text-align: center; }
+  .hdr-table th { background: #f5f5f5; font-weight: 700; }
+  .hdr-table select, .hdr-table input {
+    width: 100%; border: none; text-align: center; font-size: 13px; background: transparent; padding: 4px;
+  }
+
+  .reason-section { margin-bottom: 20px; direction: rtl; }
+  .reason-section h3 { text-align: center; background: #f5f5f5; border: 1px solid #999; padding: 8px; margin: 0 0 10px; font-size: 15px; }
+  .reason-section textarea {
+    width: 100%; min-height: 220px; border: 1px solid #ccc; border-radius: 8px; padding: 12px;
+    font-size: 14px; font-family: inherit; resize: vertical;
+    background-image: repeating-linear-gradient(to bottom, transparent, transparent 27px, #ddd 28px);
+    line-height: 28px;
+  }
+
+  .sig-area { border: 2px dashed #e74c3c; border-radius: 12px; background: #fffafa;
+              padding: 16px; margin-bottom: 16px; text-align: center; direction: rtl; }
+  #sig-canvas { border: 1px solid #f5b7b1; border-radius: 8px; background: #fff;
+                cursor: crosshair; touch-action: none; width: 100%; max-width: 600px; height: 160px; display: block; margin: 0 auto; }
+  .sig-hint { color: #aaa; font-size: 13px; margin: 6px 0 10px; }
+  .btn-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; margin-top: 10px; }
+</style>
+
+<div class="form-card">
+  <section class="card">
+    <div class="form-header">
+      <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo"
+           style="height:56px; object-fit:contain; margin-bottom:8px;"
+           onerror="this.style.display='none'">
+      <h2>تقرير سبب الإنذار</h2>
+    </div>
+
+    <form method="post" id="wfr-form">
+      <input type="hidden" name="signature" id="sig-input">
+
+      <table class="hdr-table">
+        <thead>
+          <tr>
+            <th>اليوم</th>
+            <th>التاريخ</th>
+            <th>اسم الموظف</th>
+            <th>ID</th>
+            <th>اسم المشرف</th>
+            <th>ID</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td id="day-name-cell">{{ today_day_name }}</td>
+            <td><input type="date" name="report_date" id="report_date" value="{{ today }}"></td>
+            <td>
+              <input type="text" name="employee_name_manual" id="employee_name_manual"
+                     placeholder="اكتب اسم الموظف" required>
+            </td>
+            <td>
+              <select name="employee_id" id="employee_id" required>
+                <option value="" disabled {{ 'selected' if not pre_emp_id else '' }}>— اختر —</option>
+                {% for e in employees %}
+                <option value="{{ e.id }}" {{ 'selected' if pre_emp_id and pre_emp_id|string == e.id|string else '' }}>{{ e.emp_number }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td>{{ sup.name }}</td>
+            <td>{{ sup.supervisor_code }}</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="reason-section">
+        <h3>سبب الإنذار</h3>
+        <textarea name="reason_text" id="reason_text" required
+                  placeholder="اكتب سبب الإنذار بالتفصيل..."></textarea>
+      </div>
+
+      <div class="sig-area">
+        <div style="font-weight:700; color:#c0392b; margin-bottom:8px;">توقيع المشرف</div>
+        <canvas id="sig-canvas" width="600" height="160"></canvas>
+        <div class="sig-hint">ارسم توقيعك بإصبعك أو الماوس</div>
+        <button type="button" class="btn-sm" onclick="clearSig()">مسح التوقيع</button>
+      </div>
+
+      <div class="btn-row">
+        <button type="submit" class="btn danger" onclick="return submitSig()"
+                style="width:100%;padding:12px;font-size:16px">
+          إرسال تقرير الإنذار
+        </button>
+      </div>
+    </form>
+  </section>
+</div>
+
+<script>
+const AR_DAY_NAMES = ["الإثنين","الثلاثاء","الأربعاء","الخميس","الجمعة","السبت","الأحد"];
+
+const dateInput = document.getElementById('report_date');
+const dayCell   = document.getElementById('day-name-cell');
+function updateDayName() {
+  if (!dateInput.value) return;
+  const d = new Date(dateInput.value + 'T00:00:00');
+  // getDay(): 0=Sunday..6=Saturday -> نطابق ترتيب AR_DAY_NAMES (0=Monday..6=Sunday)
+  const jsDay = d.getDay(); // 0=Sun
+  const idx = (jsDay + 6) % 7; // يحوّل الأحد(0) لآخر عنصر، الاثنين(1) لأول عنصر
+  dayCell.textContent = AR_DAY_NAMES[idx];
+}
+if (dateInput) { dateInput.addEventListener('change', updateDayName); }
+
+const canvas = document.getElementById('sig-canvas');
+if (canvas) {
+  const ctx = canvas.getContext('2d');
+  let drawing = false;
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    const sx = canvas.width / r.width, sy = canvas.height / r.height;
+    const s = e.touches ? e.touches[0] : e;
+    return { x: (s.clientX - r.left) * sx, y: (s.clientY - r.top) * sy };
+  }
+  canvas.addEventListener('mousedown',  e => { drawing=true; const p=getPos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); });
+  canvas.addEventListener('mousemove',  e => { if(!drawing)return; const p=getPos(e); ctx.lineTo(p.x,p.y); ctx.strokeStyle='#1a1f3a'; ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.stroke(); });
+  canvas.addEventListener('mouseup',    () => drawing=false);
+  canvas.addEventListener('mouseleave', () => drawing=false);
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing=true; const p=getPos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); },{passive:false});
+  canvas.addEventListener('touchmove',  e => { e.preventDefault(); if(!drawing)return; const p=getPos(e); ctx.lineTo(p.x,p.y); ctx.strokeStyle='#1a1f3a'; ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.stroke(); },{passive:false});
+  canvas.addEventListener('touchend',   () => drawing=false);
+}
+function clearSig() { if(canvas) canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height); }
+
+function submitSig() {
+  if (!canvas) return true;
+  // تحقق إن فيه رسم فعلي (مو فاضي)
+  const blank = document.createElement('canvas');
+  blank.width = canvas.width; blank.height = canvas.height;
+  if (canvas.toDataURL() === blank.toDataURL()) {
+    alert('الرجاء رسم التوقيع قبل الإرسال');
+    return false;
+  }
+  document.getElementById('sig-input').value = canvas.toDataURL('image/png');
+  return true;
+}
+</script>
+{% endblock %}

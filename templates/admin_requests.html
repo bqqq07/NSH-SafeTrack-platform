@@ -1,0 +1,106 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Requests</h1>
+
+<section class="card no-print">
+  <form method="get" action="{{ url_for('admin_requests') }}" class="grid3">
+    <label>Status
+      <select name="status">
+        <option value="" {{ ''==status and 'selected' or '' }}>All</option>
+        <option value="pending"  {{ status=='pending' and 'selected' or '' }}>Pending</option>
+        <option value="approved" {{ status=='approved' and 'selected' or '' }}>Approved</option>
+        <option value="rejected" {{ status=='rejected' and 'selected' or '' }}>Rejected</option>
+      </select>
+    </label>
+    <div class="align-end">
+      <button class="btn">Apply</button>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Created</th>
+        <th>Supervisor (ID)</th>
+        <th>Employee</th>
+        <th>Type</th>
+        <th>Title</th>
+        <th>Date</th>
+        <th>Status</th>
+        <th class="no-print">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for r, emp, sup in rows %}
+      <tr id="row-{{ r.id }}">
+        <td class="mono">{{ r.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+        <td>{{ sup.name or '—' }} <span class="muted">({{ sup.supervisor_code }})</span></td>
+        <td>
+          <button class="linklike" data-summary="{{ r.id }}" type="button">{{ emp.name }}</button>
+        </td>
+        <td class="mono">{{ r.req_type }}</td>
+        <td>{{ r.title }}</td>
+        <td class="mono">{{ r.target_date or '—' }}</td>
+        <td>
+          {% if r.status=='pending' %}
+            <span class="badge warn">Pending</span>
+          {% elif r.status=='approved' %}
+            <span class="badge ok">Approved</span>
+          {% else %}
+            <span class="badge err">Rejected</span>
+          {% endif %}
+          {% if r.admin_note %}<div class="muted small">{{ r.admin_note }}</div>{% endif %}
+        </td>
+        <td class="no-print">
+          {% if r.status=='pending' %}
+          <form method="post" style="display:inline-block">
+            <input type="hidden" name="id" value="{{ r.id }}">
+            <input type="hidden" name="action" value="approve">
+            <input type="text" name="note" placeholder="Note (optional)" style="width:120px">
+            <button class="btn small primary">Approve</button>
+          </form>
+          <form method="post" style="display:inline-block; margin-left:6px;">
+            <input type="hidden" name="id" value="{{ r.id }}">
+            <input type="hidden" name="action" value="reject">
+            <input type="text" name="note" placeholder="Note (optional)" style="width:120px">
+            <button class="btn small">Reject</button>
+          </form>
+          {% else %}
+            <span class="muted small">—</span>
+          {% endif %}
+        </td>
+      </tr>
+      <tr id="sum-{{ r.id }}" class="no-border" style="display:none;">
+        <td colspan="8" id="sumc-{{ r.id }}" class="muted">Loading…</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="8" class="center muted">No requests.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<script>
+document.addEventListener('click', async (e) => {
+  const btn = e.target.closest('[data-summary]');
+  if (!btn) return;
+  const id = btn.getAttribute('data-summary');
+  const row = document.getElementById('sum-' + id);
+  const cell = document.getElementById('sumc-' + id);
+  if (row.style.display === 'none') {
+    row.style.display = '';
+    cell.textContent = 'Loading…';
+    try {
+      const r = await fetch('{{ url_for("admin_request_employee_summary", req_id=0) }}'.replace('/0/', '/' + id + '/'));
+      cell.innerHTML = await r.text();
+    } catch(err) {
+      cell.textContent = 'Failed to load summary.';
+    }
+  } else {
+    row.style.display = 'none';
+  }
+});
+</script>
+{% endblock %}

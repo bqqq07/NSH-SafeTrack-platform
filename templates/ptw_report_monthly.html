@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}PTW Monthly Report — {{ month_name }} {{ year }}{% endblock %}
+{% block content %}
+<style>
+@media print {
+  .no-print{display:none!important}
+  body{font-size:10px}
+}
+.rpt-header{display:flex;align-items:center;justify-content:space-between;
+            margin-bottom:16px;padding-bottom:12px;border-bottom:3px solid #0f172a}
+.rpt-title{font-size:18px;font-weight:700;margin:0}
+.rpt-sub{font-size:12px;color:var(--muted);margin-top:3px}
+.sum-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
+          gap:10px;margin-bottom:20px}
+.sum-box{background:#fff;border:1px solid var(--border);border-radius:8px;
+         padding:10px;text-align:center}
+.sum-num{font-size:22px;font-weight:700}
+.sum-lbl{font-size:11px;color:var(--muted);margin-top:2px}
+.rpt-table{width:100%;border-collapse:collapse;font-size:12px}
+.rpt-table th{background:#0f172a;color:#fff;padding:8px 6px;
+              text-align:center;white-space:nowrap;font-size:11px}
+.rpt-table th.left{text-align:left}
+.rpt-table td{padding:8px 6px;border-bottom:1px solid #e5e7eb;text-align:center}
+.rpt-table td.left{text-align:left;font-weight:600}
+.rpt-table tr:nth-child(even) td{background:#f9fafb}
+.rpt-table tfoot td{background:#f0f4f8;font-weight:700;border-top:2px solid #cbd5e1}
+.green{color:#16a34a;font-weight:700}
+.prog-cell{min-width:120px}
+.prog-bar-wrap{height:5px;background:#e5e7eb;border-radius:3px;overflow:hidden;margin-top:3px}
+.prog-bar{height:100%;background:#3b82f6;border-radius:3px}
+.prog-bar.full{background:#22c55e}
+</style>
+
+<div class="no-print" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+  <button onclick="window.print()" class="btn primary">🖨️ Print / Save PDF</button>
+  <a href="{{ url_for('ptw_reports_picker') }}" class="btn">← Change Period</a>
+  <a href="{{ url_for('ptw_progress_report') }}" class="btn">Full Progress →</a>
+</div>
+
+<div class="rpt-header">
+  <div>
+    <div class="rpt-title">PTW Training — Monthly Report</div>
+    <div class="rpt-sub">
+      Period: <strong>{{ first_day.strftime('%d %B %Y') }}</strong>
+      → <strong>{{ last_day.strftime('%d %B %Y') }}</strong>
+    </div>
+  </div>
+  <img src="{{ url_for('static', filename='img/logo.png') }}" style="height:40px" alt="">
+</div>
+
+<div class="sum-grid">
+  <div class="sum-box">
+    <div class="sum-num">{{ rows|length }}</div>
+    <div class="sum-lbl">Active Trainees</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num">{{ total_subs }}</div>
+    <div class="sum-lbl">Submissions This Month</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num green">{{ total_approved }}</div>
+    <div class="sum-lbl">Approved This Month</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num">{{ rows|selectattr('pct','equalto',100)|list|length }}</div>
+    <div class="sum-lbl">Fully Complete</div>
+  </div>
+</div>
+
+{% if not rows %}
+<p style="color:#94a3b8;text-align:center;padding:40px">No active trainees.</p>
+{% else %}
+<table class="rpt-table">
+  <thead>
+    <tr>
+      <th class="left">#</th>
+      <th class="left">Trainee</th>
+      <th>Submitted (month)</th>
+      <th>Approved (month)</th>
+      <th>Modules Done</th>
+      <th>Total Stages Done</th>
+      <th class="prog-cell">Overall Progress</th>
+      <th class="no-print">Answers</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td>{{ loop.index }}</td>
+    <td class="left">{{ r.officer.name }}</td>
+    <td>{{ r.submitted }}</td>
+    <td class="green">{{ r.approved_month }}</td>
+    <td>{{ r.mods_done }} / 7</td>
+    <td>{{ r.all_approved }} / {{ r.field_total }}</td>
+    <td class="prog-cell">
+      {{ r.pct }}%
+      <div class="prog-bar-wrap">
+        <div class="prog-bar{% if r.pct == 100 %} full{% endif %}" style="width:{{ r.pct }}%"></div>
+      </div>
+    </td>
+    <td class="no-print">
+      <a href="{{ url_for('ptw_answers_report', officer_id=r.officer.id) }}"
+         style="font-size:11px;color:#3b82f6;text-decoration:none">View →</a>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td></td>
+      <td class="left">Total</td>
+      <td>{{ total_subs }}</td>
+      <td>{{ total_approved }}</td>
+      <td>—</td>
+      <td>—</td>
+      <td>—</td>
+      <td class="no-print"></td>
+    </tr>
+  </tfoot>
+</table>
+{% endif %}
+
+<div style="font-size:10px;color:#94a3b8;margin-top:20px;text-align:right">
+  Generated: {{ now.strftime('%d %b %Y, %H:%M') }}
+</div>
+{% endblock %}

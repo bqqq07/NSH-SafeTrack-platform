@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>New Toolbox Talk (TBT)</h2>
+<div class="card" style="max-width:650px">
+  <form method="post" enctype="multipart/form-data" id="tbtForm" data-offline-type="tbt">
+    <label>Date
+      <input type="date" name="date" value="{{ today.isoformat() }}" required>
+    </label>
+
+    <label>Topic
+      <input type="text" name="topic" placeholder="TBT topic / safety subject" required>
+    </label>
+
+    <label>Location
+      <input type="text" name="location" id="locationInput"
+             value="{{ today_location }}" list="locationList" placeholder="Site area / location">
+      <datalist id="locationList">
+        {% for loc in locations %}<option value="{{ loc }}">{% endfor %}
+      </datalist>
+    </label>
+
+    <label>Area Supervisor Code (optional)
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" name="supervisor_code" id="supCode" placeholder="e.g. SUP001" style="flex:1">
+        <button type="button" class="btn" onclick="lookupSup()">Lookup</button>
+        <button type="button" class="btn primary" id="loadEmpsBtn" onclick="loadSupervisorEmployees()" style="display:none">تحميل الموظفين</button>
+      </div>
+      <small id="supName" style="color:var(--success)"></small>
+    </label>
+
+    <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;margin:12px 0">
+      <legend style="padding:0 6px;font-weight:600">Attendance</legend>
+
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input type="text" id="empNumInput" placeholder="Employee badge number" style="flex:1">
+        <button type="button" class="btn" onclick="lookupEmployee()">Add</button>
+      </div>
+      <small id="empError" style="color:var(--danger)"></small>
+
+      <table style="width:100%;border-collapse:collapse" id="attendanceTable">
+        <thead>
+          <tr style="background:var(--bg)">
+            <th style="padding:6px;text-align:left;font-size:13px">Badge #</th>
+            <th style="padding:6px;text-align:left;font-size:13px">Name</th>
+            <th style="padding:6px;width:40px"></th>
+          </tr>
+        </thead>
+        <tbody id="attendanceBody"></tbody>
+      </table>
+      <p style="margin:8px 0 0;font-size:13px;color:var(--muted)">
+        Total: <strong id="totalCount">0</strong>
+      </p>
+
+      <div id="hiddenInputs"></div>
+    </fieldset>
+
+    <label id="signPhotoLabel">Sign-in Sheet Photo
+      <span id="signPhotoOffline" style="display:none;font-size:12px;color:#92400e;
+            background:#fef9c3;border:1px solid #fbbf24;border-radius:4px;padding:2px 8px;margin-right:6px">
+        📴 Add after sync
+      </span>
+      <input type="file" name="sign_photo" accept="image/*" id="signPhotoInput">
+    </label>
+    <script>
+      (function(){
+        function updateSignPhoto(){
+          var note  = document.getElementById('signPhotoOffline');
+          var input = document.getElementById('signPhotoInput');
+          if(!navigator.onLine){ note.style.display='inline'; input.style.display='none'; }
+          else                  { note.style.display='none';  input.style.display=''; }
+        }
+        updateSignPhoto();
+        window.addEventListener('online',  updateSignPhoto);
+        window.addEventListener('offline', updateSignPhoto);
+      })();
+    </script>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button type="submit" class="btn primary">Save TBT</button>
+      <a href="{{ url_for('hse_tbt_list') }}" class="btn">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+async function lookupSup() {
+  const code = document.getElementById('supCode').value.trim();
+  if (!code) return;
+  const res = await fetch(`/hse/api/supervisor_lookup?code=${encodeURIComponent(code)}`);
+  const data = await res.json();
+  const el = document.getElementById('supName');
+  const btn = document.getElementById('loadEmpsBtn');
+  if (data.found) {
+    el.textContent = '✓ ' + data.name;
+    el.style.color = 'var(--success)';
+    btn.style.display = '';
+  } else {
+    el.textContent = '✗ Not found';
+    el.style.color = 'var(--danger)';
+    btn.style.display = 'none';
+  }
+}
+
+async function loadSupervisorEmployees() {
+  const code = document.getElementById('supCode').value.trim();
+  if (!code) return;
+  const res = await fetch(`/api/hse/tbt/supervisor-employees?supervisor_code=${encodeURIComponent(code)}`);
+  if (!res.ok) return;
+  const data = await res.json();
+  const emps = data.employees || [];
+  if (emps.length === 0) {
+    document.getElementById('empError').textContent = 'لا يوجد موظفون لهذا المشرف';
+    return;
+  }
+  document.getElementById('empError').textContent = '';
+  // أضف الموظفين الذين لم يُضافوا بعد
+  const existingNums = new Set(
+    [...document.querySelectorAll('#hiddenInputs input[name="emp_number[]"]')].map(i => i.value)
+  );
+  emps.forEach(e => {
+    if (!existingNums.has(e.emp_number)) addRow(e.emp_number, e.name);
+  });
+}
+
+async function lookupEmployee() {
+  const numInput = document.getElementById('empNumInput');
+  const errEl = document.getElementById('empError');
+  const num = numInput.value.trim();
+  errEl.textContent = '';
+  if (!num) return;
+
+  const res = await fetch(`/hse/api/employee_lookup?emp_number=${encodeURIComponent(num)}`);
+  const data = await res.json();
+
+  if (!data.found) {
+    errEl.textContent = '✗ Employee not found or not active';
+    return;
+  }
+
+  addRow(num, data.name);
+  numInput.value = '';
+}
+
+document.getElementById('empNumInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); lookupEmployee(); }
+});
+
+function addRow(num, name) {
+  const body = document.getElementById('attendanceBody');
+  const hidden = document.getElementById('hiddenInputs');
+
+  const tr = document.createElement('tr');
+  tr.style.borderTop = '1px solid var(--border)';
+  tr.innerHTML = `
+    <td style="padding:6px;font-size:13px">${escHtml(num)}</td>
+    <td style="padding:6px;font-size:13px">${escHtml(name)}</td>
+    <td style="padding:6px;text-align:center">
+      <button type="button" onclick="removeRow(this,'${escHtml(num)}')"
+              style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px">✕</button>
+    </td>`;
+  body.appendChild(tr);
+
+  const inp1 = document.createElement('input');
+  inp1.type = 'hidden'; inp1.name = 'emp_number[]'; inp1.value = num; inp1.id = `num_${num}`;
+  const inp2 = document.createElement('input');
+  inp2.type = 'hidden'; inp2.name = 'emp_name[]'; inp2.value = name; inp2.id = `name_${num}`;
+  hidden.appendChild(inp1); hidden.appendChild(inp2);
+
+  updateCount();
+}
+
+function removeRow(btn, num) {
+  btn.closest('tr').remove();
+  const n = document.getElementById(`num_${num}`);
+  const na = document.getElementById(`name_${num}`);
+  if (n) n.remove(); if (na) na.remove();
+  updateCount();
+}
+
+function updateCount() {
+  document.getElementById('totalCount').textContent =
+    document.getElementById('attendanceBody').children.length;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}

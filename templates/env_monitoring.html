@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>قراءات الرصد البيئي (ضجيج / هواء)</h1>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}<div class="alert alert-{{ cat }}">{{ msg }}</div>{% endfor %}
+{% endwith %}
+
+{% if exceedances %}
+<div class="alert alert-danger">
+  ⚠️ {{ exceedances|length }} قراءة تتجاوز الحد المسموح به!
+</div>
+{% endif %}
+
+<section class="card">
+  <h2>إضافة قراءة</h2>
+  <form method="post" style="display:grid;gap:.5rem;grid-template-columns:1fr 1fr">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <label>التاريخ *
+      <input type="date" name="reading_date" required>
+    </label>
+    <label>نوع القياس *
+      <select name="monitor_type" required>
+        {% for val, label in monitor_types %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>الموقع *
+      <input type="text" name="location" required placeholder="وصف الموقع">
+    </label>
+    <label>رمز المنطقة
+      <input type="text" name="area_code">
+    </label>
+    <label>القيمة *
+      <input type="number" name="value" step="0.01" required>
+    </label>
+    <label>الوحدة *
+      <input type="text" name="unit" required placeholder="dB / mg/m³ / ppm / °C">
+    </label>
+    <label>الحد المسموح به
+      <input type="number" name="limit_value" step="0.01" placeholder="اتركه فارغاً إن لم يكن محدداً">
+    </label>
+    <label style="grid-column:1/-1">الإجراء المتخذ (إن تجاوز الحد)
+      <textarea name="action_taken" rows="2"></textarea>
+    </label>
+    <div style="grid-column:1/-1">
+      <button type="submit" class="btn primary">حفظ</button>
+    </div>
+  </form>
+</section>
+
+{% if readings %}
+<table class="rtable" style="margin-top:1rem">
+  <thead>
+    <tr><th>التاريخ</th><th>النوع</th><th>الموقع</th><th>القيمة</th><th>الوحدة</th><th>الحد</th><th>تجاوز؟</th></tr>
+  </thead>
+  <tbody>
+  {% for r in readings %}
+    <tr {% if r.exceeds_limit %}style="background:rgba(255,0,0,.06)"{% endif %}>
+      <td>{{ r.reading_date }}</td>
+      <td>{{ r.monitor_type }}</td>
+      <td>{{ r.location }}</td>
+      <td>{{ r.value }}</td>
+      <td>{{ r.unit }}</td>
+      <td>{{ r.limit_value or '—' }}</td>
+      <td>{% if r.exceeds_limit %}<span style="color:red">⚠️ نعم</span>{% else %}—{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="hint" style="margin-top:1rem">لا توجد قراءات.</p>
+{% endif %}
+{% endblock %}

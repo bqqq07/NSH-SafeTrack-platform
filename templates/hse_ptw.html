@@ -1,0 +1,169 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.ptw-badge{display:inline-block;padding:2px 10px;border-radius:10px;font-size:11px;font-weight:700}
+.ptw-active{background:#d1fae5;color:#065f46}
+.ptw-suspended{background:#fef3c7;color:#92400e}
+.ptw-closed{background:#f3f4f6;color:#6b7280}
+.ptw-type-pill{display:inline-block;padding:2px 10px;border-radius:10px;font-size:11px;
+               font-weight:600;background:#dbeafe;color:#1d4ed8}
+</style>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:8px">
+  <div>
+    <h2 style="margin:0 0 2px">Permit to Work (PTW)</h2>
+    <p class="muted" style="margin:0;font-size:13px">
+      Current week: {{ ws.strftime('%d %b') }} – {{ we.strftime('%d %b %Y') }}
+    </p>
+  </div>
+</div>
+
+<!-- Add / Update Form -->
+<div class="card" style="max-width:620px">
+  <h3 style="margin-top:0">Register New PTW</h3>
+  <form method="post" autocomplete="off">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+      <label>Permit Number *
+        <input type="text" name="permit_number" id="permitNumInput" placeholder="e.g. PTW-2025-001" required
+               list="permit_suggestions" style="width:100%;box-sizing:border-box">
+        <datalist id="permit_suggestions">
+          {% for pn in permit_numbers %}<option value="{{ pn }}">{% endfor %}
+        </datalist>
+      </label>
+      <label>Permit Type *
+        <select name="permit_type" required style="width:100%;box-sizing:border-box">
+          <option value="">— Select —</option>
+          <option value="Hot Work">Hot Work</option>
+          <option value="Cold Work">Cold Work</option>
+          <option value="Excavation">Excavation</option>
+          <option value="Confined Space">Confined Space</option>
+          <option value="Working at Height">Working at Height</option>
+          <option value="Electrical Isolation">Electrical Isolation</option>
+          <option value="Lifting">Lifting</option>
+          <option value="Other">Other</option>
+        </select>
+      </label>
+    </div>
+
+    <label style="margin-top:8px;display:block">Location
+      <input type="text" name="location" value="{{ loc or '' }}" placeholder="Work area / location"
+             list="loc_list" style="width:100%;box-sizing:border-box">
+      <datalist id="loc_list">{% for l in locations %}<option value="{{ l }}">{% endfor %}</datalist>
+    </label>
+
+    <label style="margin-top:8px;display:block">Description
+      <textarea name="description" rows="2" placeholder="Brief description of work covered..."
+                style="width:100%;box-sizing:border-box"></textarea>
+    </label>
+
+    <label style="margin-top:8px;display:block">Week Start (Saturday)
+      <input type="date" name="week_start" value="{{ ws.isoformat() }}"
+             style="width:100%;box-sizing:border-box">
+    </label>
+
+    <label style="margin-top:8px;display:block">Attached to PTW (sub-permit, optional)
+      <select name="attached_to_id" style="width:100%;box-sizing:border-box">
+        <option value="">— None (standalone) —</option>
+        {% for p in active_ptw %}
+        <option value="{{ p.id }}">{{ p.permit_number }} ({{ p.permit_type }})</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <button type="submit" class="btn primary" style="width:100%;margin-top:14px">
+      Register PTW
+    </button>
+  </form>
+</div>
+
+<!-- PTW List -->
+{% if ptw_list %}
+<div class="card">
+  <h3 style="margin-top:0">My PTW Register</h3>
+  <div style="overflow-x:auto">
+    <table class="table compact" style="min-width:640px">
+      <thead>
+        <tr>
+          <th>Permit #</th>
+          <th>Type</th>
+          <th>Location</th>
+          <th>Week</th>
+          <th class="center">Status</th>
+          <th class="no-print">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in ptw_list %}
+        <tr {% if p.status == 'closed' %}style="opacity:.6"{% endif %}>
+          <td class="mono" style="font-weight:600">{{ p.permit_number }}</td>
+          <td><span class="ptw-type-pill">{{ p.permit_type }}</span></td>
+          <td>{{ p.location or '—' }}</td>
+          <td class="nowrap" style="font-size:12px">{{ p.week_start.strftime('%d %b') }} – {{ p.week_end.strftime('%d %b') }}</td>
+          <td class="center">
+            <span class="ptw-badge ptw-{{ p.status }}">{{ p.status.title() }}</span>
+          </td>
+          <td class="no-print" style="white-space:nowrap">
+            {% if p.status != 'closed' %}
+            <form method="post" action="{{ url_for('hse_ptw_status', ptw_id=p.id) }}" style="display:inline">
+              {% if p.status == 'active' %}
+              <button name="status" value="suspended" class="btn" style="padding:2px 8px;font-size:11px">Suspend</button>
+              <button name="status" value="closed"    class="btn danger" style="padding:2px 8px;font-size:11px">Close</button>
+              {% else %}
+              <button name="status" value="active" class="btn primary" style="padding:2px 8px;font-size:11px">Reactivate</button>
+              <button name="status" value="closed" class="btn danger"  style="padding:2px 8px;font-size:11px">Close</button>
+              {% endif %}
+            </form>
+            {% endif %}
+            {% set expired = p.week_end < today %}
+            {% if expired and p.status == 'active' %}
+            <form method="post" action="{{ url_for('hse_ptw_renew', ptw_id=p.id) }}" style="display:inline">
+              <button type="submit" class="btn primary" style="padding:2px 8px;font-size:11px;background:#f59e0b">Renew</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% if p.description %}
+        <tr {% if p.status == 'closed' %}style="opacity:.6"{% endif %}>
+          <td></td>
+          <td colspan="5" style="font-size:12px;color:var(--muted);padding-top:2px;padding-bottom:6px">
+            {{ p.description }}
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<script>
+// Auto-fill details from known permit numbers
+const permitInput = document.getElementById("permitNumInput");
+if (permitInput) {
+  permitInput.addEventListener("change", async () => {
+    const q = permitInput.value.trim();
+    if (!q) return;
+    try {
+      const res = await fetch(`/hse/ptw/suggest?q=${encodeURIComponent(q)}`);
+      const hits = await res.json();
+      if (hits.length > 0) {
+        const h = hits[0];
+        if (h.type) {
+          const sel = document.querySelector("select[name='permit_type']");
+          if (sel) [...sel.options].forEach(o => { if (o.value === h.type) o.selected = true; });
+        }
+        if (h.loc) {
+          const locEl = document.querySelector("input[name='location']");
+          if (locEl && !locEl.value) locEl.value = h.loc;
+        }
+        if (h.desc) {
+          const descEl = document.querySelector("textarea[name='description']");
+          if (descEl && !descEl.value) descEl.value = h.desc;
+        }
+      }
+    } catch {}
+  });
+}
+</script>
+{% endblock %}

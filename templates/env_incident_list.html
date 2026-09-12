@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Environmental Incidents{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;">
+  <h2 style="margin:0;">Environmental Incidents</h2>
+  <a href="{{ url_for('env_incident_new') }}" class="btn btn-primary">+ New Incident</a>
+</div>
+
+{% for inc in incidents %}
+<div class="card" style="padding:1rem;margin-bottom:.75rem;border-left:4px solid {% if inc.status == 'open' %}#dc2626{% else %}#16a34a{% endif %};">
+  <div style="display:flex;justify-content:space-between;align-items:flex-start;">
+    <div>
+      <strong>{{ inc.incident_type }}</strong>
+      <span style="margin-left:.75rem;font-size:.85rem;opacity:.6;">{{ inc.date }}</span>
+      {% if inc.location %}<span style="font-size:.85rem;opacity:.6;">| {{ inc.location }}</span>{% endif %}
+    </div>
+    <span style="padding:.2rem .75rem;border-radius:999px;font-size:.8rem;
+      background:{% if inc.status=='open' %}#fee2e2;color:#991b1b{% else %}#dcfce7;color:#166534{% endif %};">
+      {% if inc.status=='open' %}Open{% else %}Closed{% endif %}
+    </span>
+  </div>
+  <p style="margin:.5rem 0;opacity:.8;font-size:.9rem;">{{ inc.description }}</p>
+  {% if inc.action_taken %}
+  <p style="margin:.25rem 0;font-size:.85rem;opacity:.6;"><strong>Action:</strong> {{ inc.action_taken }}</p>
+  {% endif %}
+  {% if inc.status == 'open' %}
+  <form method="POST" action="{{ url_for('env_incident_close', inc_id=inc.id) }}" style="margin-top:.5rem;">
+    <button type="submit" class="btn btn-sm btn-secondary"
+            onclick="return confirm('Close this incident?')">Close</button>
+  </form>
+  {% endif %}
+</div>
+{% else %}
+<p style="opacity:.5;">No environmental incidents recorded.</p>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Approve {{ level_def.code }}{% endblock %}
+{% block content %}
+<a href="{{ url_for('welfare_supervisor') }}" style="color:#94a3b8;font-size:.9rem">← Supervisor</a>
+<h2 style="margin-top:.5rem">Approve: {{ officer.name }} — {{ level_def.code }} {{ level_def.title }}</h2>
+<p style="color:#94a3b8">{{ level_def.month }}</p>
+
+<!-- Deliverable -->
+{% if progress.deliverable_path %}
+<div class="card" style="margin-bottom:1rem;border-left:4px solid #fcd34d">
+  <div style="font-size:.8rem;color:#fcd34d;margin-bottom:.25rem">Submitted Deliverable</div>
+  <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap">
+    <div>
+      <div style="font-weight:600">{{ progress.deliverable_path.split('/')[-1] }}</div>
+      {% if progress.deliverable_at %}
+      <div style="font-size:.82rem;color:#94a3b8">Uploaded {{ progress.deliverable_at.strftime('%d %b %Y %H:%M') }}</div>
+      {% endif %}
+      {% if progress.deliverable_note %}
+      <div style="font-size:.85rem;color:#e2e8f0;margin-top:.25rem">{{ progress.deliverable_note }}</div>
+      {% endif %}
+    </div>
+    <a href="{{ url_for('hse_photo_serve', path=progress.deliverable_path) }}"
+       target="_blank" class="btn btn-secondary" style="padding:.3rem .8rem;font-size:.85rem">
+      View / Download
+    </a>
+  </div>
+</div>
+{% else %}
+<div class="alert warning" style="margin-bottom:1rem">No deliverable uploaded yet.</div>
+{% endif %}
+
+<!-- Deliverable requirement reminder -->
+<div class="card" style="margin-bottom:1rem;background:#0f172a">
+  <div style="font-size:.8rem;color:#94a3b8;margin-bottom:.25rem">Required deliverable</div>
+  <p style="margin:0;font-size:.9rem">{{ level_def.deliverable }}</p>
+  {% if level_def.gate_check %}
+  <p style="margin:.35rem 0 0;font-size:.82rem;color:#64748b">Gate check: {{ level_def.gate_check }}</p>
+  {% endif %}
+</div>
+
+{% if blocked %}
+<div class="alert warning">⛔ {{ blocked }}</div>
+{% endif %}
+
+{% if not all_done %}
+<div class="alert warning">Deliverable has not been uploaded yet.</div>
+{% endif %}
+
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <div style="display:flex;gap:.75rem;margin-top:1rem;flex-wrap:wrap">
+    <button type="submit" class="btn"
+      {% if not all_done or blocked %}
+      onclick="return confirm('Deliverable is missing or overdue findings exist. Approve anyway?')"
+      {% endif %}>
+      Approve Level {{ level_def.code }}
+    </button>
+    <a href="{{ url_for('welfare_supervisor') }}" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+{% endblock %}

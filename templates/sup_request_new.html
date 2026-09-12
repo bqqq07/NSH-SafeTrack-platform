@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>New Request</h1>
+<section class="card">
+  <form method="post" class="grid2">
+    <label>Employee
+      <select name="employee_id" required>
+        <option value="">Choose...</option>
+        {% for e in employees %}
+          <option value="{{ e.id }}">{{ e.name }} — {{ e.emp_number }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Type
+      <select name="req_type">
+        <option value="leave">Leave</option>
+        <option value="permission">Permission</option>
+        <option value="other" selected>Other</option>
+      </select>
+    </label>
+    <label>Title<input name="title" required placeholder="Short title"></label>
+    <label>Date<input type="date" name="target_date" value="{{ today.isoformat() }}" required></label>
+
+    <label class="full">Details
+      <textarea name="details" rows="3" placeholder="Write details..."></textarea>
+    </label>
+
+    <div class="actions">
+      <button class="btn primary">Submit</button>
+      <a class="btn" href="{{ url_for('sup_requests') }}">My Requests</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

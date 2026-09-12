@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Findings{% endblock %}
+{% block content %}
+<div style="max-width:720px;margin:0 auto">
+  <h2>Findings</h2>
+  <div style="display:flex;gap:8px;margin-bottom:12px">
+    {% for s,lbl in [('open','Open'),('overdue','Overdue'),('closed','Closed')] %}
+      <a href="{{ url_for('welfare_findings', status=s) }}"
+         style="flex:1;text-align:center;padding:10px;border-radius:10px;text-decoration:none;font-weight:700;
+                background:{{ '#0f172a' if status==s else '#f1f5f9' }};color:{{ '#fff' if status==s else '#334155' }}">{{ lbl }}</a>
+    {% endfor %}
+  </div>
+
+  {% for f in rows %}
+  {% set od = f.status=='open' and f.due_date and f.due_date < today %}
+  <div style="border:1px solid {{ '#fecaca' if od else '#e2e8f0' }};background:{{ '#fff1f2' if od else '#fff' }};
+              border-radius:12px;padding:12px;margin-bottom:10px">
+    {% if od %}<div style="color:#9f1239;font-weight:800">🔴 OVERDUE by {{ (today - f.due_date).days }} day(s)</div>{% endif %}
+    <div style="font-weight:700">{{ f.description }}</div>
+    <div style="color:#64748b;font-size:.9rem;margin-top:4px">
+      Unit {{ f.unit }}{% if f.ref_no %} · {{ f.ref_no }}{% endif %} · {{ f.severity }}
+      {% if f.due_date %} · Due {{ f.due_date }}{% endif %}
+      {% if f.responsible %} · {{ f.responsible }}{% endif %}
+    </div>
+    {% if f.status == 'open' %}
+      {% if f.severity in locked %}
+        <div style="margin-top:8px;color:#b45309;font-weight:700">🔒 Requires supervisor verification</div>
+        {% if g_is_welfare_viewer %}
+        <form method="post" action="{{ url_for('welfare_finding_verify', fid=f.id) }}" style="margin-top:8px">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input name="note" placeholder="Verification note"
+                 style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1;margin-bottom:6px">
+          <button style="padding:10px 16px;border:0;background:#0f172a;color:#fff;border-radius:8px;font-weight:700">Verify &amp; close</button>
+        </form>
+        {% endif %}
+      {% else %}
+        <a href="{{ url_for('welfare_finding_close', fid=f.id) }}"
+           style="display:inline-block;margin-top:8px;background:#0f172a;color:#fff;padding:10px 16px;
+                  border-radius:8px;font-weight:700;text-decoration:none">Close</a>
+      {% endif %}
+    {% else %}
+      <div style="margin-top:6px;color:#166534;font-weight:700">✓ Closed {{ f.closed_at.date() if f.closed_at }}</div>
+    {% endif %}
+  </div>
+  {% else %}
+    <p style="color:#64748b">Nothing here.</p>
+  {% endfor %}
+</div>
+{% endblock %}

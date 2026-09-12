@@ -1,0 +1,273 @@
+﻿{% extends "base.html" %}
+{% block title %}Welfare Monthly Report{% endblock %}
+{% block content %}
+<style>
+@media print {
+  .no-print { display:none!important }
+  body { font-size:10px }
+  .container { margin:0; padding:0; max-width:100% }
+}
+.rpt-header { display:flex; align-items:center; justify-content:space-between;
+              margin-bottom:16px; padding-bottom:12px; border-bottom:3px solid #0f172a }
+.rpt-title  { font-size:18px; font-weight:700; margin:0 }
+.rpt-sub    { font-size:12px; color:var(--muted); margin-top:3px }
+.sum-grid   { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
+              gap:10px; margin-bottom:16px }
+.sum-box    { background:#fff; border:1px solid var(--border); border-radius:8px;
+              padding:10px; text-align:center }
+.sum-num    { font-size:22px; font-weight:700 }
+.sum-lbl    { font-size:11px; color:var(--muted); margin-top:2px }
+.rpt-table  { width:100%; border-collapse:collapse; font-size:12px }
+.rpt-table th { background:#0f172a; color:#fff; padding:8px 6px;
+                text-align:center; white-space:nowrap; font-size:11px }
+.rpt-table th.left { text-align:left }
+.rpt-table td { padding:7px 6px; border-bottom:1px solid #e5e7eb; text-align:center }
+.rpt-table td.left { text-align:left; font-weight:600 }
+.rpt-table tr:nth-child(even) td { background:#f9fafb }
+.rpt-table tr.zero-row td { background:#fef2f2 }
+.rpt-table tfoot td { background:#f0f4f8; font-weight:700; border-top:2px solid #cbd5e1 }
+.risk-h { color:#b91c1c; font-weight:700 }
+.good   { color:#166534; font-weight:700 }
+.sec-title { font-size:15px; font-weight:800; margin:20px 0 10px;
+             padding:8px 12px; border-radius:8px }
+.sec-wlf { background:#eff6ff; color:#1e3a5f }
+.sec-env { background:#f0fdf4; color:#14532d }
+</style>
+
+<!-- Toolbar -->
+<div class="no-print" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+  <button onclick="window.print()" class="btn primary">🖨️ Print / Save PDF</button>
+  <a href="{{ url_for('welfare_report_monthly_picker') }}" class="btn">← Change Month</a>
+  <a href="{{ url_for('welfare_report_weekly_picker') }}" class="btn">Weekly Report →</a>
+</div>
+
+<!-- Report Header -->
+<div class="rpt-header">
+  <div>
+    <div class="rpt-title">HSE Monthly Report — {{ month_name }} {{ year }}</div>
+    <div class="rpt-sub">
+      <strong>{{ first_day.strftime('%d %b %Y') }}</strong> → <strong>{{ last_day.strftime('%d %b %Y') }}</strong>
+    </div>
+  </div>
+  <img src="{{ url_for('static', filename='img/logo.png') }}" style="height:40px" alt="">
+</div>
+
+{# ═══════════════════════════════════════════════════════════════
+   WELFARE OFFICERS SECTION
+═══════════════════════════════════════════════════════════════ #}
+{% if wlf_rows %}
+<div class="sec-title sec-wlf">👷 Welfare Officers</div>
+
+{% set wlf_active  = wlf_rows | selectattr('zero','equalto',false) | list | length %}
+{% set wlf_rounds  = wlf_rows | sum(attribute='rounds') %}
+{% set wlf_finds   = wlf_rows | sum(attribute='finds_new') %}
+{% set wlf_closed  = wlf_rows | sum(attribute='finds_closed') %}
+{% set wlf_open    = wlf_rows | sum(attribute='finds_open') %}
+{% set wlf_comps   = wlf_rows | sum(attribute='complaints') %}
+{% set wlf_shared  = wlf_rows | sum(attribute='weekly_shared') %}
+
+<div class="sum-grid">
+  <div class="sum-box">
+    <div class="sum-num">{{ wlf_active }}<span style="font-size:.9rem;color:var(--muted)">/{{ wlf_rows|length }}</span></div>
+    <div class="sum-lbl">Active</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num">{{ wlf_rounds }}</div>
+    <div class="sum-lbl">Submissions</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num">{{ wlf_finds }}</div>
+    <div class="sum-lbl">Findings</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num good">{{ wlf_closed }}</div>
+    <div class="sum-lbl">Closed</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num {% if wlf_open %}risk-h{% endif %}">{{ wlf_open }}</div>
+    <div class="sum-lbl">Still Open</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num {% if wlf_comps %}risk-h{% endif %}">{{ wlf_comps }}</div>
+    <div class="sum-lbl">Complaints</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num">{{ wlf_shared }}</div>
+    <div class="sum-lbl">Wkly Shared</div>
+  </div>
+</div>
+
+<div style="overflow-x:auto">
+<table class="rpt-table">
+  <thead>
+    <tr>
+      <th class="left" rowspan="2">Officer</th>
+      <th rowspan="2">Role</th>
+      <th rowspan="2">Submissions</th>
+      <th colspan="3" style="border-bottom:1px solid #334155">Findings</th>
+      <th rowspan="2">On-Time<br>Closure</th>
+      <th rowspan="2">Complaints</th>
+      <th rowspan="2">Wkly<br>Shared</th>
+      <th rowspan="2">Level</th>
+      <th rowspan="2">Points</th>
+    </tr>
+    <tr>
+      <th>New</th><th>Closed</th><th>Open</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in wlf_rows %}
+    <tr {% if r.zero %}class="zero-row"{% endif %}>
+      <td class="left">
+        <a href="{{ url_for('safety_welfare_profile', uid=r.officer_id) }}" style="font-weight:600">{{ r.officer_name }}</a>
+        {% if r.zero %}<span style="color:var(--warning);font-size:10px;margin-left:4px">⚠</span>{% endif %}
+      </td>
+      <td style="font-size:10px;color:#64748b">{{ r.role.replace('_',' ').title() }}</td>
+      <td>{% if r.rounds %}<strong>{{ r.rounds }}</strong>{% else %}<span class="muted">0</span>{% endif %}</td>
+      <td>{{ r.finds_new or '—' }}</td>
+      <td>{% if r.finds_closed %}<span class="good">{{ r.finds_closed }}</span>{% else %}—{% endif %}</td>
+      <td>{% if r.finds_open %}<span class="risk-h">{{ r.finds_open }}</span>{% else %}—{% endif %}</td>
+      <td>
+        {% if r.on_time_pct is not none %}
+          <span style="font-weight:700;color:{{ '#166534' if r.on_time_pct >= 80 else '#b91c1c' }}">{{ r.on_time_pct }}%</span>
+        {% else %}—{% endif %}
+      </td>
+      <td>{% if r.complaints %}<span class="risk-h">{{ r.complaints }}</span>{% else %}—{% endif %}</td>
+      <td>{{ r.weekly_shared or '—' }}</td>
+      <td style="font-size:11px;color:var(--muted)">{{ r.level_no }}/{{ r.level_total }}</td>
+      <td><strong style="color:#0369a1">{{ r.points }}</strong></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td class="left" colspan="2">Total</td>
+      <td>{{ wlf_rounds }}</td>
+      <td>{{ wlf_finds }}</td>
+      <td>{{ wlf_closed }}</td>
+      <td>{{ wlf_open }}</td>
+      <td>—</td>
+      <td>{{ wlf_comps }}</td>
+      <td>{{ wlf_shared }}</td>
+      <td>—</td>
+      <td>—</td>
+    </tr>
+  </tfoot>
+</table>
+</div>
+<p style="font-size:11px;color:var(--muted);margin-top:6px">Points = Submissions × 3 + Closed × 2 − Open</p>
+{% endif %}
+
+{# ═══════════════════════════════════════════════════════════════
+   ENVIRONMENT OFFICERS SECTION
+═══════════════════════════════════════════════════════════════ #}
+{% if env_rows %}
+{% set days_in_month = (last_day - first_day).days + 1 %}
+<div class="sec-title sec-env">🌿 Environment Officers</div>
+
+{% set env_active   = env_rows | selectattr('zero','equalto',false) | list | length %}
+{% set env_waste    = env_rows | sum(attribute='waste') %}
+{% set env_soil     = env_rows | sum(attribute='soil') %}
+{% set env_dust     = env_rows | sum(attribute='dust') %}
+{% set env_hazcom   = env_rows | sum(attribute='hazcom') %}
+{% set env_sewage   = env_rows | sum(attribute='sewage') %}
+{% set env_inc_new  = env_rows | sum(attribute='incidents_new') %}
+{% set env_inc_open = env_rows | sum(attribute='incidents_open') %}
+
+<div class="sum-grid">
+  <div class="sum-box">
+    <div class="sum-num">{{ env_active }}<span style="font-size:.9rem;color:var(--muted)">/{{ env_rows|length }}</span></div>
+    <div class="sum-lbl">Active</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num good">{{ env_waste }}</div>
+    <div class="sum-lbl">Waste Checks</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num good">{{ env_soil }}</div>
+    <div class="sum-lbl">Soil/Water</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num good">{{ env_dust }}</div>
+    <div class="sum-lbl">Dust</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num good">{{ env_hazcom }}</div>
+    <div class="sum-lbl">HAZCOM</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num good">{{ env_sewage }}</div>
+    <div class="sum-lbl">Sewage</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num {% if env_inc_open %}risk-h{% endif %}">{{ env_inc_open }}</div>
+    <div class="sum-lbl">Open Incidents</div>
+  </div>
+</div>
+
+<div style="overflow-x:auto">
+<table class="rpt-table">
+  <thead>
+    <tr>
+      <th class="left" rowspan="2">Officer</th>
+      <th colspan="5" style="border-bottom:1px solid #334155">Checks Done (days / {{ days_in_month }})</th>
+      <th rowspan="2">Coverage<br>%</th>
+      <th colspan="2" style="border-bottom:1px solid #334155">Incidents</th>
+      <th rowspan="2">Level<br>Work</th>
+    </tr>
+    <tr>
+      <th>Waste</th><th>Soil</th><th>Dust</th><th>HAZCOM</th><th>Sewage</th>
+      <th>New</th><th>Open</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in env_rows %}
+    {% set pct = ((r.total / r.max * 100)|round|int) if r.max > 0 else 0 %}
+    <tr {% if r.zero %}class="zero-row"{% endif %}>
+      <td class="left">
+        {{ r.officer_name }}
+        {% if r.zero %}<span style="color:var(--warning);font-size:10px;margin-left:4px">⚠ No checks</span>{% endif %}
+      </td>
+      <td>{% if r.waste %}<span class="good">{{ r.waste }}</span>{% else %}<span class="risk-h">0</span>{% endif %}</td>
+      <td>{% if r.soil %}<span class="good">{{ r.soil }}</span>{% else %}<span class="risk-h">0</span>{% endif %}</td>
+      <td>{% if r.dust %}<span class="good">{{ r.dust }}</span>{% else %}<span class="risk-h">0</span>{% endif %}</td>
+      <td>{% if r.hazcom %}<span class="good">{{ r.hazcom }}</span>{% else %}<span class="risk-h">0</span>{% endif %}</td>
+      <td>{% if r.sewage %}<span class="good">{{ r.sewage }}</span>{% else %}<span class="risk-h">0</span>{% endif %}</td>
+      <td>
+        <span style="font-weight:700;color:{{ '#166534' if pct >= 80 else ('#854d0e' if pct >= 50 else '#b91c1c') }}">
+          {{ pct }}%
+        </span>
+      </td>
+      <td>{{ r.incidents_new or '—' }}</td>
+      <td>{% if r.incidents_open %}<span class="risk-h">{{ r.incidents_open }}</span>{% else %}—{% endif %}</td>
+      <td>{{ r.level_work or '—' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td class="left">Total</td>
+      <td>{{ env_waste }}</td>
+      <td>{{ env_soil }}</td>
+      <td>{{ env_dust }}</td>
+      <td>{{ env_hazcom }}</td>
+      <td>{{ env_sewage }}</td>
+      <td>—</td>
+      <td>{{ env_inc_new }}</td>
+      <td>{{ env_inc_open }}</td>
+      <td>—</td>
+    </tr>
+  </tfoot>
+</table>
+</div>
+<p style="font-size:11px;color:var(--muted);margin-top:6px">Coverage % = total checks done ÷ ({{ days_in_month }} days × 5 check types).</p>
+{% endif %}
+
+{% if not wlf_rows and not env_rows %}
+<div class="card"><p class="muted">No officers found.</p></div>
+{% endif %}
+
+<p style="margin-top:14px;font-size:11px;color:var(--muted);text-align:right">
+  Generated: {{ now.strftime('%d %b %Y — %H:%M') }}
+</p>
+{% endblock %}

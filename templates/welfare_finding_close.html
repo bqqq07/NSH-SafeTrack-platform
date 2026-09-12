@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Close finding{% endblock %}
+{% block content %}
+<div style="max-width:620px;margin:0 auto">
+  <h2>Close finding</h2>
+  <div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:14px">
+    <div style="font-weight:700">{{ f.description }}</div>
+    <div style="color:#64748b;font-size:.9rem;margin-top:4px">
+      Unit {{ f.unit }}{% if f.ref_no %} · {{ f.ref_no }}{% endif %} · {{ f.severity }}{% if f.due_date %} · Due {{ f.due_date }}{% endif %}
+    </div>
+  </div>
+  {% if before %}
+    <div style="margin-bottom:12px"><strong>Before</strong>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        {% for p in before %}<img src="{{ url_for('hse_photo', filename=p.photo_path) }}"
+            style="width:110px;height:110px;object-fit:cover;border-radius:8px">{% endfor %}
+      </div></div>
+  {% endif %}
+  <form method="post" enctype="multipart/form-data">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label style="font-weight:700">After photo (required)</label>
+    <input type="file" name="after_photo" accept="image/*" capture="environment" required
+           style="display:block;margin:8px 0 14px">
+    <label style="font-weight:700">Closure note (required)</label>
+    <textarea name="closure_note" rows="3" required placeholder="What was done, verified when"
+              style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></textarea>
+    <button style="width:100%;margin-top:14px;padding:16px;border:0;background:#22c55e;color:#04220f;
+                   border-radius:12px;font-weight:800">Confirm closure</button>
+  </form>
+</div>
+{% endblock %}

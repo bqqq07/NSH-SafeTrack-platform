@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">
+  <h1 style="margin:0">Monthly Evaluation — Roster</h1>
+  {% if my_roster %}
+  <a href="{{ url_for('monthly_eval_form') }}" class="btn primary" style="font-size:1rem">
+    ✏️ Start Evaluation →
+  </a>
+  {% endif %}
+</div>
+<p class="hint">Add the officers you are responsible for evaluating. Once your roster is set, click <strong>Start Evaluation</strong>.</p>
+
+<section class="card">
+  <h2>Your Current Roster</h2>
+  {% if my_roster %}
+  <table class="table">
+    <thead><tr><th>Name</th><th>Role</th><th>Action</th></tr></thead>
+    <tbody>
+    {% for entry in my_roster %}
+      <tr>
+        <td>{{ entry.subject.name }}</td>
+        <td style="color:var(--muted);font-size:.88rem">{{ entry.subject.role }}</td>
+        <td>
+          <form method="post">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+            <input type="hidden" name="action" value="remove">
+            <input type="hidden" name="subject_id" value="{{ entry.subject_id }}">
+            <button type="submit" class="btn small"
+                    style="border-color:var(--danger);color:var(--danger)"
+                    onclick="return confirm('Remove from roster?')">Remove</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+
+  <div style="margin-top:1rem">
+    <a href="{{ url_for('monthly_eval_form') }}" class="btn primary">✏️ Start Evaluation →</a>
+  </div>
+
+  {% else %}
+    <p class="hint">Your roster is empty. Add officers below.</p>
+  {% endif %}
+</section>
+
+<section class="card">
+  <h2>Add Officer</h2>
+  {% if candidates %}
+  <form method="post" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <input type="hidden" name="action" value="add">
+    <label style="margin:0;flex:1;min-width:200px">
+      <select name="subject_id" required>
+        <option value="">Select officer...</option>
+        {% for u in candidates %}
+          <option value="{{ u.id }}">{{ u.name }} ({{ u.role }})</option>
+        {% endfor %}
+      </select>
+    </label>
+    <button type="submit" class="btn primary">Add to Roster</button>
+  </form>
+  {% else %}
+    <p class="hint">No officers available to add — all are already on your roster.</p>
+  {% endif %}
+</section>
+{% endblock %}

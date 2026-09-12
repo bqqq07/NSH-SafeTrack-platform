@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}My Daily Work Reports{% endblock %}
+{% block content %}
+<section class="card">
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px">
+    <h2 style="margin:0">{% if is_site_supervisor %}Supervisors' Daily Work Reports{% else %}My Daily Work Reports{% endif %}</h2>
+    {% if not is_site_supervisor %}
+    <a class="btn primary" href="{{ url_for('supervisor_daily_work_new') }}">+ New Report</a>
+    {% endif %}
+  </div>
+
+  {% if reports %}
+  <table style="width:100%; border-collapse:collapse; margin-top:14px; font-size:14px">
+    <thead>
+      <tr style="background:var(--primary); color:#fff">
+        <th style="padding:9px 10px; text-align:left">Date</th>
+        {% if is_site_supervisor %}
+        <th style="padding:9px 10px; text-align:left">Supervisor</th>
+        {% endif %}
+        <th style="padding:9px 10px; text-align:center">Items</th>
+        <th style="padding:9px 10px; text-align:left">Areas</th>
+        <th style="padding:9px 10px; text-align:left">Employees</th>
+        <th style="padding:9px 10px; text-align:center">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in reports %}
+      <tr style="border-bottom:1px solid var(--border); {% if loop.index is even %}background:#f9fafb{% endif %}">
+        <td style="padding:8px 10px; white-space:nowrap"><strong>{{ r.report_date.strftime('%d %b %Y') }}</strong></td>
+        {% if is_site_supervisor %}
+        <td style="padding:8px 10px">
+          <strong>{{ r.supervisor.name }}</strong><br>
+          <span class="muted" style="font-size:12px">{{ r.supervisor.supervisor_code }}</span>
+        </td>
+        {% endif %}
+        <td style="padding:8px 10px; text-align:center">{{ r.items|length }}</td>
+        <td style="padding:8px 10px; color:var(--muted); font-size:13px">
+          {% set areas = r.items | map(attribute='area') | list %}
+          {% if areas %}{{ areas[:2] | join(', ') }}{% if areas|length > 2 %} +{{ areas|length - 2 }}{% endif %}
+          {% else %}-{% endif %}
+        </td>
+        <td style="padding:8px 10px; font-size:12px">
+          {% if r.report_employees %}
+            {% for re in r.report_employees[:2] %}
+            <span style="display:inline-block;background:#e8f0fe;border-radius:10px;padding:2px 7px;margin:1px;white-space:nowrap">{{ re.employee.name }}</span>
+            {% endfor %}
+            {% if r.report_employees|length > 2 %}
+            <span class="muted">+{{ r.report_employees|length - 2 }}</span>
+            {% endif %}
+          {% else %}-{% endif %}
+        </td>
+        <td style="padding:8px 10px; text-align:center; white-space:nowrap">
+          <a class="btn" style="padding:5px 10px; font-size:12px" href="{{ url_for('supervisor_daily_work_view', report_id=r.id) }}">View</a>
+          <a class="btn primary" style="padding:5px 10px; font-size:12px" href="{{ url_for('supervisor_daily_work_pdf', report_id=r.id) }}" target="_blank">PDF</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted" style="margin-top:20px; text-align:center">
+    {% if is_site_supervisor %}No reports submitted by your supervisors yet.
+    {% else %}No reports yet. Click <strong>+ New Report</strong> to get started.{% endif %}
+  </p>
+  {% endif %}
+</section>
+{% endblock %}

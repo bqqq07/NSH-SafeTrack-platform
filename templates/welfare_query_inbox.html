@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Welfare Queries{% endblock %}
+{% block content %}
+<div style="max-width:760px;margin:0 auto">
+  <h2>Welfare queries</h2>
+  <p style="color:#64748b;margin-top:0">
+    {% if mine %}Questions from the welfare team about units you are covering.
+      You have answered <strong>{{ answered_n }}</strong> so far — this counts as part of your activity.
+    {% else %}All welfare queries.{% endif %}</p>
+
+  {% for q in rows %}
+  <div style="border:1px solid {{ '#fecaca' if overdue(q) else '#e2e8f0' }};
+              background:{{ '#fff1f2' if overdue(q) else '#fff' }};
+              border-radius:12px;padding:14px;margin-bottom:10px">
+    <div style="font-weight:700">{{ q.question }}</div>
+    <div style="color:#64748b;font-size:.9rem;margin-top:4px">
+      Unit {{ q.unit }}{% if q.ref_no %} · {{ q.ref_no }}{% endif %}
+      · from {{ askers.get(q.asker_id,'—') }} · {{ q.date }}
+      {% if q.photo_wanted %} · <strong>photo requested</strong>{% endif %}
+    </div>
+
+    {% if q.status == 'answered' %}
+      <div style="background:#f0fdf4;border-radius:8px;padding:10px;margin-top:8px">
+        <div style="color:#166534;font-weight:700">
+          Answered
+          {% if q.answered_by %}<span style="font-weight:400;font-size:.85rem;color:#475569"> by {{ answerers.get(q.answered_by, '—') }}</span>{% endif %}
+          {% if q.answered_at %}<span style="font-size:.78rem;color:#94a3b8;margin-left:6px">· {{ q.answered_at.strftime('%d %b %H:%M') }}</span>{% endif %}
+        </div>
+        <div>{{ q.answer_text }}</div>
+        {% if q.answer_photo %}
+          <img src="{{ url_for('hse_photo', filename=q.answer_photo) }}"
+               style="width:110px;height:110px;object-fit:cover;border-radius:8px;margin-top:8px">
+        {% endif %}
+      </div>
+    {% else %}
+      <form method="post" action="{{ url_for('welfare_query_answer', qid=q.id) }}"
+            enctype="multipart/form-data" style="margin-top:10px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <textarea name="answer_text" rows="2" required placeholder="Answer from what you can see"
+                  style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1"></textarea>
+        <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+          <input type="file" name="answer_photo" accept="image/*" capture="environment">
+          <button style="padding:10px 18px;border:0;background:#22c55e;color:#04220f;
+                         border-radius:8px;font-weight:800">Send answer</button>
+        </div>
+      </form>
+    {% endif %}
+  </div>
+  {% else %}
+    <p style="color:#64748b">Nothing here.</p>
+  {% endfor %}
+</div>
+{% endblock %}

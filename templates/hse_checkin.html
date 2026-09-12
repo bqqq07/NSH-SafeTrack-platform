@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Daily Check-in</h2>
+
+{% if existing %}
+<div class="card" style="border-left:4px solid var(--success)">
+  <p><strong>Today's Check-in</strong> — {{ today.strftime('%A, %d %b %Y') }}</p>
+  <p>Location: <strong>{{ existing.location }}</strong></p>
+  {% if checkin_supervisor %}<p>Supervisor: <strong>{{ checkin_supervisor.name }}</strong></p>{% endif %}
+</div>
+{% endif %}
+
+<div class="card small" style="max-width:520px;margin:0 0 16px 0">
+  <h3 style="margin-top:0">{{ 'Update Check-in' if existing else 'Check In for Today' }}</h3>
+  <form method="post">
+    <label>Location *
+      <input type="text" name="location" id="locationInput"
+             value="{{ existing.location if existing else '' }}"
+             placeholder="Type or select location" required list="locationList">
+      <datalist id="locationList">
+        {% for loc in locations %}<option value="{{ loc }}">{% endfor %}
+      </datalist>
+    </label>
+
+    <label>Area Supervisor Code (optional)
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" name="supervisor_code" id="supCode"
+               value="{{ checkin_supervisor.supervisor_code if checkin_supervisor else '' }}"
+               placeholder="e.g. SUP001" style="flex:1">
+        <button type="button" class="btn" onclick="lookupSup()">Lookup</button>
+      </div>
+      <small id="supName" style="color:var(--success)">
+        {% if checkin_supervisor %}{{ checkin_supervisor.name }}{% endif %}
+      </small>
+    </label>
+
+    <button type="submit" class="btn primary" style="width:100%;margin-top:8px">
+      {{ 'Update' if existing else 'Check In' }}
+    </button>
+  </form>
+</div>
+
+<script>
+async function lookupSup() {
+  const code = document.getElementById('supCode').value.trim();
+  if (!code) return;
+  const res = await fetch(`/hse/api/supervisor_lookup?code=${encodeURIComponent(code)}`);
+  const data = await res.json();
+  const el = document.getElementById('supName');
+  if (data.found) {
+    el.textContent = '✓ ' + data.name;
+    el.style.color = 'var(--success)';
+  } else {
+    el.textContent = '✗ Supervisor not found';
+    el.style.color = 'var(--danger)';
+  }
+}
+</script>
+{% endblock %}

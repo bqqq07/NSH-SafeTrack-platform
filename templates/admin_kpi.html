@@ -1,113 +1,291 @@
 {% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
 {% block content %}
-<section class="report">
-  <header class="report-header">
-    <div class="report-head-left">
-      <img class="report-logo" src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo">
-    </div>
-    <div class="report-head-center">
-      <h1>Admin • KPI Dashboard</h1>
-      <p class="muted">Week: {{ ws }} → {{ we }} &nbsp; (Prev: {{ pws }} → {{ pwe }})</p>
-    </div>
-    <div class="report-head-right"></div>
-  </header>
+<style>
+/* ── Layout ── */
+.dash-wrap{max-width:1200px;margin:0 auto;padding:0 4px}
+.dash-title{font-size:22px;font-weight:700;margin-bottom:18px;display:flex;align-items:center;gap:10px}
+.dash-title small{font-size:13px;font-weight:400;color:var(--muted)}
 
-  <section class="card no-print">
-    <form method="post" class="grid3">
-      <label>Week Start (Sunday)<input type="date" name="week_start" value="{{ ws.isoformat() }}" required></label>
-      <label>Week End (Thursday)<input type="date" name="week_end" value="{{ we.isoformat() }}" required></label>
-      <div class="align-end"><button class="btn primary">Refresh</button></div>
-    </form>
-  </section>
+/* ── Quick Access ── */
+.qa-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:24px}
+.qa-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 10px;text-align:center;text-decoration:none;color:inherit;transition:box-shadow .15s,transform .15s;display:block}
+.qa-card:hover{box-shadow:0 4px 16px rgba(0,0,0,.1);transform:translateY(-2px);color:inherit}
+.qa-icon{font-size:26px;margin-bottom:6px}
+.qa-label{font-size:12px;font-weight:600;color:var(--text)}
+.qa-badge{display:inline-block;background:#ef4444;color:#fff;border-radius:10px;font-size:10px;font-weight:700;padding:1px 6px;margin-top:3px}
 
-  <section class="kpi-cards">
-    <div class="kpi">
-      <div class="kpi-title">Total evaluations (this week)</div>
-      <div class="kpi-value">{{ total_this_week }}</div>
-      <div class="kpi-sub">Last week: {{ total_prev_week }}</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-title">Growth (only entities with 2+ evals)</div>
-      <div class="kpi-value">
-        {% if growth_pct >= 0 %}▲{% else %}▼{% endif %}
-        {{ '%.1f'|format(growth_pct) }}%
-      </div>
-      <div class="kpi-sub">{{ pws }} → {{ ws }}</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-title">Employees coverage</div>
-      <div class="kpi-value">
-        {% if overall_emp_cov is not none %}{{ '%.1f'|format(overall_emp_cov) }}%{% else %}—{% endif %}
-      </div>
-      <div class="kpi-sub">Evaluated employees / active employees</div>
-    </div>
-    <div class="kpi">
-      <div class="kpi-title">Supervisors coverage</div>
-      <div class="kpi-value">
-        {% if overall_sup_cov is not none %}{{ '%.1f'|format(overall_sup_cov) }}%{% else %}—{% endif %}
-      </div>
-      <div class="kpi-sub">Evaluated supervisors / assigned supervisors</div>
-    </div>
-  </section>
+/* ── KPI Cards ── */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px;margin-bottom:24px}
+.kc{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px 18px;position:relative;overflow:hidden}
+.kc::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;border-radius:4px 0 0 4px}
+.kc.blue::before{background:#3b82f6}
+.kc.green::before{background:#22c55e}
+.kc.orange::before{background:#f59e0b}
+.kc.purple::before{background:#a855f7}
+.kc.red::before{background:#ef4444}
+.kc-label{font-size:11px;color:var(--muted);font-weight:500;margin-bottom:4px}
+.kc-val{font-size:26px;font-weight:700;line-height:1.1}
+.kc-sub{font-size:11px;color:var(--muted);margin-top:4px}
+.kc-delta{font-size:12px;font-weight:600}
+.kc-delta.up{color:#22c55e}.kc-delta.down{color:#ef4444}
 
-  <section class="card">
-    <h2>Supervisors → Employees</h2>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>ID</th><th>Name</th><th class="right">Employees</th>
-          <th class="right">This week</th><th class="right">Last week</th>
-          <th class="right">Coverage</th><th class="center">Trend</th>
-        </tr>
-      </thead>
-      <tbody>
+/* ── Week picker ── */
+.week-bar{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 16px;margin-bottom:20px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.week-bar label{font-size:12px;font-weight:600;color:var(--muted)}
+.week-bar input{padding:5px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px}
+
+/* ── Chart + Band row ── */
+.mid-row{display:grid;grid-template-columns:1fr 240px;gap:16px;margin-bottom:24px}
+@media(max-width:700px){.mid-row{grid-template-columns:1fr}}
+.chart-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px}
+.chart-card h3{font-size:14px;font-weight:600;margin:0 0 14px}
+.band-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px}
+.band-card h3{font-size:14px;font-weight:600;margin:0 0 14px}
+.band-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.band-name{width:70px;font-size:12px;font-weight:600}
+.band-bar-wrap{flex:1;background:var(--bg);border-radius:4px;height:14px;overflow:hidden}
+.band-bar{height:100%;border-radius:4px;transition:width .6s}
+.band-E .band-bar{background:#22c55e}
+.band-G .band-bar{background:#3b82f6}
+.band-A .band-bar{background:#f59e0b}
+.band-P .band-bar{background:#ef4444}
+.band-cnt{font-size:11px;color:var(--muted);width:24px;text-align:right}
+
+/* ── Tables ── */
+.tables-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media(max-width:800px){.tables-row{grid-template-columns:1fr}}
+.tbl-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px}
+.tbl-card h3{font-size:14px;font-weight:600;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center}
+.tbl-card h3 a{font-size:11px;font-weight:400;color:var(--primary)}
+.cov-bar{width:60px;height:6px;background:#e5e7eb;border-radius:3px;display:inline-block;vertical-align:middle;overflow:hidden}
+.cov-fill{height:100%;border-radius:3px;background:#3b82f6}
+.trend-up{color:#22c55e;font-size:11px}.trend-down{color:#ef4444;font-size:11px}
+.row-done{background:#e8f9ee}
+.row-missing{background:#fdeaea}
+</style>
+
+<div class="dash-wrap">
+  <div class="dash-title">
+    📊 Admin Dashboard
+    <small>Week: {{ ws }} → {{ we }}</small>
+  </div>
+
+  <!-- ── Quick Access ── -->
+  <div class="qa-grid">
+    <a href="{{ url_for('admin_employees') }}" class="qa-card">
+      <div class="qa-icon">👥</div>
+      <div class="qa-label">Employees</div>
+    </a>
+    <a href="{{ url_for('admin_report_picker') }}" class="qa-card">
+      <div class="qa-icon">📊</div>
+      <div class="qa-label">Reports</div>
+    </a>
+    <a href="{{ url_for('attendance_admin') }}" class="qa-card">
+      <div class="qa-icon">🗓️</div>
+      <div class="qa-label">Attendance</div>
+    </a>
+    <a href="{{ url_for('requests_inbox') }}" class="qa-card">
+      <div class="qa-icon">📥</div>
+      <div class="qa-label">Requests</div>
+      {% if (pending_requests|default(0)) > 0 %}
+      <div class="qa-badge">{{ pending_requests }}</div>
+      {% endif %}
+    </a>
+    <a href="{{ url_for('user_location_page') }}" class="qa-card">
+      <div class="qa-icon">📍</div>
+      <div class="qa-label">Locations</div>
+    </a>
+    {% if g_is_hse_supervisor %}
+    <a href="{{ url_for('hse_dashboard') }}" class="qa-card">
+      <div class="qa-icon">🛡️</div>
+      <div class="qa-label">HSE</div>
+    </a>
+    {% endif %}
+    <a href="{{ url_for('admin_users') }}" class="qa-card">
+      <div class="qa-icon">👤</div>
+      <div class="qa-label">Users</div>
+    </a>
+    <a href="{{ url_for('settings_company') }}" class="qa-card">
+      <div class="qa-icon">⚙️</div>
+      <div class="qa-label">Settings</div>
+    </a>
+  </div>
+
+  <!-- ── Week Picker ── -->
+  <form method="post" class="week-bar no-print">
+    <label>Week Start (Sun)</label>
+    <input type="date" name="week_start" value="{{ ws.isoformat() }}" required>
+    <label>Week End (Thu)</label>
+    <input type="date" name="week_end" value="{{ we.isoformat() }}" required>
+    <button class="btn primary" style="padding:6px 14px;font-size:13px">Apply</button>
+  </form>
+
+  <!-- ── KPI Cards ── -->
+  <div class="kpi-row">
+    <div class="kc blue">
+      <div class="kc-label">Evaluated Employees</div>
+      <div class="kc-val">{{ active_evaluated }}</div>
+      <div class="kc-sub">of {{ active_total }} active</div>
+    </div>
+    <div class="kc green">
+      <div class="kc-label">Employee Coverage</div>
+      <div class="kc-val">{% if overall_emp_cov is not none %}{{ '%.0f'|format(overall_emp_cov) }}%{% else %}—{% endif %}</div>
+      <div class="kc-sub">evaluations this week</div>
+    </div>
+    <div class="kc purple">
+      <div class="kc-label">Supervisor Coverage</div>
+      <div class="kc-val">{% if overall_sup_cov is not none %}{{ '%.0f'|format(overall_sup_cov) }}%{% else %}—{% endif %}</div>
+      <div class="kc-sub">site sups evaluated</div>
+    </div>
+    <div class="kc orange">
+      <div class="kc-label">Attendance Rate</div>
+      <div class="kc-val">{% if att_rate is not none %}{{ att_rate }}%{% else %}—{% endif %}</div>
+      <div class="kc-sub">leave: {% if leave_rate is not none %}{{ leave_rate }}%{% else %}—{% endif %}</div>
+    </div>
+    <div class="kc {% if pending_requests > 0 %}red{% else %}green{% endif %}">
+      <div class="kc-label">Pending Requests</div>
+      <div class="kc-val">{{ pending_requests }}</div>
+      <div class="kc-sub"><a href="{{ url_for('requests_inbox') }}" style="color:inherit">view inbox →</a></div>
+    </div>
+    <div class="kc blue">
+      <div class="kc-label">Avg Eval Score</div>
+      <div class="kc-val">{{ avg_score if avg_score else '—' }}</div>
+      <div class="kc-sub">
+        {% if growth_pct >= 0 %}<span class="kc-delta up">▲ {{ '%.1f'|format(growth_pct) }}%</span>
+        {% else %}<span class="kc-delta down">▼ {{ '%.1f'|format(growth_pct|abs) }}%</span>{% endif %}
+        vs prev week
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Chart + Band Distribution ── -->
+  <div class="mid-row">
+    <div class="chart-card">
+      <h3>Top Supervisors — Evaluation Coverage %</h3>
+      <canvas id="supChart" height="160"></canvas>
+    </div>
+    <div class="band-card">
+      <h3>Score Bands This Week</h3>
+      {% set band_total = (band_counts.values()|sum) or 1 %}
+      {% for band, label, cls in [('Excellent','Excellent','E'),('Good','Good','G'),('Satisfactory','Satisfactory','A'),('Needs Improvement','Needs Imp.','P')] %}
+      {% set cnt = band_counts.get(band, 0) %}
+      <div class="band-row band-{{ cls }}">
+        <div class="band-name">{{ label }}</div>
+        <div class="band-bar-wrap">
+          <div class="band-bar" style="width:{{ (cnt/band_total*100)|round }}%"></div>
+        </div>
+        <div class="band-cnt">{{ cnt }}</div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <!-- ── Tables ── -->
+  <div class="tables-row" style="grid-template-columns:1fr">
+    <!-- Supervisors table -->
+    <div class="tbl-card">
+      <h3>Supervisors <a href="{{ url_for('admin_employees') }}">see all →</a></h3>
+      <table class="table" style="font-size:12px">
+        <thead><tr>
+          <th>Name</th>
+          <th class="right">Emps</th>
+          <th class="right">Done</th>
+          <th class="right">Cov%</th>
+          <th class="center">↕</th>
+        </tr></thead>
+        <tbody>
         {% for r in sup_rows %}
-        <tr>
-          <td class="mono">{{ r.code }}</td>
-          <td>{{ r.name or '—' }}</td>
+        {% set row_cls = 'row-done' if (r.target and r.done_c >= r.target) else ('row-missing' if (r.target and r.done_c == 0) else '') %}
+        <tr class="{{ row_cls }}">
+          <td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+            <a href="{{ url_for('admin_supervisor_employees', sup_id=r.id) }}" style="text-decoration:none;color:inherit">{{ r.name or r.code }}</a>
+          </td>
           <td class="right">{{ r.target }}</td>
           <td class="right">{{ r.done_c }}</td>
-          <td class="right">{{ r.done_p }}</td>
-          <td class="right">{% if r.coverage is not none %}{{ '%.1f'|format(r.coverage) }}%{% else %}—{% endif %}</td>
+          <td class="right">
+            {% if r.coverage is not none %}
+            <span class="cov-bar"><span class="cov-fill" style="width:{{ [r.coverage,100]|min }}%"></span></span>
+            {{ '%.0f'|format(r.coverage) }}%
+            {% else %}—{% endif %}
+          </td>
           <td class="center">
-            {% if r.trend == 'up' %}▲ +{{ r.delta }}{% elif r.trend == 'down' %}▼ {{ r.delta }}{% else %}—{% endif %}
+            {% if r.trend == 'up' %}<span class="trend-up">▲</span>
+            {% elif r.trend == 'down' %}<span class="trend-down">▼</span>
+            {% else %}—{% endif %}
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="7" class="center muted">No supervisors.</td></tr>
+        <tr><td colspan="5" class="center muted">No data</td></tr>
         {% endfor %}
-      </tbody>
-    </table>
-  </section>
+        </tbody>
+      </table>
+    </div>
 
-  <section class="card">
-    <h2>Site Supervisors → Supervisors</h2>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>ID</th><th>Name</th><th class="right">Assigned</th>
-          <th class="right">This week</th><th class="right">Last week</th>
-          <th class="right">Coverage</th><th class="center">Trend</th>
-        </tr>
-      </thead>
-      <tbody>
+    <!-- Site Supervisors table -->
+    <div class="tbl-card">
+      <h3>Site Supervisors</h3>
+      <table class="table" style="font-size:12px">
+        <thead><tr>
+          <th>Name</th>
+          <th class="right">Assigned</th>
+          <th class="right">Done</th>
+          <th class="right">Cov%</th>
+          <th class="center">↕</th>
+        </tr></thead>
+        <tbody>
         {% for r in site_rows %}
         <tr>
-          <td class="mono">{{ r.code }}</td>
-          <td>{{ r.name or '—' }}</td>
+          <td style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ r.name or r.code }}</td>
           <td class="right">{{ r.target }}</td>
           <td class="right">{{ r.done_c }}</td>
-          <td class="right">{{ r.done_p }}</td>
-          <td class="right">{% if r.coverage is not none %}{{ '%.1f'|format(r.coverage) }}%{% else %}—{% endif %}</td>
+          <td class="right">
+            {% if r.coverage is not none %}
+            <span class="cov-bar"><span class="cov-fill" style="width:{{ [r.coverage,100]|min }}%"></span></span>
+            {{ '%.0f'|format(r.coverage) }}%
+            {% else %}—{% endif %}
+          </td>
           <td class="center">
-            {% if r.trend == 'up' %}▲ +{{ r.delta }}{% elif r.trend == 'down' %}▼ {{ r.delta }}{% else %}—{% endif %}
+            {% if r.trend == 'up' %}<span class="trend-up">▲</span>
+            {% elif r.trend == 'down' %}<span class="trend-down">▼</span>
+            {% else %}—{% endif %}
           </td>
         </tr>
         {% else %}
-        <tr><td colspan="7" class="center muted">No site supervisors.</td></tr>
+        <tr><td colspan="5" class="center muted">No data</td></tr>
         {% endfor %}
-      </tbody>
-    </table>
-  </section>
-</section>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+const labels = {{ chart_labels | tojson }};
+const values = {{ chart_values | tojson }};
+new Chart(document.getElementById('supChart'), {
+  type: 'bar',
+  data: {
+    labels,
+    datasets: [{
+      label: 'Coverage %',
+      data: values,
+      backgroundColor: values.map(v =>
+        v >= 80 ? '#22c55e' : v >= 50 ? '#f59e0b' : '#ef4444'
+      ),
+      borderRadius: 5,
+      borderSkipped: false,
+    }]
+  },
+  options: {
+    responsive: true,
+    plugins: { legend: { display: false } },
+    scales: {
+      y: { min: 0, max: 100, ticks: { callback: v => v + '%' }, grid: { color: '#f0f0f0' } },
+      x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+    }
+  }
+});
+</script>
 {% endblock %}

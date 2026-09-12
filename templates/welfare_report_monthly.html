@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Welfare Report — {{ month_name }} {{ year }}{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <a href="{{ url_for('welfare_report_picker') }}" style="color:#94a3b8;font-size:.9rem">← Reports</a>
+    <h2 style=>Welfare Monthly Report — {{ month_name }} {{ year }}</h2>
+  </div>
+  <div style="display:flex;gap:.75rem">
+    <a href="{{ url_for('welfare_report_monthly_excel', year=year, month=month) }}" class="btn btn-secondary">↓ Excel</a>
+    <a href="{{ url_for('welfare_report_monthly_pdf',   year=year, month=month) }}" class="btn">↓ PDF</a>
+  </div>
+</div>
+
+{% if rows %}
+<div style="overflow-x:auto">
+<table class="table" style="min-width:700px">
+  <thead>
+    <tr>
+      <th>Officer</th>
+      <th style="text-align:center">Rounds</th>
+      <th style="text-align:center">Avg Score</th>
+      <th style="text-align:center">Units</th>
+      <th style="text-align:center">Findings</th>
+      <th style="text-align:center">Closed</th>
+      <th style="text-align:center">Flag Logs</th>
+      <th style="text-align:center">Complaints</th>
+      <th style="text-align:center">Level</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for r in rows %}
+  <tr>
+    <td style="font-weight:600">{{ r.officer_name }}</td>
+    <td style="text-align:center">{{ r.rounds_submitted }}</td>
+    <td style="text-align:center">
+      {% if r.avg_score is not none %}
+      <span style="color:{% if r.avg_score>=70 %}#22c55e{% elif r.avg_score>=50 %}#f59e0b{% else %}#ef4444{% endif %};font-weight:600">
+        {{ r.avg_score }}%
+      </span>
+      {% else %}<span style="color:#94a3b8">—</span>{% endif %}
+    </td>
+    <td style="text-align:center">{{ r.units_covered }}</td>
+    <td style="text-align:center">{{ r.findings_written }}</td>
+    <td style="text-align:center">
+      <span style="color:{% if r.findings_closed > 0 %}#22c55e{% else %}#94a3b8{% endif %}">
+        {{ r.findings_closed }}
+      </span>
+    </td>
+    <td style="text-align:center">{{ r.flag_logs }}</td>
+    <td style="text-align:center">{{ r.complaints }}</td>
+    <td style="text-align:center">
+      <span class="badge badge-active" style="font-size:.8rem">{{ r.current_level }}</span>
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+  {% if rows|length > 1 %}
+  <tfoot style="font-weight:600;border-top:2px solid #374151">
+    <tr>
+      <td>Total</td>
+      <td style="text-align:center">{{ rows|sum(attribute='rounds_submitted') }}</td>
+      <td style="text-align:center">—</td>
+      <td style="text-align:center">—</td>
+      <td style="text-align:center">{{ rows|sum(attribute='findings_written') }}</td>
+      <td style="text-align:center">{{ rows|sum(attribute='findings_closed') }}</td>
+      <td style="text-align:center">{{ rows|sum(attribute='flag_logs') }}</td>
+      <td style="text-align:center">{{ rows|sum(attribute='complaints') }}</td>
+      <td></td>
+    </tr>
+  </tfoot>
+  {% endif %}
+</table>
+</div>
+{% else %}
+<p style="color:#64748b">No welfare officers or no data for this period.</p>
+{% endif %}
+{% endblock %}

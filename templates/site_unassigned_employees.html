@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Unassigned Employees{% endblock %}
+{% block content %}
+<section class="report">
+  <header class="report-header">
+    <div class="report-head-left">
+      <img class="report-logo" src="{{ url_for('static', filename='img/logo.png') }}" alt="Company logo">
+    </div>
+    <div class="report-head-center">
+      <h1>Unassigned Employees</h1>
+      <p class="muted">Employees currently not under any supervisor — assign them to one of your supervisors</p>
+    </div>
+    <div class="report-head-right"></div>
+  </header>
+
+  <section class="card">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Emp. No</th>
+          <th>Department</th>
+          <th>Site</th>
+          <th class="no-print">Assign to</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in employees %}
+        <tr>
+          <td>{{ e.name }}</td>
+          <td class="mono">{{ e.emp_number }}</td>
+          <td>{{ e.department or '—' }}</td>
+          <td>{{ e.site or '—' }}</td>
+          <td class="no-print">
+            <form method="post" style="display:flex;gap:6px;align-items:center">
+              {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+              <input type="hidden" name="emp_id" value="{{ e.id }}">
+              <select name="supervisor_id" required>
+                <option value="" disabled selected>Choose supervisor…</option>
+                {% for s in my_supervisors %}
+                <option value="{{ s.id }}">{{ s.name }} ({{ s.supervisor_code }})</option>
+                {% endfor %}
+              </select>
+              <button class="btn primary">Assign</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="center muted">No unassigned employees.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</section>
+{% endblock %}

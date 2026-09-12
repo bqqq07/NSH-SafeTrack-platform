@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>سجل التقييمات الشهرية</h1>
+{% if evals %}
+<table class="rtable">
+  <thead>
+    <tr><th>الموظف</th><th>الشهر</th><th>المقيِّم</th><th>الدرجة</th><th>التصنيف</th><th>تاريخ الإرسال</th></tr>
+  </thead>
+  <tbody>
+  {% for e in evals %}
+    <tr>
+      <td>{{ e.subject.name if e.subject else '—' }}</td>
+      <td>{{ e.period_year }}-{{ '%02d'|format(e.period_month) }}</td>
+      <td>{{ e.evaluator.name if e.evaluator else '—' }}</td>
+      <td>{{ e.total_score if e.total_score is not none else '—' }}%</td>
+      <td>{{ e.band or '—' }}</td>
+      <td>{{ e.submitted_at.strftime('%Y-%m-%d') if e.submitted_at else '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="hint">لا توجد تقييمات بعد.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="card">
+  <h2>التقييم اليومي</h2>
+
+  <form id="f" class="grid2" onsubmit="save(event)" autocomplete="off">
+    <label>الموظف
+      <select name="employee_id" required>
+        <option value="">— اختر الموظف —</option>
+        {% for e in emps %}
+          <option value="{{ e.id }}">{{ e.name }} ({{ e.emp_number }})</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>المشرف (اختياري)
+      <select name="supervisor_id">
+        <option value="">—</option>
+        {% for s in sups %}
+          <option value="{{ s.id }}">{{ s.name }} ({{ s.supervisor_code or s.id }})</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>التاريخ
+      <input type="date" name="eval_date" value="{{ today.isoformat() }}" required>
+    </label>
+
+    <div class="grid-span muted small">الدرجات اليومية: Targets من 40، Performance من 60. المجموع يحتسب تلقائيًا.</div>
+
+    <label>Targets (0–40)
+      <input type="number" name="targets_score" min="0" max="40" step="0.01" required>
+    </label>
+
+    <label>Performance (0–60)
+      <input type="number" name="perf_score" min="0" max="60" step="0.01" required>
+    </label>
+
+    <label>المجموع /100 (تلقائي)
+      <input type="number" name="total_score" step="0.01" readonly>
+    </label>
+
+    <label>التصنيف (تلقائي)
+      <input type="text" name="overall_band" readonly>
+    </label>
+
+    <fieldset class="grid-span" style="border:0; padding:0; margin:0">
+      <legend class="muted small">قيم “Actual / c_” (اختياري — للعرض في التقرير الأسبوعي)</legend>
+      <div class="grid3">
+        <label>Punctuality <input type="number" name="c_punctuality" step="0.01"></label>
+        <label>Quality     <input type="number" name="c_quality" step="0.01"></label>
+        <label>Productivity<input type="number" name="c_productivity" step="0.01"></label>
+        <label>Communication<input type="number" name="c_communication" step="0.01"></label>
+        <label>Problem Solving<input type="number" name="c_problemsolving" step="0.01"></label>
+        <label>Compliance  <input type="number" name="c_compliance" step="0.01"></label>
+      </div>
+    </fieldset>
+
+    <label class="grid-span">ملاحظات
+      <textarea name="notes" rows="3"></textarea>
+    </label>
+
+    <div class="grid-span" style="display:flex; gap:8px;">
+      <button class="btn primary">حفظ / تحديث</button>
+      <a class="btn" href="{{ url_for('daily.daily_list') }}">عرض السجلات اليومية</a>
+      <a class="btn" href="{{ url_for('reports_daily.reports_all') }}">تقرير أسبوعي من اليومي</a>
+    </div>
+  </form>
+
+  <div id="msg" class="muted small" style="margin-top:8px;"></div>
+</section>
+
+<script>
+const f = document.getElementById('f');
+const targets = f.elements['targets_score'];
+const perf = f.elements['perf_score'];
+const total = f.elements['total_score'];
+const band = f.elements['overall_band'];
+
+function calc() {
+  const t = parseFloat(targets.value||0), p = parseFloat(perf.value||0);
+  const sum = (isNaN(t)?0:t) + (isNaN(p)?0:p);
+  total.value = sum.toFixed(2);
+  band.value = sum>=90?'A':sum>=80?'B':sum>=70?'C':sum>=60?'D':'E';
+}
+targets.addEventListener('input', calc);
+perf.addEventListener('input', calc);
+calc();
+
+async function save(e){
+  e.preventDefault();
+  const body = new FormData(f);
+  const res = await fetch('{{ url_for("daily.daily_upsert") }}', {
+    method: 'POST',
+    headers: { 'Accept': 'application/json' },
+    body
+  }).catch(()=>null);
+  const msg = document.getElementById('msg');
+  if(!res){ msg.textContent = 'Network error'; return; }
+  if(res.ok){
+    const j = await res.json();
+    msg.textContent = 'تم الحفظ ✅ (ID: '+ j.id +')';
+  } else {
+    msg.textContent = 'خطأ في الحفظ: ' + await res.text();
+  }
+}
+</script>
+{% endblock %}

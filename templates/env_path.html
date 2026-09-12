@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Environment Path{% endblock %}
+{% block content %}
+<div style="max-width:720px;margin:0 auto">
+
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+    <h2 style="margin:0;color:#064e3b">🌿 My Environment Path</h2>
+    <a href="{{ url_for('env_dashboard') }}"
+       style="color:#475569;text-decoration:none;font-size:.9rem">← Home</a>
+  </div>
+
+  {# ── Phase legend ── #}
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px">
+    {% for ph, label in [(1,'Foundation'),(2,'Field Skills'),(3,'HAZCOM & Sanitation'),(4,'Documentation')] %}
+    <span style="padding:4px 12px;border-radius:20px;font-size:.78rem;font-weight:700;
+                 background:{% if ph==1 %}#dcfce7{% elif ph==2 %}#dbeafe{% elif ph==3 %}#fef3c7{% else %}#f3e8ff{% endif %};
+                 color:{% if ph==1 %}#14532d{% elif ph==2 %}#1e3a5f{% elif ph==3 %}#78350f{% else %}#581c87{% endif %}">
+      Phase {{ ph }}: {{ label }}
+    </span>
+    {% endfor %}
+  </div>
+
+  {# ── Level cards ── #}
+  {% set modules = {} %}
+  {% for lvl in levels %}
+    {% set p = progs.get(lvl.code) %}
+    {% set is_cur = current and current.level_code == lvl.code %}
+
+    {# Module heading #}
+    {% if loop.first or levels[loop.index0-1].module != lvl.module %}
+    <div style="font-weight:800;color:#065f46;margin:20px 0 8px;font-size:1.05rem">
+      {{ lvl.module.replace('EM','Module ') }} — {{ lvl.title.split(':')[0] if ':' in lvl.title else lvl.title }}</div>
+    {% endif %}
+
+    <div style="border:2px solid {% if is_cur %}#10b981{% elif p and p.status=='done' %}#bbf7d0{% elif p and p.status=='pending' %}#fbbf24{% elif p and p.status=='locked' %}#e2e8f0{% else %}#e2e8f0{% endif %};
+                border-radius:14px;padding:14px;margin-bottom:10px;
+                background:{% if is_cur %}#f0fdf4{% elif p and p.status=='done' %}#f0fdf4{% elif p and p.status=='locked' %}#f8fafc{% else %}#fff{% endif %}">
+
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+        <div>
+          <span style="font-size:.78rem;font-weight:700;color:#065f46">{{ lvl.code }} · Ch {{ lvl.chapter }}</span>
+          <div style="font-weight:800;margin:2px 0;color:{% if p and p.status=='locked' %}#94a3b8{% else %}#0f172a{% endif %}">
+            {{ lvl.title }}
+          </div>
+          <div style="font-size:.8rem;color:#64748b">{{ lvl.ref }}</div>
+        </div>
+        <div style="text-align:right;white-space:nowrap">
+          {% if p %}
+            {% if p.status == 'done' %}
+              <span style="background:#dcfce7;color:#166534;padding:4px 10px;border-radius:20px;font-size:.8rem;font-weight:700">✓ Done</span>
+            {% elif p.status == 'pending' %}
+              <span style="background:#fef3c7;color:#92400e;padding:4px 10px;border-radius:20px;font-size:.8rem;font-weight:700">⏳ Pending</span>
+            {% elif p.status == 'active' %}
+              <span style="background:#d1fae5;color:#065f46;padding:4px 10px;border-radius:20px;font-size:.8rem;font-weight:700">▶ Active</span>
+            {% else %}
+              <span style="background:#f1f5f9;color:#94a3b8;padding:4px 10px;border-radius:20px;font-size:.8rem;font-weight:700">🔒 Locked</span>
+            {% endif %}
+          {% endif %}
+        </div>
+      </div>
+
+      {% if p and p.status in ('active','pending','done') %}
+        <div style="font-size:.88rem;color:#475569;margin-top:8px;line-height:1.5">
+          {{ lvl.why[:120] }}{% if lvl.why|length > 120 %}…{% endif %}
+        </div>
+      {% endif %}
+
+      {% if p and p.status in ('active','pending') %}
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <a href="{{ url_for('env_level', code=lvl.code) }}"
+             style="padding:8px 16px;background:#065f46;color:#fff;border-radius:8px;
+                    text-decoration:none;font-weight:700;font-size:.88rem">Open chapter</a>
+          <a href="{{ url_for('env_level_work_new', code=lvl.code) }}"
+             style="padding:8px 16px;background:#d1fae5;color:#065f46;border-radius:8px;
+                    text-decoration:none;font-weight:700;font-size:.88rem">+ Record work</a>
+        </div>
+      {% elif p and p.status == 'done' %}
+        <a href="{{ url_for('env_level', code=lvl.code) }}"
+           style="display:inline-block;margin-top:8px;color:#065f46;text-decoration:none;font-size:.88rem">Review →</a>
+      {% endif %}
+
+    </div>
+  {% endfor %}
+
+</div>
+{% endblock %}

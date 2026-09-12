@@ -1,0 +1,231 @@
+{% extends "base.html" %}
+{% block title %}{{ cfg.appendix }}: {{ cfg.title }}{% endblock %}
+{% block content %}
+<style>
+.cl-wrap { max-width:1120px; margin:0 auto }
+/* ── Header logos bar ── */
+.cl-logos-bar {
+  display:flex; align-items:center; justify-content:space-between;
+  border:1px solid #cbd5e1; border-radius:8px; padding:8px 14px;
+  margin-bottom:12px; gap:12px;
+}
+.cl-title-block { flex:1 }
+.cl-title-block .cl-appendix { font-size:.75rem; color:#64748b; font-weight:600 }
+.cl-title-block h2 { margin:2px 0 0; font-size:1rem; font-weight:700 }
+.cl-logos-right { display:flex; align-items:center; gap:12px }
+.cl-logos-right img { height:38px; object-fit:contain }
+.cl-amiral-box {
+  border:2px solid #065f46; padding:6px 10px; border-radius:6px;
+  font-weight:900; font-size:.85rem; color:#065f46; text-align:center; line-height:1.2;
+}
+/* ── Info block ── */
+.cl-info-box {
+  border:2px solid #065f46; border-radius:10px; padding:12px 14px;
+  margin-bottom:14px; display:grid; grid-template-columns:1fr auto; gap:12px;
+}
+.cl-field-label { font-size:.72rem; font-weight:700; color:#64748b; display:block; margin-bottom:3px }
+.cl-area-cbs { display:flex; flex-wrap:wrap; gap:8px; margin:6px 0 8px }
+.cl-area-cbs label { display:flex; align-items:center; gap:4px; font-size:.85rem; cursor:pointer }
+.cl-date-row { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:8px }
+/* ── Checklist table ── */
+.cl-table { width:100%; border-collapse:collapse; font-size:.8rem; margin-bottom:16px }
+.cl-table th, .cl-table td {
+  border:1px solid #94a3b8; padding:5px 6px; vertical-align:middle;
+}
+.cl-table thead th {
+  background:#064e3b; color:#fff; text-align:center;
+  font-size:.72rem; font-weight:700; line-height:1.3;
+}
+.cl-table thead th.th-good { background:#16a34a }
+.cl-table thead th.th-imm  { background:#dc2626 }
+.cl-table thead th.th-imp  { background:#d97706 }
+.cl-table thead th.th-comp { background:#e2e8f0; color:#1e293b }
+.cl-table .sec-row td {
+  background:#d1fae5; font-weight:700; font-style:italic; font-size:.78rem;
+  color:#064e3b; padding:6px 8px;
+}
+.cl-table tbody tr:hover { background:#f0fdf4 }
+.cl-num  { text-align:center; color:#64748b; width:28px }
+.cl-item { min-width:210px }
+.cl-status { text-align:center; width:80px }
+.cl-radio { cursor:pointer; width:15px; height:15px; accent-color:#065f46 }
+.cl-txt { width:100%; font-size:.77rem; padding:3px 4px; border:1px solid #cbd5e1; border-radius:3px }
+/* ── JSO / notes ── */
+.cl-jso-box { border:1px solid #94a3b8; border-radius:8px; padding:12px; margin-bottom:14px }
+.cl-jso-grid { display:grid; grid-template-columns:120px 1fr; gap:6px; margin-bottom:8px }
+</style>
+
+<div class="cl-wrap">
+
+  <!-- ── Logos bar (matches DOCX header) ── -->
+  <div class="cl-logos-bar">
+    <div class="cl-title-block">
+      <div class="cl-appendix">{{ cfg.appendix }}</div>
+      <h2>{{ cfg.title }}</h2>
+    </div>
+    <div class="cl-logos-right">
+      <img src="{{ url_for('static', filename='img/amiral_logo.png') }}" alt="AMIRAL">
+      <div class="cl-amiral-box">AMIRAL<br>PROJECT</div>
+      <img src="{{ url_for('static', filename='img/tecnimont_logo.png') }}" alt="TECNIMONT">
+    </div>
+  </div>
+
+  <form method="post" data-offline-type="env_checklist">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="_ctype" value="{{ ctype }}">
+    <input type="hidden" name="_item_count" value="{{ flat_items|length }}">
+
+    <!-- ── Info block ── -->
+    <div class="cl-info-box">
+      <div>
+        <!-- Construction worksite -->
+        <span class="cl-field-label">Construction worksite (Specify the Area/Unit/Elevation)</span>
+        <input type="text" name="area_detail" placeholder="e.g. PKG-2 Unit 380 — Str 1000"
+               style="width:100%;margin-bottom:8px">
+
+        <!-- Location checkboxes (same order as DOCX) -->
+        <div class="cl-area-cbs">
+          {% for loc in ['Workshop','Office','Laydown Area','Camp/Accommodation'] %}
+          <label>
+            <input type="checkbox" name="area_types" value="{{ loc }}"> {{ loc }}
+          </label>
+          {% endfor %}
+          <label>
+            <input type="checkbox" name="area_types" value="Other"> Other:
+            <input type="text" name="area_other" placeholder="specify"
+                   style="width:90px;font-size:.82rem;padding:2px 5px;border:1px solid #cbd5e1;border-radius:3px">
+          </label>
+        </div>
+
+        <!-- Date + Report No -->
+        <div class="cl-date-row">
+          <div>
+            <span class="cl-field-label">Inspection Date *</span>
+            <input type="date" name="filled_date" value="{{ today.isoformat() }}" required>
+          </div>
+          <div>
+            <span class="cl-field-label">Inspection Report N.</span>
+            <div style="display:flex;align-items:center;gap:6px;padding-top:4px;font-size:.84rem;color:#374151">
+              <span>{{ cfg.report_prefix }} #</span>
+              <input type="text" name="report_no_custom" placeholder="001"
+                     style="width:60px;text-align:center;font-size:.84rem">
+              <span>/ {{ today.year }}</span>
+              <span style="font-size:.72rem;color:#94a3b8;display:block">(auto-assigned on save)</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Subcontractor -->
+        <div>
+          <span class="cl-field-label">SUBCONTRACTOR(s) Inspected</span>
+          <input type="text" name="subcontractor" placeholder="e.g. ABC Contracting Co." style="width:100%">
+        </div>
+      </div>
+
+      <!-- AMIRAL box right side -->
+      <div style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px">
+        <img src="{{ url_for('static', filename='img/amiral_logo.png') }}" alt="AMIRAL"
+             style="height:50px;object-fit:contain">
+        <div class="cl-amiral-box" style="font-size:1rem;padding:8px 14px">AMIRAL<br>PROJECT</div>
+        <img src="{{ url_for('static', filename='img/tecnimont_logo.png') }}" alt="TECNIMONT"
+             style="height:30px;object-fit:contain">
+      </div>
+    </div>
+
+    <!-- ── Checklist table ── -->
+    <div style="overflow-x:auto;margin-bottom:16px">
+      <table class="cl-table">
+        <thead>
+          <tr>
+            <th rowspan="2" style="width:28px">#</th>
+            <th rowspan="2" style="text-align:left;min-width:220px">Item</th>
+            {% if cfg.has_na %}<th rowspan="2" style="width:70px">Not<br>Applicable<br>(N/A)</th>{% endif %}
+            <th class="th-good" style="width:80px">{{ cfg.col_good }}</th>
+            <th class="th-imm"  style="width:80px">{{ cfg.col_imm }}</th>
+            <th class="th-imp"  style="width:80px">{{ cfg.col_imp }}</th>
+            <th colspan="2" class="th-comp" style="text-align:center">{{ cfg.compliance_header }}</th>
+          </tr>
+          <tr>
+            <th class="th-good" style="font-size:.7rem">✓</th>
+            <th class="th-imm"  style="font-size:.7rem">✓</th>
+            <th class="th-imp"  style="font-size:.7rem">✓</th>
+            <th class="th-comp" style="min-width:90px">Area / SUBCON.</th>
+            <th class="th-comp" style="min-width:90px">{{ cfg.note_col }}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% set ns = namespace(idx=0, current_section='') %}
+          {% for sec_name, item_text in flat_items %}
+            {% if sec_name != ns.current_section %}
+              {% set ns.current_section = sec_name %}
+              <tr class="sec-row">
+                <td colspan="{{ 8 if cfg.has_na else 7 }}">{{ sec_name }}</td>
+              </tr>
+            {% endif %}
+            <tr>
+              <td class="cl-num">{{ ns.idx + 1 }}</td>
+              <td class="cl-item">{{ item_text }}</td>
+              {% if cfg.has_na %}
+              <td class="cl-status">
+                <input type="radio" class="cl-radio" name="s_{{ ns.idx }}" value="na" checked>
+              </td>
+              {% endif %}
+              <td class="cl-status">
+                <input type="radio" class="cl-radio" name="s_{{ ns.idx }}" value="good"
+                       {% if not cfg.has_na %}checked{% endif %}>
+              </td>
+              <td class="cl-status">
+                <input type="radio" class="cl-radio" name="s_{{ ns.idx }}" value="immediately">
+              </td>
+              <td class="cl-status">
+                <input type="radio" class="cl-radio" name="s_{{ ns.idx }}" value="improve">
+              </td>
+              <td><input type="text" class="cl-txt" name="a_{{ ns.idx }}" placeholder="Area / Subcon"></td>
+              <td><input type="text" class="cl-txt" name="n_{{ ns.idx }}" placeholder="{{ cfg.note_col[:18] }}"></td>
+            </tr>
+            {% set ns.idx = ns.idx + 1 %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ── Notes / JSO (matches DOCX bottom section) ── -->
+    <div class="cl-jso-box">
+      <div style="font-weight:700;font-size:.87rem;margin-bottom:6px;color:#0f172a">
+        Notes / Observations:
+        <span style="font-weight:400;color:#64748b;font-size:.8rem">
+          Short Description of observation. For more details, refer to the observations in JSO using the Ob.No.
+        </span>
+      </div>
+      <div class="cl-jso-grid">
+        <div style="font-size:.76rem;font-weight:700;color:#64748b;padding:3px 0">JSO Ob.No.</div>
+        <div style="font-size:.76rem;font-weight:700;color:#64748b;padding:3px 0">Short Description of Observation</div>
+        {% for i in range(4) %}
+        <input type="text" name="jso_no_{{ i }}" placeholder="#{{ i+1 }}"
+               style="font-size:.81rem;padding:4px 6px;border:1px solid #cbd5e1;border-radius:3px">
+        <input type="text" name="jso_desc_{{ i }}" placeholder="Description..."
+               style="font-size:.81rem;padding:4px 6px;border:1px solid #cbd5e1;border-radius:3px">
+        {% endfor %}
+      </div>
+      <label>
+        <span class="cl-field-label">Additional observations / notes</span>
+        <textarea name="observations" rows="3"
+                  style="width:100%;resize:vertical;font-size:.83rem;padding:5px 7px;
+                         border:1px solid #cbd5e1;border-radius:4px"
+                  placeholder="Any additional notes..."></textarea>
+      </label>
+    </div>
+
+    {% if cfg.has_na %}
+    <p style="font-size:.78rem;color:#64748b;font-style:italic;margin-bottom:12px">NA = Not applicable</p>
+    {% endif %}
+
+    <div style="display:flex;gap:10px">
+      <button type="submit" class="btn primary" style="padding:10px 28px;font-size:1rem">
+        💾 Save Checklist
+      </button>
+      <a href="{{ url_for('env_checklist_new') }}" class="btn" style="padding:10px 18px">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

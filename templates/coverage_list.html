@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>طلبات التغطية</h1>
+
+{% if gaps %}
+<section class="card alert-danger">
+  <h2>⚠️ مناطق بدون تغطية اليوم ({{ today }})</h2>
+  <ul>
+    {% for g in gaps %}
+      <li>
+        المنطقة: <strong>{{ g.area_code }}</strong>
+        <form method="post" action="{{ url_for('coverage_list') }}" style="display:inline">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+          <input type="hidden" name="area_code" value="{{ g.area_code }}">
+          <!-- سيُضاف طلب تغطية يدوياً من هنا لاحقاً -->
+        </form>
+      </li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section class="card">
+  <h2>الطلبات المفتوحة</h2>
+  {% if open_requests %}
+  <table class="rtable">
+    <thead>
+      <tr>
+        <th>التاريخ</th><th>المنطقة</th><th>الغائب</th><th>طلب من</th><th>تعيين بديل</th><th>إجراء</th>
+      </tr>
+    </thead>
+    <tbody>
+    {% for cr in open_requests %}
+      <tr>
+        <td>{{ cr.absence_date }}</td>
+        <td>{{ cr.area_code }}</td>
+        <td>{{ cr.absent_employee.name if cr.absent_employee else '—' }}</td>
+        <td>{{ cr.requester.name if cr.requester else '—' }}</td>
+        <td>
+          <form method="post" action="{{ url_for('coverage_assign', cr_id=cr.id) }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+            <select name="assigned_to" required>
+              <option value="">اختر...</option>
+              {% for usr in available %}
+                <option value="{{ usr.id }}">{{ usr.name }} ({{ usr.role }})</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn primary small">تعيين</button>
+          </form>
+        </td>
+        <td>
+          <form method="post" action="{{ url_for('coverage_close', cr_id=cr.id) }}" onsubmit="return confirm('إغلاق الطلب؟')">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+            <button type="submit" class="btn small">إغلاق</button>
+          </form>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    <p class="hint">لا توجد طلبات مفتوحة.</p>
+  {% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Add Asset{% endblock %}
+{% block content %}
+<div style="max-width:600px;margin:0 auto">
+  <h2>Add an Asset</h2>
+  <form method="post" style="border:1px solid #e2e8f0;border-radius:12px;padding:16px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+    <label style="font-weight:700;display:block;margin-bottom:4px">Location</label>
+    <select name="location_code" required
+            style="width:100%;padding:12px;border-radius:10px;border:1px solid #cbd5e1;margin-bottom:10px">
+      {% for loc in locations %}
+        <option value="{{ loc.code }}">{{ loc.label }}</option>
+      {% endfor %}
+    </select>
+
+    <label style="font-weight:700;display:block;margin-bottom:4px">Asset type</label>
+    <select name="asset_type" required
+            style="width:100%;padding:12px;border-radius:10px;border:1px solid #cbd5e1;margin-bottom:10px">
+      {% for val, lbl in asset_types %}
+        <option value="{{ val }}">{{ lbl }}</option>
+      {% endfor %}
+    </select>
+
+    <label style="font-weight:700;display:block;margin-bottom:4px">Label / ID</label>
+    <input name="label" required placeholder="e.g. Shelter 19 or WS-07"
+           style="width:100%;padding:12px;border-radius:10px;border:1px solid #cbd5e1;margin-bottom:10px">
+
+    <div style="display:flex;gap:10px;margin-bottom:10px">
+      <div style="flex:1">
+        <label style="font-weight:700;display:block;margin-bottom:4px">Qty</label>
+        <input name="qty" type="number" min="1" value="1"
+               style="width:100%;padding:12px;border-radius:10px;border:1px solid #cbd5e1">
+      </div>
+      <div style="flex:1">
+        <label style="font-weight:700;display:block;margin-bottom:4px">Capacity (pax / units)</label>
+        <input name="capacity" type="number" min="1" placeholder="optional"
+               style="width:100%;padding:12px;border-radius:10px;border:1px solid #cbd5e1">
+      </div>
+    </div>
+
+    <label style="font-weight:700;display:block;margin-bottom:4px">Notes</label>
+    <textarea name="notes" rows="2" placeholder="Vendor, service schedule, any notes…"
+              style="width:100%;padding:12px;border-radius:10px;border:1px solid #cbd5e1;margin-bottom:12px"></textarea>
+
+    <div style="display:flex;gap:8px">
+      <button style="flex:1;padding:14px;border:0;background:#0f172a;color:#fff;
+                     border-radius:12px;font-weight:800">Save asset</button>
+      <a href="{{ url_for('welfare_assets') }}"
+         style="flex:1;padding:14px;border:1px solid #cbd5e1;background:#fff;
+                border-radius:12px;font-weight:700;text-align:center;
+                text-decoration:none;color:#334155">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

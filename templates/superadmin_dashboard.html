@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>Super Admin — z NSH_</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f1f5f9; color: #1e293b; direction: rtl; }
+    a { text-decoration: none; color: #2563eb; }
+
+    nav { background: #1e293b; padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; color: #fff; }
+    .nav-brand { font-weight: 700; font-size: 1.1rem; }
+    .nav-links a { color: #94a3b8; margin-right: 1rem; font-size: 0.9rem; }
+    .nav-links a:hover { color: #fff; }
+    .badge-sa { background: #7c3aed; color: #fff; font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 20px; margin-right: 0.5rem; }
+
+    .wrap { max-width: 1100px; margin: 0 auto; padding: 2rem; }
+    h1 { font-size: 1.6rem; font-weight: 700; margin-bottom: 0.3rem; }
+    .subtitle { color: #64748b; margin-bottom: 2rem; font-size: 0.9rem; }
+
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
+    .stat { background: #fff; border-radius: 12px; padding: 1.5rem; box-shadow: 0 1px 4px rgba(0,0,0,0.06); border-right: 4px solid #2563eb; }
+    .stat.pending { border-right-color: #f59e0b; }
+    .stat.users { border-right-color: #16a34a; }
+    .stat-num { font-size: 2.2rem; font-weight: 800; color: #1e293b; }
+    .stat-label { font-size: 0.85rem; color: #64748b; margin-top: 0.2rem; }
+
+    .section-title { font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem; color: #1e293b; }
+
+    .alert-box { background: #fffbeb; border: 1px solid #fcd34d; border-radius: 10px; padding: 1rem 1.2rem; margin-bottom: 2rem; }
+    .alert-box h3 { font-size: 1rem; font-weight: 700; color: #92400e; margin-bottom: 0.5rem; }
+    .pending-item { display: flex; align-items: center; justify-content: space-between; padding: 0.6rem 0; border-bottom: 1px solid #fef3c7; }
+    .pending-item:last-child { border-bottom: none; }
+    .pending-item strong { font-size: 0.95rem; }
+    .pending-item span { color: #78716c; font-size: 0.82rem; }
+    .btn-sm { padding: 0.35rem 0.9rem; border-radius: 6px; font-size: 0.82rem; font-weight: 600; border: none; cursor: pointer; display: inline-block; }
+    .btn-approve { background: #16a34a; color: #fff; }
+    .btn-approve:hover { background: #15803d; }
+
+    .table-wrap { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f8fafc; padding: 0.75rem 1rem; text-align: right; font-size: 0.82rem; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+    td { padding: 0.75rem 1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.9rem; }
+    tr:last-child td { border-bottom: none; }
+    .badge { display: inline-block; padding: 0.2rem 0.6rem; border-radius: 20px; font-size: 0.75rem; font-weight: 600; }
+    .badge-active { background: #dcfce7; color: #16a34a; }
+    .badge-pending { background: #fef9c3; color: #a16207; }
+
+    .flash { padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem; }
+    .flash-success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    .flash-warning { background: #fffbeb; color: #92400e; border: 1px solid #fcd34d; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand">
+    <span class="badge-sa">Super Admin</span>
+    z NSH_ Platform
+  </div>
+  <div class="nav-links">
+    <a href="{{ url_for('superadmin_dashboard') }}">لوحة التحكم</a>
+    <a href="{{ url_for('superadmin_companies') }}">الشركات</a>
+    <a href="{{ url_for('logout') }}">خروج</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <h1>لوحة تحكم المنصة</h1>
+  <p class="subtitle">إدارة كاملة لجميع الشركات والمستخدمين</p>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="flash flash-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-num">{{ total_companies }}</div>
+      <div class="stat-label">إجمالي الشركات</div>
+    </div>
+    <div class="stat">
+      <div class="stat-num">{{ active_companies }}</div>
+      <div class="stat-label">شركات نشطة</div>
+    </div>
+    <div class="stat pending">
+      <div class="stat-num">{{ pending_companies }}</div>
+      <div class="stat-label">بانتظار الموافقة</div>
+    </div>
+    <div class="stat users">
+      <div class="stat-num">{{ total_users }}</div>
+      <div class="stat-label">إجمالي المستخدمين</div>
+    </div>
+  </div>
+
+  {% if pending %}
+  <div class="alert-box">
+    <h3>⏳ طلبات تسجيل بانتظار الموافقة ({{ pending|length }})</h3>
+    {% for co in pending %}
+    <div class="pending-item">
+      <div>
+        <strong>{{ co.name }}</strong><br>
+        <span>{{ co.owner_email }} · {{ co.created_at.strftime('%Y-%m-%d') if co.created_at else '—' }}</span>
+      </div>
+      <div style="display:flex;gap:0.5rem;">
+        <form method="post" action="{{ url_for('superadmin_activate', company_id=co.id) }}" style="display:inline;">
+          <button class="btn-sm btn-approve">✓ موافقة</button>
+        </form>
+        <a href="{{ url_for('superadmin_company_detail', company_id=co.id) }}" class="btn-sm" style="background:#f1f5f9;color:#475569;">عرض</a>
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  <div class="section-title">آخر الشركات المسجّلة</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>اسم الشركة</th>
+          <th>البريد الإلكتروني</th>
+          <th>تاريخ التسجيل</th>
+          <th>الحالة</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for co in recent %}
+        <tr>
+          <td>{{ co.id }}</td>
+          <td><strong>{{ co.name }}</strong></td>
+          <td>{{ co.owner_email or '—' }}</td>
+          <td>{{ co.created_at.strftime('%Y-%m-%d') if co.created_at else '—' }}</td>
+          <td>
+            {% if co.is_active %}
+              <span class="badge badge-active">نشط</span>
+            {% else %}
+              <span class="badge badge-pending">معلّق</span>
+            {% endif %}
+          </td>
+          <td><a href="{{ url_for('superadmin_company_detail', company_id=co.id) }}">عرض ←</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <div style="margin-top:1rem;text-align:left;">
+    <a href="{{ url_for('superadmin_companies') }}">عرض جميع الشركات ←</a>
+  </div>
+</div>
+
+</body>
+</html>

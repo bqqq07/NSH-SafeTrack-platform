@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Verify Finding{% endblock %}
+{% block content %}
+<a href="{{ url_for('welfare_findings') }}" style="color:#94a3b8;font-size:.9rem">← Findings</a>
+<h2 style="margin-top:.5rem">Verify Finding — {{ finding.ref_no or finding.id }}</h2>
+
+<div class="card" style="margin-bottom:1rem">
+  <table class="table">
+    <tr><th>Item</th><td>{{ finding.item or '—' }}</td></tr>
+    <tr><th>Severity</th><td>{{ finding.severity }}</td></tr>
+    <tr><th>Description</th><td>{{ finding.description or '—' }}</td></tr>
+    <tr><th>Status</th><td>{{ finding.status }}</td></tr>
+    <tr><th>Closed at</th><td>{{ finding.closed_at.strftime('%Y-%m-%d %H:%M') if finding.closed_at else '—' }}</td></tr>
+  </table>
+</div>
+
+{% if photos %}
+<h3>Photos</h3>
+<div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1rem">
+  {% for ph in photos %}
+  <div>
+    <div style="font-size:.8rem;color:#94a3b8">{{ ph.kind }}</div>
+    <a href="{{ url_for('hse_photo', filename=ph.photo_path) }}" target="_blank">
+      <img src="{{ url_for('hse_photo', filename=ph.photo_path) }}"
+           style="width:140px;height:100px;object-fit:cover;border-radius:4px">
+    </a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<p style="color:#94a3b8">No photos attached.</p>
+{% endif %}
+
+{% if finding.status == 'closed' %}
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <button type="submit" class="btn">Mark as Verified ✓</button>
+</form>
+{% else %}
+<p style="color:#94a3b8">Finding is {{ finding.status }} — cannot verify.</p>
+{% endif %}
+{% endblock %}

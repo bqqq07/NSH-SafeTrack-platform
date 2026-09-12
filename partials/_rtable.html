@@ -1,0 +1,38 @@
+{# جدول متجاوب: بطاقات على الجوال، جدول عادي على الكمبيوتر.
+   الاستخدام: <table class="table rtable"> مع data-l على كل <td>. #}
+<style>
+  /* يبطل table-layout:fixed الموروث من .report حتى لا تتداخل الأعمدة */
+  .report .rtable{ table-layout:auto }
+  .rtable th, .rtable td{ vertical-align:middle }
+
+  @media (max-width:768px){
+    /* أي min-width مكتوب inline يُلغى — وإلا يظهر سكرول أفقي وتختفي العناوين */
+    .rtable{ min-width:0 !important; width:100% !important }
+    .rtable, .rtable tbody, .rtable tr, .rtable td{ display:block; width:100% }
+    .rtable td{ box-sizing:border-box; max-width:100% }
+    .rtable thead{ display:none }
+    .rtable tr{
+      border:1px solid #e5e7eb; border-radius:10px; background:#fff;
+      margin-bottom:10px; padding:6px 10px; box-shadow:0 1px 2px rgba(0,0,0,.04);
+    }
+    .rtable td{
+      border:none; border-bottom:1px dashed #eef2f7;
+      display:flex; justify-content:space-between; align-items:center;
+      gap:12px; padding:.5rem .1rem; white-space:normal;
+    }
+    .rtable td:last-child{ border-bottom:none }
+    /* .table .nowrap أقوى تخصيصاً — نتجاوزه داخل البطاقات */
+    .table.rtable td.nowrap{ white-space:normal }
+    .rtable td{ word-break:break-word; overflow-wrap:anywhere }
+    .rtable td::before{
+      content:attr(data-l); font-weight:600; color:#6b7280;
+      font-size:.75rem; flex:0 0 auto; text-transform:uppercase; letter-spacing:.02em;
+    }
+    .rtable td[data-l=""]::before{ display:none }
+    /* خلايا الأزرار تأخذ العرض كامل تحت العنوان */
+    .rtable td.stack{ display:block }
+    .rtable td.stack::before{ display:block; margin-bottom:6px }
+    .rtable td.name{ font-weight:700; font-size:1rem }
+    .rtable .empty-row{ display:block; text-align:center; padding:14px }
+  }
+</style>

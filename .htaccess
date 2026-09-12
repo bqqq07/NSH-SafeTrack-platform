@@ -1,0 +1,34 @@
+### AutoSSL-Satellite Don't Edit Below This Line ###
+<IfModule mod_rewrite.c>
+	RewriteEngine On
+	# Force HTTPS
+	RewriteCond %{HTTPS} off
+	RewriteCond %{HTTP:X-Forwarded-SSL} !on
+	RewriteRule ^(.*)$ "https://%{HTTP_HOST}%{REQUEST_URI}" [R=301,L]
+</IfModule>
+### AutoSSL-Satellite Don't Edit Above This Line ###
+### AutoSSL-Satellite Don't Edit Below This Line ###
+<IfModule mod_rewrite.c>
+	RewriteEngine On
+	# Force HTTPS
+	RewriteCond %{HTTPS} off
+	RewriteCond %{HTTP:X-Forwarded-SSL} !on
+	RewriteRule ^(.*)$ "https://%{HTTP_HOST}%{REQUEST_URI}" [R=301,L]
+</IfModule>
+### AutoSSL-Satellite Don't Edit Above This Line ###
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+PassengerAppRoot "/home/zappimiw/NSH"
+PassengerBaseURI "/"
+PassengerPython "/home/zappimiw/virtualenv/NSH/3.9/bin/python"
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION BEGIN
+PassengerAppRoot "/home/zappimiw/NSH"
+PassengerBaseURI "/"
+PassengerPython "/home/zappimiw/virtualenv/NSH/3.9/bin/python"
+# DO NOT REMOVE. CLOUDLINUX PASSENGER CONFIGURATION END
+
+# Pass all HSE and API routes to Flask/Passenger without Apache interference
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteRule ^(hse|api)/ - [L]
+</IfModule>

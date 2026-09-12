@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Daily Work Reports — Admin{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Supervisor Daily Work Reports</h2>
+
+  <!-- Filters -->
+  <form method="GET" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom:16px">
+    <label style="margin:0; flex:1; min-width:140px">From Date
+      <input type="date" name="from" value="{{ date_from }}">
+    </label>
+    <label style="margin:0; flex:1; min-width:140px">To Date
+      <input type="date" name="to" value="{{ date_to }}">
+    </label>
+    <label style="margin:0; flex:2; min-width:180px">Supervisor
+      <select name="supervisor_id">
+        <option value="">— All Supervisors —</option>
+        {% for s in supervisors %}
+        <option value="{{ s.id }}" {% if sel_sup == s.id|string %}selected{% endif %}>
+          {{ s.name }} ({{ s.supervisor_code }})
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+    <button class="btn primary" type="submit" style="align-self:flex-end">Filter</button>
+    <a class="btn" href="{{ url_for('admin_daily_work') }}" style="align-self:flex-end">Reset</a>
+  </form>
+
+  {% if reports %}
+  <p class="muted small" style="margin-bottom:8px">{{ reports|length }} report(s) found</p>
+  <table style="width:100%; border-collapse:collapse; font-size:14px">
+    <thead>
+      <tr style="background:var(--primary); color:#fff">
+        <th style="padding:9px 10px; text-align:left">Date</th>
+        <th style="padding:9px 10px; text-align:left">Supervisor</th>
+        <th style="padding:9px 10px; text-align:center">Items</th>
+        <th style="padding:9px 10px; text-align:left">Areas</th>
+        <th style="padding:9px 10px; text-align:left">Employees</th>
+        <th style="padding:9px 10px; text-align:left">Notes</th>
+        <th style="padding:9px 10px; text-align:center">Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for r in reports %}
+      <tr style="border-bottom:1px solid var(--border); {% if loop.index is even %}background:#f9fafb{% endif %}">
+        <td style="padding:8px 10px; white-space:nowrap">
+          <strong>{{ r.report_date.strftime('%d %b %Y') }}</strong>
+        </td>
+        <td style="padding:8px 10px">
+          {{ r.supervisor.name }}<br>
+          <span class="muted" style="font-size:12px">{{ r.supervisor.supervisor_code }}</span>
+        </td>
+        <td style="padding:8px 10px; text-align:center">{{ r.items|length }}</td>
+        <td style="padding:8px 10px; color:var(--muted); font-size:13px">
+          {% set areas = r.items | map(attribute='area') | list %}
+          {% if areas %}
+            {{ areas[:3] | join(', ') }}{% if areas|length > 3 %} +{{ areas|length - 3 }}{% endif %}
+          {% else %}-{% endif %}
+        </td>
+        <td style="padding:8px 10px; font-size:12px">
+          {% if r.report_employees %}
+            {% for re in r.report_employees %}
+            <span style="display:inline-block;background:#e8f0fe;border-radius:10px;padding:2px 8px;margin:1px;white-space:nowrap">
+              {{ re.employee.name }}
+            </span>
+            {% endfor %}
+          {% else %}-{% endif %}
+        </td>
+        <td style="padding:8px 10px; color:var(--muted); font-size:13px">{{ (r.notes or '-')[:50] }}</td>
+        <td style="padding:8px 10px; text-align:center; white-space:nowrap">
+          <a class="btn" style="padding:5px 10px; font-size:12px" href="{{ url_for('supervisor_daily_work_view', report_id=r.id) }}">View</a>
+          <a class="btn primary" style="padding:5px 10px; font-size:12px" href="{{ url_for('supervisor_daily_work_pdf', report_id=r.id) }}" target="_blank">PDF</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="muted" style="text-align:center; margin-top:20px">No reports found for the selected filters.</p>
+  {% endif %}
+</section>
+{% endblock %}

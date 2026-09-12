@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+  <h1 style="margin:0">New HSE Request</h1>
+  <a href="{{ url_for('hse_requests_mine') }}" class="btn">← My Requests</a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}<div class="alert alert-{{ cat }}">{{ msg }}</div>{% endfor %}
+{% endwith %}
+
+<section class="card">
+  <form method="post" id="reqForm">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+
+    <div style="display:grid;gap:.75rem;grid-template-columns:1fr 1fr">
+      <label>Request Type *
+        <select name="request_type" id="reqType" required onchange="toggleTraining()">
+          {% for val, label in types %}
+            <option value="{{ val }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>Title *
+        <input type="text" name="title" required placeholder="Brief description of the request">
+      </label>
+      <label style="grid-column:1/-1">Details
+        <textarea name="details" rows="3" placeholder="Any additional details..."></textarea>
+      </label>
+    </div>
+
+    <!-- Training-specific fields -->
+    <div id="trainingFields" style="display:none;margin-top:1rem">
+      <h3 style="margin:0 0 .75rem;font-size:15px;color:var(--primary)">Training Details</h3>
+      <div style="display:grid;gap:.75rem;grid-template-columns:1fr 1fr">
+
+        <label>Worker / Employee *
+          {% if employees %}
+          <select name="employee_id" id="empSelect" onchange="syncEmpName()">
+            <option value="">— Select from list —</option>
+            {% for emp in employees %}
+              <option value="{{ emp.id }}" data-name="{{ emp.name }}">{{ emp.name }}{% if emp.badge_number %} ({{ emp.badge_number }}){% endif %}</option>
+            {% endfor %}
+            <option value="other">Other (type name below)</option>
+          </select>
+          {% else %}
+          <input type="hidden" name="employee_id" value="">
+          {% endif %}
+        </label>
+
+        <label>Worker Name <small style="color:var(--muted)">(if not in list)</small>
+          <input type="text" name="employee_name_text" id="empNameText"
+                 placeholder="Full name of the worker">
+        </label>
+
+        <label>Training Course / Skill Needed *
+          <input type="text" name="course_name" placeholder="e.g. First Aid, Fire Safety, Rigging">
+        </label>
+
+        <label>Preferred Date
+          <input type="date" name="preferred_date">
+        </label>
+
+        <label style="grid-column:1/-1">Justification / Reason
+          <textarea name="justification" rows="2" placeholder="Why does this worker need this training?"></textarea>
+        </label>
+      </div>
+    </div>
+
+    <div style="margin-top:1rem;display:flex;gap:.5rem">
+      <button type="submit" class="btn primary">Submit Request</button>
+      <a href="{{ url_for('hse_requests_mine') }}" class="btn">Cancel</a>
+    </div>
+  </form>
+</section>
+
+<script>
+function toggleTraining() {
+  const t = document.getElementById('reqType').value;
+  document.getElementById('trainingFields').style.display = t === 'training' ? 'block' : 'none';
+}
+function syncEmpName() {
+  const sel = document.getElementById('empSelect');
+  if (!sel) return;
+  const txt = document.getElementById('empNameText');
+  if (sel.value && sel.value !== 'other') {
+    txt.value = sel.options[sel.selectedIndex].dataset.name || '';
+    txt.readOnly = true;
+  } else {
+    txt.value = '';
+    txt.readOnly = false;
+  }
+}
+// auto-show if training is pre-selected
+toggleTraining();
+</script>
+{% endblock %}

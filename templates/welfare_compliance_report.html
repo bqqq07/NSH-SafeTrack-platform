@@ -1,0 +1,184 @@
+﻿{% extends "base.html" %}
+{% block title %}Welfare Monthly Report — {{ month_name }} {{ year }}{% endblock %}
+{% block content %}
+<style>
+@media print {
+  .no-print { display:none!important }
+  body { font-size:10px }
+  .container { margin:0; padding:0; max-width:100% }
+  .card { border:none; box-shadow:none; padding:0 }
+}
+.rpt-header { display:flex; align-items:center; justify-content:space-between;
+              margin-bottom:16px; padding-bottom:12px; border-bottom:3px solid #0f172a }
+.rpt-title  { font-size:18px; font-weight:700; margin:0 }
+.rpt-sub    { font-size:12px; color:var(--muted); margin-top:3px }
+.sum-grid   { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
+              gap:10px; margin-bottom:16px }
+.sum-box    { background:#fff; border:1px solid var(--border); border-radius:8px;
+              padding:10px; text-align:center }
+.sum-num    { font-size:22px; font-weight:700 }
+.sum-lbl    { font-size:11px; color:var(--muted); margin-top:2px }
+.wlf-rpt-table { width:100%; border-collapse:collapse; font-size:12px }
+.wlf-rpt-table th { background:#0f172a; color:#fff; padding:8px 6px;
+                    text-align:center; white-space:nowrap; font-size:11px }
+.wlf-rpt-table th.left { text-align:left }
+.wlf-rpt-table td { padding:7px 6px; border-bottom:1px solid #e5e7eb; text-align:center }
+.wlf-rpt-table td.left { text-align:left; font-weight:600 }
+.wlf-rpt-table tr:nth-child(even) td { background:#f9fafb }
+.wlf-rpt-table tr.zero-row td { background:#fef2f2 }
+.wlf-rpt-table tfoot td { background:#f0f4f8; font-weight:700; border-top:2px solid #cbd5e1 }
+.risk-h { color:#b91c1c; font-weight:700 }
+.good   { color:#166534; font-weight:700 }
+</style>
+
+<!-- Toolbar -->
+<div class="no-print" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+  <button onclick="window.print()" class="btn primary">🖨️ Print / Save PDF</button>
+  <form method="get" action="{{ url_for('welfare_compliance_report') }}" style="display:flex;gap:6px;align-items:center;margin:0">
+    <label style="font-size:12px;font-weight:600;color:var(--muted)">Month</label>
+    <input type="month" name="month"
+           value="{{ '%04d-%02d' | format(year, month) }}"
+           max="{{ today.strftime('%Y-%m') }}"
+           style="padding:6px 10px;border-radius:7px;border:1px solid var(--border);font-size:12px"
+           required>
+    <button class="btn" type="submit">View</button>
+  </form>
+  <a href="{{ url_for('safety_manager_dashboard') }}" class="btn">← Dashboard</a>
+</div>
+
+<!-- Report Header -->
+<div class="rpt-header">
+  <div>
+    <div class="rpt-title">Welfare Monthly Report — {{ month_name }} {{ year }}</div>
+    <div class="rpt-sub">
+      <strong>{{ first_day.strftime('%d %b %Y') }}</strong> → <strong>{{ last_day.strftime('%d %b %Y') }}</strong>
+    </div>
+  </div>
+  <img src="{{ url_for('static', filename='img/logo.png') }}" style="height:40px" alt="">
+</div>
+
+<!-- Summary -->
+{% set active_officers  = rows | selectattr('zero','equalto',false) | list | length %}
+{% set total_rounds     = rows | sum(attribute='rounds') %}
+{% set total_finds      = rows | sum(attribute='finds_new') %}
+{% set total_closed     = rows | sum(attribute='finds_closed') %}
+{% set total_open       = rows | sum(attribute='finds_open') %}
+{% set total_complaints = rows | sum(attribute='complaints') %}
+{% set total_shared     = rows | sum(attribute='weekly_shared') %}
+{% set scores = rows | selectattr('avg_score','ne',none) | map(attribute='avg_score') | list %}
+{% set team_avg = (scores|sum / scores|length)|round(1) if scores else none %}
+
+<div class="sum-grid">
+  <div class="sum-box">
+    <div class="sum-num">{{ active_officers }}<span style="font-size:.9rem;color:var(--muted)">/{{ rows|length }}</span></div>
+    <div class="sum-lbl">Officers Active</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num">{{ total_rounds }}</div>
+    <div class="sum-lbl">Rounds</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num good">{{ total_closed }}</div>
+    <div class="sum-lbl">Findings Closed</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num {% if total_open > 0 %}risk-h{% endif %}">{{ total_open }}</div>
+    <div class="sum-lbl">Findings Open</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num {% if total_complaints > 0 %}risk-h{% endif %}">{{ total_complaints }}</div>
+    <div class="sum-lbl">Complaints</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num">{% if team_avg is not none %}{{ team_avg }}%{% else %}—{% endif %}</div>
+    <div class="sum-lbl">Team Avg Score</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num">{{ total_shared }}</div>
+    <div class="sum-lbl">Weekly Reports</div>
+  </div>
+</div>
+
+<!-- Table -->
+{% if rows %}
+<div style="overflow-x:auto">
+<table class="wlf-rpt-table">
+  <thead>
+    <tr>
+      <th class="left" rowspan="2">Officer</th>
+      <th rowspan="2">Rounds</th>
+      <th rowspan="2">Avg<br>Score</th>
+      <th rowspan="2">Best<br>Score</th>
+      <th colspan="3" style="border-bottom:1px solid #334155">Findings</th>
+      <th rowspan="2">On-Time<br>Closure</th>
+      <th rowspan="2">Complaints</th>
+      <th rowspan="2">Wkly<br>Shared</th>
+      <th rowspan="2">Level</th>
+    </tr>
+    <tr>
+      <th>New</th>
+      <th>Closed</th>
+      <th>Open</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr {% if r.zero %}class="zero-row"{% endif %}>
+      <td class="left">
+        <a href="{{ url_for('safety_welfare_profile', uid=r.officer_id) }}" style="font-weight:600">
+          {{ r.officer_name }}
+        </a>
+        {% if r.zero %}<span style="color:var(--warning);font-size:10px;margin-left:4px">⚠</span>{% endif %}
+      </td>
+      <td>{% if r.rounds > 0 %}<strong>{{ r.rounds }}</strong>{% else %}<span class="muted">0</span>{% endif %}</td>
+      <td>
+        {% if r.avg_score is not none %}
+          <span style="font-weight:700;color:{{ '#166534' if r.avg_score >= 80 else ('#854d0e' if r.avg_score >= 60 else '#b91c1c') }}">
+            {{ r.avg_score }}%
+          </span>
+        {% else %}—{% endif %}
+      </td>
+      <td>
+        {% if r.best_score is not none %}<span class="good">{{ r.best_score }}%</span>{% else %}—{% endif %}
+      </td>
+      <td>{{ r.finds_new or '—' }}</td>
+      <td>{% if r.finds_closed > 0 %}<span class="good">{{ r.finds_closed }}</span>{% else %}—{% endif %}</td>
+      <td>{% if r.finds_open > 0 %}<span class="risk-h">{{ r.finds_open }}</span>{% else %}—{% endif %}</td>
+      <td>
+        {% if r.on_time_pct is not none %}
+          <span style="font-weight:700;color:{{ '#166534' if r.on_time_pct >= 80 else '#b91c1c' }}">
+            {{ r.on_time_pct }}%
+          </span>
+        {% else %}—{% endif %}
+      </td>
+      <td>{% if r.complaints > 0 %}<span class="risk-h">{{ r.complaints }}</span>{% else %}—{% endif %}</td>
+      <td>{{ r.weekly_shared or '—' }}</td>
+      <td style="font-size:11px;color:var(--muted)">{{ r.level_no }}/{{ r.level_total }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td class="left">Total</td>
+      <td>{{ total_rounds }}</td>
+      <td>{% if team_avg is not none %}{{ team_avg }}%{% else %}—{% endif %}</td>
+      <td>—</td>
+      <td>{{ total_finds }}</td>
+      <td>{{ total_closed }}</td>
+      <td>{{ total_open }}</td>
+      <td>—</td>
+      <td>{{ total_complaints }}</td>
+      <td>{{ total_shared }}</td>
+      <td>—</td>
+    </tr>
+  </tfoot>
+</table>
+</div>
+{% else %}
+<div class="card"><p class="muted">No welfare officers found.</p></div>
+{% endif %}
+
+<p style="margin-top:14px;font-size:11px;color:var(--muted);text-align:right">
+  Generated: {{ now.strftime('%d %b %Y — %H:%M') }}
+</p>
+{% endblock %}

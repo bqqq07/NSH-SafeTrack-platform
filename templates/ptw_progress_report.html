@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}PTW Training — Weekly Progress{% endblock %}
+{% block content %}
+<style>
+@media print {
+  .no-print{display:none!important}
+  body{font-size:10px}
+}
+.rpt-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:10px}
+.rpt-title{font-size:18px;font-weight:700}
+.rpt-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.trainee-card{background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;margin-bottom:16px;overflow:hidden}
+.trainee-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;gap:12px;flex-wrap:wrap}
+.trainee-name{font-size:14px;font-weight:700}
+.trainee-meta{font-size:12px;color:#64748b;margin-top:2px}
+.stat-row{display:flex;gap:12px;flex-wrap:wrap}
+.stat-box{background:#f8fafc;border-radius:8px;padding:8px 14px;text-align:center;min-width:70px}
+.stat-num{font-size:18px;font-weight:700}
+.stat-num.green{color:#16a34a}
+.stat-num.yellow{color:#d97706}
+.stat-num.red{color:#dc2626}
+.stat-label{font-size:10px;color:#64748b;margin-top:1px}
+.prog-outer{height:6px;background:#e5e7eb;border-radius:3px;margin:0 16px 4px;overflow:hidden}
+.prog-inner{height:100%;background:#3b82f6;border-radius:3px}
+.prog-inner.full{background:#22c55e}
+.mod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:6px;padding:10px 16px 14px}
+.mod-cell{background:#f1f5f9;border-radius:8px;padding:8px 10px;font-size:11px}
+.mod-cell-title{font-weight:600;color:#334155;margin-bottom:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mod-cell-prog{color:#64748b}
+.mod-cell.done-all{background:#dcfce7}
+.mod-cell.done-all .mod-cell-prog{color:#166534;font-weight:700}
+.answers-link{font-size:12px;color:#3b82f6;text-decoration:none;padding:6px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff}
+.answers-link:hover{background:#dbeafe}
+.empty-state{text-align:center;padding:40px;color:#94a3b8;font-size:13px}
+</style>
+
+<div class="no-print" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+  <button onclick="window.print()" class="btn primary">🖨️ Print / Save PDF</button>
+  <a href="{{ url_for('ptw_reports_picker') }}" class="btn">📅 Weekly / Monthly</a>
+  <a href="{{ url_for('ptw_supervisor_review') }}" class="btn">← Review</a>
+</div>
+<div class="rpt-header">
+  <div>
+    <div class="rpt-title">PTW Training — Progress Report</div>
+    <div class="rpt-sub">Generated {{ now.strftime('%d %b %Y, %H:%M') }}</div>
+  </div>
+  <img src="{{ url_for('static', filename='img/logo.png') }}" style="height:40px" alt="">
+</div>
+
+{% if not trainees %}
+<div class="empty-state">No active trainees found.</div>
+{% else %}
+{% for t in trainees %}
+{% set pct = (t.approved / t.field_total * 100)|int if t.field_total else 0 %}
+<div class="trainee-card">
+  <div class="trainee-header">
+    <div>
+      <div class="trainee-name">{{ t.officer.name }}</div>
+      <div class="trainee-meta">
+        Last activity:
+        {% if t.last_activity %}{{ t.last_activity.strftime('%d %b %Y') }}{% else %}—{% endif %}
+      </div>
+    </div>
+    <div class="stat-row">
+      <div class="stat-box">
+        <div class="stat-num green">{{ t.approved }}</div>
+        <div class="stat-label">Approved</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num yellow">{{ t.pending }}</div>
+        <div class="stat-label">Pending</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num red">{{ t.rejected }}</div>
+        <div class="stat-label">Rejected</div>
+      </div>
+      <div class="stat-box">
+        <div class="stat-num">{{ t.field_total }}</div>
+        <div class="stat-label">Total stages</div>
+      </div>
+    </div>
+    <a href="{{ url_for('ptw_answers_report', officer_id=t.officer.id) }}" class="answers-link">View answers →</a>
+  </div>
+  <div class="prog-outer">
+    <div class="prog-inner{% if pct == 100 %} full{% endif %}" style="width:{{ pct }}%"></div>
+  </div>
+  <div style="font-size:11px;color:#64748b;padding:2px 16px 6px">{{ t.approved }} / {{ t.field_total }} field stages approved ({{ pct }}%)</div>
+  <div class="mod-grid">
+    {% for ms in t.mods %}
+    <div class="mod-cell{% if ms.done == ms.total %} done-all{% endif %}">
+      <div class="mod-cell-title">Module {{ ms.seq }}</div>
+      <div class="mod-cell-prog">
+        {% if ms.done == ms.total %}✓ Complete
+        {% else %}{{ ms.done }}/{{ ms.total }}{% endif %}
+      </div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

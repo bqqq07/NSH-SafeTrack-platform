@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>New Observation</h2>
+<div class="card" style="max-width:620px">
+  <form method="post" enctype="multipart/form-data" data-offline-type="observation">
+    <label>Date
+      <input type="date" name="date" value="{{ today.isoformat() }}" required>
+    </label>
+
+    <label>Location
+      <input type="text" name="location" id="locationInput"
+             value="{{ today_location }}" list="locationList" placeholder="Site area / location">
+      <datalist id="locationList">
+        {% for loc in locations %}<option value="{{ loc }}">{% endfor %}
+      </datalist>
+    </label>
+
+    <label>Observation Type *
+      <select name="obs_type" required>
+        <option value="">— Select —</option>
+        <option value="unsafe_act">Unsafe Act</option>
+        <option value="unsafe_condition">Unsafe Condition</option>
+        <option value="positive">Positive</option>
+      </select>
+    </label>
+
+    <label>Category
+      <select name="category">
+        <option value="">— Select —</option>
+        {% for cat in categories %}
+        <option value="{{ cat }}">{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>Risk Level
+      <select name="risk_level">
+        <option value="">— N/A —</option>
+        <option value="L">L — Low</option>
+        <option value="M">M — Medium</option>
+        <option value="H">H — High</option>
+      </select>
+    </label>
+
+    <label>Description
+      <textarea name="description" rows="3" placeholder="Describe the observation..."></textarea>
+    </label>
+
+    <label>Immediate Action Taken
+      <textarea name="action_taken" rows="2" placeholder="What was done immediately?"></textarea>
+    </label>
+
+    <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;margin:8px 0" id="photoFields">
+      <legend style="padding:0 6px;font-weight:600">Photos (up to 3)</legend>
+      <p id="offlinePhotoNote" style="display:none;margin:0 0 8px;font-size:13px;
+         background:#fef9c3;border:1px solid #fbbf24;border-radius:6px;padding:6px 10px">
+        📴 Offline — photos will be available after sync. Save the record now and add photos from the list.
+      </p>
+      <div id="photoInputs">
+        <label>Photo 1 <input type="file" name="photo_1" accept="image/*"></label>
+        <label>Photo 2 <input type="file" name="photo_2" accept="image/*"></label>
+        <label>Photo 3 <input type="file" name="photo_3" accept="image/*"></label>
+      </div>
+    </fieldset>
+    <script>
+      (function(){
+        function updatePhotoUI(){
+          var note   = document.getElementById('offlinePhotoNote');
+          var inputs = document.getElementById('photoInputs');
+          if(!navigator.onLine){ note.style.display=''; inputs.style.display='none'; }
+          else                  { note.style.display='none'; inputs.style.display=''; }
+        }
+        updatePhotoUI();
+        window.addEventListener('online',  updatePhotoUI);
+        window.addEventListener('offline', updatePhotoUI);
+      })();
+    </script>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button type="submit" class="btn primary">Save Observation</button>
+      <a href="{{ url_for('hse_observations') }}" class="btn">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

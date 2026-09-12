@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}My KPIs{% endblock %}
+{% block content %}
+<div style="max-width:640px;margin:0 auto">
+  <h2>📊 My KPIs</h2>
+  <p style="color:#64748b;margin-top:0">Since {{ month_start }}{% if level %} · {{ level.code }} {{ level.title }}{% endif %}</p>
+
+  {% macro bar(label, have, target) %}
+    <div style="margin:12px 0">
+      <div style="display:flex;justify-content:space-between">
+        <span>{{ label }}</span><strong>{{ have }}{% if target %} / {{ target }}{% endif %}</strong>
+      </div>
+      {% if target %}
+      <div style="height:10px;background:#e2e8f0;border-radius:6px;margin-top:4px;overflow:hidden">
+        <div style="height:10px;background:{{ '#22c55e' if have >= target else '#38bdf8' }};
+                    width:{{ [100, (have*100//target)]|min }}%"></div>
+      </div>
+      {% endif %}
+    </div>
+  {% endmacro %}
+
+  <div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px">
+    {% for t in tasks %}{{ bar(t.label, t.have, t.target) }}{% endfor %}
+  </div>
+
+  <div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-top:12px">
+    {{ bar('Submissions', c.rounds_submitted, 20) }}
+    {{ bar('Units covered', c.units_covered, units_total) }}
+    {{ bar('Findings closed', c.findings_closed, 0) }}
+    {{ bar('Complaints recorded', c.complaints, 0) }}
+    <div style="margin:12px 0;display:flex;justify-content:space-between">
+      <span>Closed on time</span>
+      <strong>{% if pct_on_time is none %}—{% else %}{{ pct_on_time }}%{% endif %} / 80%</strong>
+    </div>
+    <div style="margin:12px 0;display:flex;justify-content:space-between">
+      <span>Open findings</span><strong>{{ open_n }}</strong>
+    </div>
+  </div>
+
+  {% if blocked %}
+    <div style="background:#fee2e2;color:#991b1b;padding:14px;border-radius:12px;margin-top:12px;font-weight:700">
+      🔒 {{ blocked }}</div>
+  {% endif %}
+</div>
+{% endblock %}

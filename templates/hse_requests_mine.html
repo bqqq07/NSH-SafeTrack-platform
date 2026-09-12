@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+  <h1 style="margin:0">My Requests</h1>
+  <a href="{{ url_for('hse_request_new') }}" class="btn primary">+ New Request</a>
+</div>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}<div class="alert alert-{{ cat }}">{{ msg }}</div>{% endfor %}
+{% endwith %}
+
+{% if reqs %}
+{% for r in reqs %}
+<section class="card" style="margin-bottom:.75rem">
+  <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem">
+    <div>
+      <strong style="font-size:15px">{{ r.title }}</strong>
+      <span class="badge" style="margin-left:.4rem;background:var(--surface2);color:var(--muted);font-size:11px;padding:2px 8px;border-radius:10px">{{ r.request_type }}</span>
+    </div>
+    <div>
+      {% if r.status == 'approved' %}<span style="color:var(--success);font-weight:700">✅ Approved</span>
+      {% elif r.status == 'rejected' %}<span style="color:var(--danger);font-weight:700">❌ Rejected</span>
+      {% elif r.status == 'in_progress' %}<span style="color:var(--warning);font-weight:700">🔄 In Progress</span>
+      {% else %}<span style="color:var(--muted);font-weight:700">⏳ Pending</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="font-size:12px;color:var(--muted);margin-bottom:.5rem">
+    Submitted: {{ r.created_at.strftime('%d %b %Y') if r.created_at else '—' }}
+    {% if r.decided_at %} · Decided: {{ r.decided_at.strftime('%d %b %Y') }}{% endif %}
+  </div>
+
+  {% if r.details %}
+  <p style="margin:.25rem 0;font-size:13px">{{ r.details }}</p>
+  {% endif %}
+
+  {% if r.training_detail %}
+  <div style="background:var(--surface2,#f5f7fa);border-radius:8px;padding:.6rem .8rem;margin:.5rem 0;font-size:13px">
+    <div style="margin-bottom:.25rem">
+      <strong>Course:</strong> {{ r.training_detail.course_name }}
+    </div>
+    {% set w_name = r.training_detail.employee.name if r.training_detail.employee else r.training_detail.employee_name_text %}
+    {% if w_name %}
+    <div style="margin-bottom:.25rem"><strong>Worker:</strong> {{ w_name }}</div>
+    {% endif %}
+    {% if r.training_detail.preferred_date %}
+    <div style="margin-bottom:.25rem"><strong>Preferred Date:</strong> {{ r.training_detail.preferred_date.strftime('%d %b %Y') }}</div>
+    {% endif %}
+    {% if r.training_detail.justification %}
+    <div style="margin-bottom:.25rem;color:var(--muted)">{{ r.training_detail.justification }}</div>
+    {% endif %}
+    {% if r.training_detail.scheduled_date %}
+    <div style="margin-top:.4rem;padding:.4rem .6rem;background:#d1fae5;border-radius:6px;color:#065f46;font-weight:700">
+      📅 Scheduled: {{ r.training_detail.scheduled_date.strftime('%d %b %Y') }}
+    </div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  {% if r.admin_note %}
+  <div style="margin-top:.4rem;padding:.4rem .6rem;background:#fef9c3;border-radius:6px;font-size:13px">
+    <strong>Note:</strong> {{ r.admin_note }}
+  </div>
+  {% endif %}
+</section>
+{% endfor %}
+{% else %}
+  <div class="card" style="text-align:center;padding:2.5rem;color:var(--muted)">
+    No requests yet. Click <strong>+ New Request</strong> to get started.
+  </div>
+{% endif %}
+{% endblock %}

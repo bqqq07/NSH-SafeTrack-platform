@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Welfare Asset Register{% endblock %}
+{% block content %}
+<div style="max-width:860px;margin:0 auto">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <h2 style="margin:0">📋 Asset Register</h2>
+    <a href="{{ url_for('welfare_asset_new') }}"
+       style="background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;
+              font-weight:700;text-decoration:none">+ Add asset</a>
+  </div>
+
+  {% if not assets %}
+    <p style="color:#64748b">No assets recorded yet. Add your first asset above.</p>
+  {% else %}
+    {% set cur_loc = namespace(code=None) %}
+    {% for a in assets %}
+      {% if a.location_code != cur_loc.code %}
+        {% set cur_loc.code = a.location_code %}
+        <div style="font-weight:800;color:#0f172a;margin:18px 0 6px;font-size:1.05rem">
+          {{ loc_map.get(a.location_code, a.location_code) }}
+        </div>
+      {% endif %}
+      <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;
+                  display:flex;justify-content:space-between;align-items:center;
+                  margin-bottom:6px;background:#fff">
+        <div>
+          <span style="font-weight:700">{{ a.label }}</span>
+          <span style="margin-left:10px;color:#64748b;font-size:.9rem">
+            {{ a.asset_type.replace('_',' ').title() }}
+            · qty {{ a.qty }}
+            {% if a.capacity %} · cap {{ a.capacity }}{% endif %}
+          </span>
+          {% if a.notes %}
+            <div style="color:#64748b;font-size:.85rem;margin-top:4px">{{ a.notes }}</div>
+          {% endif %}
+        </div>
+        <form method="post" action="{{ url_for('welfare_asset_delete', aid=a.id) }}"
+              onsubmit="return confirm('Remove this asset?')" style="margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button style="padding:6px 12px;border:1px solid #fca5a5;background:#fff;
+                         color:#dc2626;border-radius:8px;cursor:pointer">Remove</button>
+        </form>
+      </div>
+    {% endfor %}
+  {% endif %}
+</div>
+{% endblock %}

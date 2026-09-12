@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>{{ co.name }} — Super Admin</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', Tahoma, Arial, sans-serif; background: #f1f5f9; color: #1e293b; direction: rtl; }
+    a { text-decoration: none; color: #2563eb; }
+    nav { background: #1e293b; padding: 0 2rem; display: flex; align-items: center; justify-content: space-between; height: 60px; color: #fff; }
+    .nav-brand { font-weight: 700; font-size: 1.1rem; }
+    .badge-sa { background: #7c3aed; color: #fff; font-size: 0.72rem; padding: 0.15rem 0.5rem; border-radius: 20px; margin-right: 0.5rem; }
+    .nav-links a { color: #94a3b8; margin-right: 1rem; font-size: 0.9rem; }
+    .nav-links a:hover { color: #fff; }
+    .wrap { max-width: 1000px; margin: 0 auto; padding: 2rem; }
+
+    .breadcrumb { font-size: 0.85rem; color: #64748b; margin-bottom: 1rem; }
+    .breadcrumb a { color: #2563eb; }
+
+    .header-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 1rem; margin-bottom: 2rem; flex-wrap: wrap; }
+    h1 { font-size: 1.6rem; font-weight: 700; }
+    .meta { color: #64748b; font-size: 0.88rem; margin-top: 0.3rem; }
+    .actions { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    .btn { padding: 0.55rem 1.1rem; border-radius: 8px; font-size: 0.88rem; font-weight: 600; border: none; cursor: pointer; display: inline-block; }
+    .btn-danger { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; }
+    .btn-danger:hover { background: #fee2e2; }
+    .btn-success { background: #dcfce7; color: #16a34a; border: 1px solid #bbf7d0; }
+    .btn-success:hover { background: #bbf7d0; }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .btn-purple { background: #7c3aed; color: #fff; }
+    .btn-purple:hover { background: #6d28d9; }
+
+    .badge { display: inline-block; padding: 0.25rem 0.7rem; border-radius: 20px; font-size: 0.8rem; font-weight: 600; }
+    .badge-active { background: #dcfce7; color: #16a34a; }
+    .badge-pending { background: #fef9c3; color: #a16207; }
+    .badge-free { background: #e0e7ff; color: #4338ca; }
+
+    .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+    .info-card { background: #fff; border-radius: 12px; padding: 1.2rem 1.5rem; box-shadow: 0 1px 4px rgba(0,0,0,0.06); }
+    .info-label { font-size: 0.78rem; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 0.4rem; }
+    .info-val { font-size: 1rem; font-weight: 600; color: #1e293b; }
+
+    .section-title { font-size: 1rem; font-weight: 700; margin: 1.5rem 0 0.75rem; }
+    .table-wrap { background: #fff; border-radius: 12px; box-shadow: 0 1px 4px rgba(0,0,0,0.06); overflow: hidden; }
+    table { width: 100%; border-collapse: collapse; }
+    th { background: #f8fafc; padding: 0.7rem 1rem; text-align: right; font-size: 0.8rem; font-weight: 600; color: #64748b; border-bottom: 1px solid #e2e8f0; }
+    td { padding: 0.7rem 1rem; border-bottom: 1px solid #f1f5f9; font-size: 0.88rem; }
+    tr:last-child td { border-bottom: none; }
+    .role-tag { display: inline-block; background: #f1f5f9; color: #475569; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 0.78rem; }
+
+    .flash { padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 1rem; font-size: 0.9rem; }
+    .flash-success { background: #f0fdf4; color: #16a34a; border: 1px solid #bbf7d0; }
+    .flash-warning { background: #fffbeb; color: #92400e; border: 1px solid #fcd34d; }
+    .flash-info    { background: #eff6ff; color: #1d4ed8; border: 1px solid #bfdbfe; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="nav-brand"><span class="badge-sa">Super Admin</span> z NSH_ Platform</div>
+  <div class="nav-links">
+    <a href="{{ url_for('superadmin_dashboard') }}">لوحة التحكم</a>
+    <a href="{{ url_for('superadmin_companies') }}">الشركات</a>
+    <a href="{{ url_for('logout') }}">خروج</a>
+  </div>
+</nav>
+
+<div class="wrap">
+  <div class="breadcrumb">
+    <a href="{{ url_for('superadmin_companies') }}">الشركات</a> ← {{ co.name }}
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div class="flash flash-{{ cat }}">{{ msg }}</div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="header-row">
+    <div>
+      <h1>{{ co.name }}</h1>
+      <div class="meta">
+        ID: {{ co.id }} ·
+        slug: {{ co.slug }} ·
+        {% if co.is_active %}
+          <span class="badge badge-active">نشط</span>
+        {% else %}
+          <span class="badge badge-pending">معلّق — بانتظار الموافقة</span>
+        {% endif %}
+        <span class="badge badge-free" style="margin-right:0.5rem;">{{ co.plan }}</span>
+      </div>
+    </div>
+    <div class="actions">
+      {% if co.is_active %}
+        <form method="post" action="{{ url_for('superadmin_deactivate', company_id=co.id) }}" onsubmit="return confirm('تعطيل هذه الشركة؟')">
+          <button class="btn btn-danger">تعطيل الشركة</button>
+        </form>
+      {% else %}
+        <form method="post" action="{{ url_for('superadmin_activate', company_id=co.id) }}">
+          <button class="btn btn-success">✓ تفعيل الشركة</button>
+        </form>
+      {% endif %}
+      {% if admin_user %}
+        <a href="{{ url_for('superadmin_impersonate', user_id=admin_user.id) }}" class="btn btn-purple">دخول كأدمن ←</a>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="info-grid">
+    <div class="info-card">
+      <div class="info-label">البريد الإلكتروني</div>
+      <div class="info-val">{{ co.owner_email or '—' }}</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">تاريخ التسجيل</div>
+      <div class="info-val">{{ co.created_at.strftime('%Y-%m-%d') if co.created_at else '—' }}</div>
+    </div>
+    <div class="info-card">
+      <div class="info-label">عدد المستخدمين</div>
+      <div class="info-val">{{ users|length }} / {{ co.max_users }}</div>
+      <form method="post" action="{{ url_for('superadmin_set_max_users', company_id=co.id) }}" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;">
+        <input type="number" name="max_users" value="{{ co.max_users }}" min="1" max="9999"
+               style="width:70px;padding:4px 6px;border:1px solid #e2e8f0;border-radius:6px;font-size:0.85rem;">
+        <button class="btn btn-primary" style="padding:0.3rem 0.7rem;font-size:0.78rem;">حفظ</button>
+      </form>
+    </div>
+    <div class="info-card">
+      <div class="info-label">الخطة</div>
+      <div class="info-val" style="text-transform:uppercase;">{{ co.plan }}</div>
+      <form method="post" action="{{ url_for('superadmin_set_plan', company_id=co.id) }}" style="margin-top:0.6rem;display:flex;gap:0.4rem;align-items:center;">
+        <select name="plan" style="padding:4px 6px;border:1px solid #e2e8f0;border-radius:6px;font-size:0.85rem;">
+          <option value="free" {% if co.plan == 'free' %}selected{% endif %}>Free</option>
+          <option value="pro" {% if co.plan == 'pro' %}selected{% endif %}>Pro</option>
+        </select>
+        <button class="btn btn-primary" style="padding:0.3rem 0.7rem;font-size:0.78rem;">حفظ</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="section-title">المستخدمون ({{ users|length }})</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>الاسم</th>
+          <th>البريد الإلكتروني</th>
+          <th>الدور</th>
+          <th>الكود</th>
+          <th>الحالة</th>
+          <th>دخول</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td><strong>{{ u.name }}</strong></td>
+          <td>{{ u.email or '—' }}</td>
+          <td><span class="role-tag">{{ u.role }}</span></td>
+          <td style="color:#94a3b8;font-size:0.8rem;">{{ u.supervisor_code }}</td>
+          <td>
+            {% if u.is_active %}
+              <span style="color:#16a34a;font-size:0.85rem;">● نشط</span>
+            {% else %}
+              <span style="color:#dc2626;font-size:0.85rem;">● معطّل</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{{ url_for('superadmin_impersonate', user_id=u.id) }}" class="btn btn-purple" style="font-size:0.78rem;padding:0.25rem 0.65rem;">دخول</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" style="text-align:center;color:#94a3b8;padding:2rem;">لا يوجد مستخدمون</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}HSE Uploads{% endblock %}
+{% block content %}
+{% include "partials/_rtable.html" %}
+<style>
+  .up-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:18px}
+  .up-card{background:#fff;border:1px solid #E4EAF0;border-radius:14px;padding:20px;
+           box-shadow:0 1px 3px rgba(90,110,130,.06)}
+  .up-card h3{margin:0 0 4px;font-size:1rem;color:#4A5568;font-weight:700}
+  .up-card .hint{font-size:.82rem;color:#6B7A8A;margin-bottom:16px;line-height:1.45}
+  .fld{display:flex;flex-direction:column;gap:5px;margin-bottom:13px}
+  .fld label{font-size:.78rem;font-weight:600;color:#5A6472;letter-spacing:.2px}
+  .fld input{padding:.55rem;border:1px solid #D5DFE8;border-radius:8px;font-size:.92rem;
+             width:100%;box-sizing:border-box;color:#4A5568;background:#fff}
+  .fld input:focus{outline:none;border-color:#7593AE}
+  .up-btn{width:100%;padding:.62rem;border:none;border-radius:9px;color:#fff;
+          font-weight:600;font-size:.92rem;cursor:pointer;letter-spacing:.2px}
+  .b-pdf{background:#8B9BA8}
+  .b-xls{background:#7FA28D}
+  .up-btn:hover{opacity:.92}
+  .mini{font-size:.76rem;color:#8A97A5}
+  .sec-title{font-size:.95rem;color:#4A5568;font-weight:700;margin:0 0 10px}
+  @media (max-width:768px){ .up-grid{grid-template-columns:1fr} }
+</style>
+
+<section class="report">
+  <header class="report-header">
+    <div class="report-head-center">
+      <h1>HSE Uploads</h1>
+      <p class="muted">Upload Toolbox Talk documents and metrics files — both appear on the Safety Manager dashboard.</p>
+    </div>
+  </header>
+
+  <div class="up-grid">
+    <!-- TBT PDF -->
+    <div class="up-card">
+      <h3>Toolbox Talk — PDF</h3>
+      <p class="hint">Displayed in the left panel of the dashboard, archived by date.</p>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="kind" value="tbt">
+        <div class="fld">
+          <label>Title <span class="mini">(optional)</span></label>
+          <input type="text" name="title" placeholder="e.g. TBT — Scaffolding Safety">
+        </div>
+        <div class="fld">
+          <label>Date</label>
+          <input type="date" name="doc_date" value="{{ today }}">
+        </div>
+        <div class="fld">
+          <label>File (PDF)</label>
+          <input type="file" name="pdf_file" accept="application/pdf" required>
+        </div>
+        <button class="up-btn b-pdf" type="submit">Upload Toolbox Talk</button>
+      </form>
+    </div>
+
+    <!-- Metrics Excel -->
+    <div class="up-card">
+      <h3>Metrics — Excel</h3>
+      <p class="hint">Figures are extracted automatically and shown in the right panel.</p>
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="kind" value="metrics">
+        <div class="fld">
+          <label>Period label <span class="mini">(optional)</span></label>
+          <input type="text" name="label" placeholder="e.g. August 2026">
+        </div>
+        <div class="fld">
+          <label>Date</label>
+          <input type="date" name="snap_date" value="{{ today }}">
+        </div>
+        <div class="fld">
+          <label>File (.xlsx)</label>
+          <input type="file" name="xls_file" accept=".xlsx,.xlsm" required>
+        </div>
+        <button class="up-btn b-xls" type="submit">Upload Metrics</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- TBT archive -->
+  <section class="card">
+    <h2 class="sec-title">Toolbox Talk Archive ({{ tbts|length }})</h2>
+    <div class="table-wrap"><table class="table rtable">
+      <thead><tr><th>Date</th><th>Title</th><th class="no-print">Actions</th></tr></thead>
+      <tbody>
+        {% for t in tbts %}
+        <tr>
+          <td class="name mono" data-l="Date">{{ t.doc_date }}</td>
+          <td data-l="Title">{{ t.title }}</td>
+          <td class="no-print stack" data-l="Actions">
+            <a class="btn" href="{{ url_for('hse_tbt_file', doc_id=t.id) }}" target="_blank">View</a>
+            <form method="post" style="display:inline"
+                  action="{{ url_for('admin_tbt_delete', doc_id=t.id) }}"
+                  onsubmit="return confirm('Delete this document?')">
+              <button class="btn" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="3" class="center muted empty-row" data-l="">No documents uploaded yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+
+  <!-- Metrics snapshots -->
+  <section class="card">
+    <h2 class="sec-title">Metrics Snapshots ({{ snaps|length }})</h2>
+    <div class="table-wrap"><table class="table rtable">
+      <thead><tr><th>Date</th><th>Label</th><th>Extracted</th><th class="no-print">Actions</th></tr></thead>
+      <tbody>
+        {% for s in snaps %}
+        <tr>
+          <td class="name mono" data-l="Date">{{ s.snap_date }}</td>
+          <td data-l="Label">{{ s.label }}</td>
+          <td data-l="Extracted">
+            {{ s.data|length }} metric{{ 's' if s.data|length != 1 else '' }}
+            {% if s.data %}
+            <br><span class="mini">{{ s.data.keys()|list|join(' · ')|truncate(90) }}</span>
+            {% endif %}
+          </td>
+          <td class="no-print stack" data-l="Actions">
+            <a class="btn" href="{{ url_for('hse_tbt_panel', snap_id=s.id) }}">View</a>
+            <form method="post" style="display:inline"
+                  action="{{ url_for('admin_metrics_delete', snap_id=s.id) }}"
+                  onsubmit="return confirm('Delete this snapshot?')">
+              <button class="btn" type="submit">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="center muted empty-row" data-l="">No snapshots uploaded yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+
+  <div class="no-print actions">
+    <a class="btn primary" href="{{ url_for('hse_tbt_panel') }}">Open Panel</a>
+    <a class="btn" href="{{ url_for('admin_kpi') }}">Back to Dashboard</a>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block content %}
+
+<!-- Page header -->
+<section class="page-head">
+  <h1>Attendance • تحضير اليوم</h1>
+  <p class="muted">سجّل حضور موظفيك يوميًا (حاضر / غائب / إجازة). يمكنك تعديلها لاحقًا لنفس اليوم.</p>
+</section>
+
+<!-- Card: toolbar -->
+<div class="card" style="margin-bottom: 16px;">
+  <form method="post" id="attForm">
+    <div class="toolbar" style="display:flex;gap:12px;flex-wrap:wrap;align-items:center">
+      <div>
+        <label class="muted" for="att-date">التاريخ</label><br>
+        <input id="att-date" name="date" type="date" value="{{ today.isoformat() }}" />
+        <span class="muted">* لو تركته كما هو سيتم الحفظ لليوم.</span>
+      </div>
+
+      <div style="margin-inline-start:auto;display:flex;gap:8px;flex-wrap:wrap">
+        <button type="submit" class="btn primary">حفظ التحضير</button>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="table-wrap">
+      <table class="table">
+        <thead>
+          <tr>
+            <th style="width:48px;text-align:center">
+              <input type="checkbox" id="toggle-check" title="تحديد/إلغاء الكل">
+            </th>
+            <th>الموظف</th>
+            <th>الرقم</th>
+            <th>القسم</th>
+            <th>الموقع</th>
+            <th style="width:190px">الحالة</th>
+            <th>ملاحظات</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for emp in employees %}
+          {% set rec = saved.get(emp.id) %}
+          <tr>
+            <td style="text-align:center">
+              <input type="checkbox" class="row-check">
+            </td>
+            <td><strong>{{ emp.name }}</strong></td>
+            <td class="muted">{{ emp.emp_number }}</td>
+            <td class="muted">{{ emp.department or '—' }}</td>
+            <td class="muted">{{ emp.site or '—' }}</td>
+            <td>
+              <select class="status"
+                      name="emp_{{ emp.id }}_status"
+                      data-emp="{{ emp.id }}">
+                <option value="">— اختر —</option>
+                <option value="present" {{ 'selected' if rec and rec.status=='present' }}>حاضر</option>
+                <option value="absent"  {{ 'selected' if rec and rec.status=='absent'  }}>غائب</option>
+                <option value="leave"   {{ 'selected' if rec and rec.status=='leave'   }}>إجازة</option>
+              </select>
+            </td>
+            <td>
+              <input type="text"
+                     name="emp_{{ emp.id }}_remarks"
+                     value="{{ rec.remarks if rec else '' }}"
+                     placeholder="اختياري">
+            </td>
+          </tr>
+          {% else %}
+          <tr>
+            <td colspan="7" class="muted" style="text-align:center">لا يوجد موظفون نشطون.</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </form>
+</div>
+
+<!-- Small legend -->
+<p class="muted">التعريف: <b>حاضر</b> = موجود، <b>غائب</b> = غير موجود، <b>إجازة</b> = إجازة نظامية.</p>
+
+{% endblock %}
+
+{% block scripts %}
+<script>
+  // تحديد الكل
+  const toggleAll = document.getElementById('toggle-check');
+  if (toggleAll){
+    toggleAll.addEventListener('change', (e)=>{
+      document.querySelectorAll('.row-check').forEach(ch => ch.checked = e.target.checked);
+    });
+  }
+
+  // تعبئة جماعية حسب الزر
+  document.querySelectorAll('[data-bulk]').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      const val = btn.getAttribute('data-bulk');
+      document.querySelectorAll('tbody tr').forEach(row=>{
+        if(row.querySelector('.row-check')?.checked){
+          const sel = row.querySelector('select.status');
+          if(sel){ sel.value = val; }
+        }
+      });
+    });
+  });
+
+  // تفريغ جماعي
+  const clearBtn = document.getElementById('clear-all');
+  if (clearBtn){
+    clearBtn.addEventListener('click', ()=>{
+      document.querySelectorAll('tbody tr').forEach(row=>{
+        if(row.querySelector('.row-check')?.checked){
+          const sel = row.querySelector('select.status');
+          const rem = row.querySelector('input[type="text"]');
+          if(sel) sel.value = "";
+          if(rem) rem.value = "";
+        }
+      });
+    });
+  }
+
+  // تأكيد قبل الإرسال إن لم يتم اختيار أي حالة
+  document.getElementById('attForm').addEventListener('submit', (e)=>{
+    const any = Array.from(document.querySelectorAll('select.status'))
+      .some(s => s.value && s.name.startsWith('emp_'));
+    if(!any){
+      if(!confirm('لا توجد تغييرات واضحة. هل تريد المتابعة؟')) e.preventDefault();
+    }
+  });
+</script>
+{% endblock %}

@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>HSE Supervisor Access</h2>
+<p class="muted" style="margin-bottom:16px">
+  Control who can view the HSE dashboard and reports. The primary supervisor ({{ primary.name if primary else '39468' }}) always has access and cannot be removed.
+</p>
+
+<!-- Add user -->
+<div class="card" style="max-width:480px">
+  <h3 style="margin-top:0">Grant Access</h3>
+  <form method="post" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+    <input type="hidden" name="action" value="add">
+    <label style="flex:1;min-width:180px">
+      Supervisor Code
+      <input type="text" name="code" placeholder="e.g. 12345" required
+             style="text-transform:uppercase">
+    </label>
+    <button type="submit" class="btn primary" style="height:38px">Grant Access</button>
+  </form>
+</div>
+
+<!-- Current access list -->
+<div class="card">
+  <h3 style="margin-top:0">Users with HSE Access</h3>
+  <div class="table-wrap">
+    <table class="table compact">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Code</th>
+          <th>Role</th>
+          <th>Granted</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Primary (always first, cannot be removed) -->
+        {% if primary %}
+        <tr>
+          <td><strong>{{ primary.name }}</strong></td>
+          <td><code>{{ primary.supervisor_code }}</code></td>
+          <td>{{ primary.role }}</td>
+          <td><span style="color:var(--muted);font-size:12px">Primary</span></td>
+          <td><span style="color:var(--muted);font-size:12px">—</span></td>
+        </tr>
+        {% endif %}
+        <!-- Others -->
+        {% for acc, user in access_list %}
+        <tr>
+          <td>{{ user.name }}</td>
+          <td><code>{{ user.supervisor_code }}</code></td>
+          <td>{{ user.role }}</td>
+          <td style="font-size:12px;color:var(--muted)">
+            {{ acc.granted_at.strftime('%d %b %Y') if acc.granted_at else '—' }}
+          </td>
+          <td>
+            <form method="post" style="margin:0"
+                  onsubmit="return confirm('Remove HSE access from {{ user.name }}?')">
+              <input type="hidden" name="action" value="remove">
+              <input type="hidden" name="user_id" value="{{ user.id }}">
+              <button type="submit" class="btn"
+                      style="background:var(--danger);color:#fff;padding:4px 10px;font-size:12px">
+                Remove
+              </button>
+            </form>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="muted" style="text-align:center">No additional users granted access</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

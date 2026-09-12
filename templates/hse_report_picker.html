@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>HSE Weekly Reports</h2>
+<div class="card" style="max-width:480px">
+  <h3 style="margin-top:0">Select Week</h3>
+  <form method="get" action="{{ url_for('hse_report_weekly') }}">
+    <label>
+      Week Start (Sunday)
+      <input type="date" name="week_start" value="{{ default_ws.isoformat() }}" required>
+    </label>
+    <p class="muted" style="margin:6px 0 14px;font-size:12px">
+      Week end (Thursday) is calculated automatically — 4 days after the selected date.
+    </p>
+    <div class="actions">
+      <button class="btn primary">View Report</button>
+      <a href="{{ url_for('hse_report_monthly_picker') }}" class="btn">Monthly Report →</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

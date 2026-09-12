@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>تقارير التغذية (الكانتين)</h1>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}<div class="alert alert-{{ cat }}">{{ msg }}</div>{% endfor %}
+{% endwith %}
+
+<section class="card">
+  <h2>تقرير وجبة</h2>
+  <form method="post" style="display:grid;gap:.5rem;grid-template-columns:1fr 1fr">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <label>التاريخ *
+      <input type="date" name="inspect_date" required>
+    </label>
+    <label>نوع الوجبة *
+      <select name="meal_type" required>
+        <option value="breakfast">فطور</option>
+        <option value="lunch">غداء</option>
+        <option value="dinner">عشاء</option>
+        <option value="snack">وجبة خفيفة</option>
+      </select>
+    </label>
+    <label>عدد الوجبات المقدمة
+      <input type="number" name="meal_count" min="0">
+    </label>
+    <div></div>
+    <label>تقييم الجودة (1-5)
+      <input type="number" name="quality_score" min="1" max="5">
+    </label>
+    <label>تقييم النظافة (1-5)
+      <input type="number" name="hygiene_score" min="1" max="5">
+    </label>
+    <label style="grid-column:1/-1">ملاحظات / مشاكل
+      <textarea name="issues_found" rows="2"></textarea>
+    </label>
+    <div style="grid-column:1/-1">
+      <button type="submit" class="btn primary">حفظ</button>
+    </div>
+  </form>
+</section>
+
+{% if records %}
+<table class="rtable" style="margin-top:1rem">
+  <thead>
+    <tr><th>التاريخ</th><th>الوجبة</th><th>عدد</th><th>جودة</th><th>نظافة</th><th>ملاحظات</th><th>المفتش</th></tr>
+  </thead>
+  <tbody>
+  {% for r in records %}
+    <tr>
+      <td>{{ r.inspect_date }}</td>
+      <td>{{ r.meal_type }}</td>
+      <td>{{ r.meal_count or '—' }}</td>
+      <td>{{ r.quality_score or '—' }}/5</td>
+      <td>{{ r.hygiene_score or '—' }}/5</td>
+      <td>{{ r.issues_found or '—' }}</td>
+      <td>{{ r.inspector.name if r.inspector else '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="hint" style="margin-top:1rem">لا توجد تقارير.</p>
+{% endif %}
+{% endblock %}

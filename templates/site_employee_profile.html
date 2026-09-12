@@ -1,0 +1,189 @@
+{% extends "base.html" %}
+{% block title %}{{ emp.name }}{% endblock %}
+{% block content %}
+{% include "partials/_rtable.html" %}
+<style>
+  .pf-head{display:flex;gap:14px;align-items:center;flex-wrap:wrap}
+  .pf-avatar{width:52px;height:52px;border-radius:50%;background:#1d4ed8;color:#fff;
+             display:flex;align-items:center;justify-content:center;font-size:1.3rem;font-weight:700;flex:0 0 auto}
+  .pf-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;font-size:.85rem;color:#6b7280}
+  .pf-meta span{background:#f3f4f6;padding:.15rem .6rem;border-radius:999px}
+  .sm-st{display:inline-block;padding:.14rem .55rem;border-radius:999px;font-size:.72rem;font-weight:600}
+  .st-active{background:#dcfce7;color:#166534}
+  .st-resigned{background:#fee2e2;color:#991b1b}
+  .st-unassigned{background:#fef3c7;color:#92400e}
+  .pf-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+  .pf-kpi{background:#f9fafb;border:1px solid #eef2f7;border-radius:10px;padding:10px;text-align:center}
+  .pf-kpi .v{font-size:1.35rem;font-weight:700;line-height:1.2}
+  .pf-kpi .l{font-size:.72rem;color:#6b7280;text-transform:uppercase;letter-spacing:.02em}
+  .pf-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .pf-tab{padding:.4rem .9rem;border:1px solid #d1d5db;border-radius:999px;font-size:.85rem;
+          background:#fff;color:#374151;cursor:pointer}
+  .pf-tab.on{background:#1d4ed8;color:#fff;border-color:#1d4ed8}
+  .pf-pane{display:none}
+  .pf-pane.on{display:block}
+  .pill{display:inline-block;padding:.12rem .5rem;border-radius:999px;font-size:.72rem;font-weight:600}
+  .p-present{background:#dcfce7;color:#166534}
+  .p-absent{background:#fee2e2;color:#991b1b}
+  .p-leave{background:#e0e7ff;color:#3730a3}
+  .p-pending{background:#fef3c7;color:#92400e}
+  .p-approved{background:#dcfce7;color:#166534}
+  .p-rejected{background:#fee2e2;color:#991b1b}
+  @media (max-width:768px){
+    .pf-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+  }
+</style>
+
+<section class="report">
+  <section class="card">
+    <div class="pf-head">
+      <div class="pf-avatar">{{ (emp.name or '?')[0]|upper }}</div>
+      <div style="flex:1;min-width:0">
+        <h1 style="margin:0;font-size:1.3rem">{{ emp.name }}</h1>
+        <div class="pf-meta">
+          <span class="mono">#{{ emp.emp_number }}</span>
+          {% if emp.department %}<span>{{ emp.department }}</span>{% endif %}
+          {% if emp.site %}<span>{{ emp.site }}</span>{% endif %}
+          <span class="sm-st st-{{ emp.status }}">{{ emp.status }}</span>
+        </div>
+        <div class="pf-meta">
+          <span>المشرف الحالي: {{ cur_sup.name or cur_sup.supervisor_code if cur_sup else '— غير معيّن' }}</span>
+          {% if emp.id_expiry_date %}<span>انتهاء الهوية: {{ emp.id_expiry_date }}</span>{% endif %}
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="pf-kpis">
+      <div class="pf-kpi">
+        <div class="v">{{ evals|length }}</div><div class="l">Evaluations</div>
+      </div>
+      <div class="pf-kpi">
+        <div class="v">{{ avg_score if avg_score is not none else '—' }}</div><div class="l">Avg Score</div>
+      </div>
+      <div class="pf-kpi">
+        <div class="v">{% if att_rate is not none %}{{ '%.0f'|format(att_rate) }}%{% else %}—{% endif %}</div>
+        <div class="l">Attendance 60d</div>
+      </div>
+      <div class="pf-kpi">
+        <div class="v">{{ reqs|length }}</div><div class="l">Requests</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="pf-tabs no-print">
+      <button class="pf-tab on" data-p="ev">التقييمات ({{ evals|length }})</button>
+      <button class="pf-tab" data-p="at">الحضور ({{ att_total }})</button>
+      <button class="pf-tab" data-p="rq">الطلبات ({{ reqs|length }})</button>
+      <button class="pf-tab" data-p="mv">الحركة ({{ moves|length }})</button>
+    </div>
+
+    <!-- التقييمات -->
+    <div class="pf-pane on" id="p-ev">
+      <div class="table-wrap"><table class="table rtable">
+        <thead><tr><th>Week</th><th>Score</th><th>Band</th><th>Evaluated by</th><th class="no-print">Open</th></tr></thead>
+        <tbody>
+          {% for e in evals %}
+          <tr>
+            <td class="name" data-l="Week">{{ e.week_start }} → {{ e.week_end }}</td>
+            <td data-l="Score"><strong>{{ e.total_score or '—' }}</strong></td>
+            <td data-l="Band">{{ e.overall_band or '—' }}</td>
+            <td data-l="By">{{ ev_names.get(e.evaluator_id, '—') }}</td>
+            <td class="no-print stack" data-l="">
+              <a class="btn" href="{{ url_for('report_employee', emp_id=emp.id,
+                 week_start=e.week_start.isoformat(), week_end=e.week_end.isoformat()) }}">عرض</a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="center muted empty-row" data-l="">لا توجد تقييمات.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- الحضور -->
+    <div class="pf-pane" id="p-at">
+      <p class="muted small">
+        حاضر: <strong>{{ att_summary.get('present', 0) }}</strong> ·
+        غائب: <strong>{{ att_summary.get('absent', 0) }}</strong> ·
+        إجازة: <strong>{{ att_summary.get('leave', 0) }}</strong>
+        <span class="muted">(آخر 60 يوم)</span>
+      </p>
+      <div class="table-wrap"><table class="table rtable">
+        <thead><tr><th>Date</th><th>Status</th><th>Remarks</th></tr></thead>
+        <tbody>
+          {% for a in att %}
+          <tr>
+            <td class="name mono" data-l="Date">{{ a.date }}</td>
+            <td data-l="Status"><span class="pill p-{{ a.status }}">{{ a.status }}</span></td>
+            <td data-l="Remarks">{{ a.remarks or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="3" class="center muted empty-row" data-l="">لا يوجد سجل حضور.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- الطلبات -->
+    <div class="pf-pane" id="p-rq">
+      <div class="table-wrap"><table class="table rtable">
+        <thead><tr><th>Date</th><th>Type</th><th>Period</th><th>Status</th></tr></thead>
+        <tbody>
+          {% for r in reqs %}
+          <tr>
+            <td class="name mono" data-l="Date">{{ r.created_at.strftime('%Y-%m-%d') if r.created_at else '—' }}</td>
+            <td data-l="Type">{{ r.type }}</td>
+            <td data-l="Period">
+              {% if r.start_date %}{{ r.start_date }}{% if r.end_date %} → {{ r.end_date }}{% endif %}
+              {% else %}—{% endif %}
+            </td>
+            <td data-l="Status"><span class="pill p-{{ r.status }}">{{ r.status }}</span></td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="center muted empty-row" data-l="">لا توجد طلبات.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+
+    <!-- الحركة -->
+    <div class="pf-pane" id="p-mv">
+      <div class="table-wrap"><table class="table rtable">
+        <thead><tr><th>Date</th><th>Action</th><th>From</th><th>To</th><th>By</th></tr></thead>
+        <tbody>
+          {% for m in moves %}
+          <tr>
+            <td class="name mono" data-l="Date">{{ m.created_at.strftime('%Y-%m-%d %H:%M') if m.created_at else '—' }}</td>
+            <td data-l="Action">{{ m.action }}</td>
+            <td data-l="From">{{ mv_names.get(m.from_user_id, '—') }}</td>
+            <td data-l="To">{{ mv_names.get(m.to_user_id, '—') }}</td>
+            <td data-l="By">{{ mv_names.get(m.actor_id, '—') }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5" class="center muted empty-row" data-l="">لا توجد حركات مسجلة.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+    </div>
+  </section>
+
+  <div class="no-print actions">
+    <a class="btn" href="{{ back_url }}">رجوع</a>
+  </div>
+</section>
+
+<script>
+document.querySelectorAll('.pf-tab').forEach(function(t){
+  t.addEventListener('click', function(){
+    document.querySelectorAll('.pf-tab').forEach(function(x){ x.classList.remove('on'); });
+    document.querySelectorAll('.pf-pane').forEach(function(x){ x.classList.remove('on'); });
+    t.classList.add('on');
+    var pane = document.getElementById('p-' + t.dataset.p);
+    if (pane) pane.classList.add('on');
+  });
+});
+</script>
+{% endblock %}

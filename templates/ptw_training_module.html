@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}{{ mod.title }}{% endblock %}
+{% block content %}
+<style>
+.back-link{font-size:13px;color:#3b82f6;text-decoration:none;margin-bottom:14px;display:inline-block}
+.mod-header{margin-bottom:18px}
+.mod-title{font-size:18px;font-weight:700}
+.mod-sub{font-size:12px;color:#64748b;margin-top:2px}
+.door-list{display:flex;flex-direction:column;gap:8px}
+.door-row{display:flex;align-items:center;gap:12px;background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px 14px;text-decoration:none;color:inherit}
+.door-row.locked{opacity:.5;cursor:not-allowed;pointer-events:none}
+.door-row.active-door{border-color:#3b82f6}
+.door-row.approved{border-color:#22c55e}
+.door-row.pending{border-color:#f59e0b}
+.door-row.rejected{border-color:#ef4444}
+.door-circle{width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0;background:#f1f5f9;color:#64748b;border:1.5px solid #e2e8f0}
+.door-circle.approved{background:#dcfce7;color:#166534;border-color:#22c55e}
+.door-circle.pending{background:#fef3c7;color:#92400e;border-color:#f59e0b}
+.door-circle.rejected{background:#fee2e2;color:#b91c1c;border-color:#ef4444}
+.door-circle.open{background:#eff6ff;color:#1e40af;border-color:#3b82f6}
+.door-info{flex:1}
+.door-name{font-size:13px;font-weight:600}
+.door-ref{font-size:11px;color:#94a3b8;margin-top:2px}
+.badge{font-size:11px;padding:3px 8px;border-radius:6px;font-weight:600}
+.badge-approved{background:#dcfce7;color:#166534}
+.badge-pending{background:#fef3c7;color:#92400e}
+.badge-rejected{background:#fee2e2;color:#b91c1c}
+.badge-open{background:#eff6ff;color:#1d4ed8}
+.badge-locked{background:#f1f5f9;color:#94a3b8}
+</style>
+
+<a href="{{ url_for('ptw_training_home') }}" class="back-link">← All modules</a>
+<div class="mod-header">
+  <div class="mod-title">Module {{ mod.seq }} — {{ mod.title }}</div>
+  <div class="mod-sub">5 field stages + 1 reference · complete in order · supervisor approves each field stage</div>
+</div>
+
+<div class="door-list">
+{% for d in doors %}
+{% set sub = d.sub %}
+{% set status = sub.status if sub else ('' if d.unlocked else 'locked') %}
+<a href="{% if d.unlocked %}{{ url_for('ptw_training_door', mod_seq=mod.seq, door_seq=d.seq) }}{% else %}#{% endif %}"
+   class="door-row {% if not d.unlocked %}locked{% elif status == 'approved' %}approved{% elif status == 'pending' %}pending{% elif status == 'rejected' %}rejected{% else %}active-door{% endif %}">
+  <div class="door-circle {% if status == 'approved' %}approved{% elif status == 'pending' %}pending{% elif status == 'rejected' %}rejected{% elif d.unlocked %}open{% endif %}">
+    {% if status == 'approved' %}✓
+    {% elif status == 'pending' %}⏳
+    {% elif status == 'rejected' %}✕
+    {% elif not d.unlocked %}🔒
+    {% else %}{{ d.seq }}{% endif %}
+  </div>
+  <div class="door-info">
+    <div class="door-name">{% if d.ref_only %}📚 Reference — {% else %}Stage {{ d.seq }} — {% endif %}{{ d.title }}</div>
+    <div class="door-ref">{{ d.ref }}</div>
+    {% if sub and sub.reviewer_note and status == 'rejected' %}
+    <div style="font-size:11px;color:#b91c1c;margin-top:3px">Note: {{ sub.reviewer_note }}</div>
+    {% endif %}
+  </div>
+  <span class="badge badge-{{ status if status else 'open' }}">
+    {% if status == 'approved' %}Approved
+    {% elif status == 'pending' %}Pending review
+    {% elif status == 'rejected' %}Rejected — resubmit
+    {% elif not d.unlocked %}Locked
+    {% else %}Open{% endif %}
+  </span>
+</a>
+{% endfor %}
+</div>
+{% endblock %}

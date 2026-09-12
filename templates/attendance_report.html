@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <title>تقرير الحضور (أدمن)</title>
+  <style>
+    body{font-family:Tahoma,Arial;background:#0f172a;color:#e5e7eb}
+    .wrap{max-width:1100px;margin:24px auto;padding:16px}
+    table{width:100%;border-collapse:collapse;margin-top:10px}
+    th,td{border:1px solid #334155;padding:8px}
+    input,button{padding:8px;border-radius:8px;border:1px solid #334155;background:#0b1220;color:#e5e7eb}
+    a.btn{display:inline-block;padding:8px 12px;background:#22c55e;color:#052e16;border-radius:8px;text-decoration:none}
+    .kpi{margin:10px 0;color:#a7f3d0}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>تقرير الحضور</h1>
+    <form method="get">
+      من: <input type="date" name="from" value="{{ d_from.isoformat() }}">
+      إلى: <input type="date" name="to" value="{{ d_to.isoformat() }}">
+      <button type="submit">عرض</button>
+      <a class="btn" href="{{ url_for('attendance_pdf', from=d_from.isoformat(), to=d_to.isoformat()) }}" target="_blank">طباعة PDF</a>
+      <a class="btn" href="{{ url_for('attendance_print', from=d_from.isoformat(), to=d_to.isoformat()) }}" target="_blank">نسخة للطباعة</a>
+
+    </form>
+
+    <div class="kpi">KPI نسبة الحضور الإجمالية: <b>{{ '%.1f'|format(kpi_attendance) }}%</b></div>
+
+    <table>
+      <tr>
+        <th>الموظف</th>
+        <th>سوبرفايزر ID</th>
+        <th>عدد الأيام</th>
+        <th>حاضر</th>
+        <th>إجازة</th>
+        <th>غائب</th>
+        <th>% الحضور</th>
+      </tr>
+      {% for r in rows %}
+      <tr>
+        <td>{{ r.emp.name }}</td>
+        <td>{{ r.sup.supervisor_code }}</td>
+        <td style="text-align:center">{{ r.total }}</td>
+        <td style="text-align:center">{{ r.present }}</td>
+        <td style="text-align:center">{{ r.leave }}</td>
+        <td style="text-align:center">{{ r.absent }}</td>
+        <td style="text-align:center">{{ '%.1f'|format(r.percent) }}</td>
+      </tr>
+      {% endfor %}
+    </table>
+  </div>
+</body>
+</html>

@@ -152,6 +152,20 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
+# ── ملفات حساسة — لا ترفع على GitHub ──
+config_local.py
+keys/
+error_log
+tmp/
+*.zip
+.claude/
+.config/
+.local/
+ssl-manager.php
+passenger_wsgi.py
+welfare_content.md
+dev/
+
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
 #  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore

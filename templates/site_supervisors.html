@@ -1,5 +1,11 @@
 {% extends "base.html" %}
+{% block title %}My Supervisors{% endblock %}
 {% block content %}
+{% include "partials/_rtable.html" %}
+<style>
+.cov-bar{width:60px;height:6px;background:#e5e7eb;border-radius:3px;display:inline-block;vertical-align:middle;overflow:hidden}
+.cov-fill{height:100%;border-radius:3px;background:#3b82f6}
+</style>
 <section class="report">
   <header class="report-header">
     <div class="report-head-left">
@@ -7,10 +13,76 @@
     </div>
     <div class="report-head-center">
       <h1>My Supervisors</h1>
-      <p class="muted">Assign supervisors you oversee and evaluate them weekly</p>
+      <p class="muted">Week: {{ ws }} → {{ we }}{% if not is_current_week %} <strong>(past week)</strong>{% endif %}</p>
+      <div class="no-print" style="display:flex;gap:8px;align-items:center;justify-content:center;margin-top:6px;flex-wrap:wrap">
+        <a class="btn" href="{{ url_for('site_supervisors', ws=prev_ws.isoformat()) }}">‹ Previous week</a>
+        {% if not is_current_week %}
+        <a class="btn primary" href="{{ url_for('site_supervisors') }}">This week</a>
+        {% endif %}
+        <a class="btn" href="{{ url_for('site_supervisors', ws=next_ws.isoformat()) }}">Next week ›</a>
+      </div>
     </div>
     <div class="report-head-right"></div>
   </header>
+
+  <!-- KPIs -->
+  <section class="card">
+    <div class="grid4">
+      <div>
+        <div class="muted">Supervisors</div>
+        <div style="font-size:22px;font-weight:700">{{ kpi_total_sups }}</div>
+      </div>
+      <div>
+        <div class="muted">Fully Evaluated (this week)</div>
+        <div style="font-size:22px;font-weight:700">{{ kpi_evaluated }} / {{ kpi_total_sups }}</div>
+      </div>
+      <div>
+        <div class="muted">Employees Evaluated</div>
+        <div style="font-size:22px;font-weight:700">{{ kpi_done_emps }} / {{ kpi_total_emps }}</div>
+      </div>
+      <div>
+        <div class="muted">Week</div>
+        <div style="font-size:14px">{{ ws }} → {{ we }}</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Completion % per supervisor -->
+  <section class="card">
+    <h2>Completion by Supervisor</h2>
+    <div class="table-wrap"><table class="table rtable">
+      <thead>
+        <tr>
+          <th>Supervisor</th>
+          <th class="right">Employees</th>
+          <th class="right">Done</th>
+          <th class="right">Completion%</th>
+          <th class="no-print">Open</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in sup_rows %}
+        <tr>
+          <td class="name" data-l="Supervisor">{{ r.name or r.code }}</td>
+          <td class="right" data-l="Employees">{{ r.target }}</td>
+          <td class="right" data-l="Done">{{ r.done_c }}</td>
+          <td class="right" data-l="Completion">
+            {% if r.coverage is not none %}
+            <span class="cov-bar"><span class="cov-fill" style="width:{{ [r.coverage,100]|min }}%"></span></span>
+            {{ '%.0f'|format(r.coverage) }}%
+            {% else %}—{% endif %}
+          </td>
+          <td class="no-print stack" data-l="Actions">
+            <a class="btn" href="{{ url_for('site_supervisor_detail', sup_id=r.id, ws=ws.isoformat()) }}">Open</a>
+            <a class="btn" href="{{ url_for('site_manage_employees', sup_id=r.id) }}">Manage</a>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="center muted empty-row" data-l="">No supervisors assigned yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
 
   <!-- Add / Create+Assign Supervisor -->
   <section class="card no-print">
@@ -37,7 +109,7 @@
   <!-- Assigned supervisors -->
   <section class="card">
     <h2>Assigned Supervisors</h2>
-    <table class="table">
+    <div class="table-wrap"><table class="table rtable">
       <thead>
         <tr>
           <th>Supervisor ID</th>
@@ -48,9 +120,9 @@
       <tbody>
         {% for link, sup in links %}
         <tr>
-          <td class="nowrap">{{ sup.supervisor_code }}</td>
-          <td>{{ sup.name }}</td>
-          <td class="no-print">
+          <td class="nowrap" data-l="ID">{{ sup.supervisor_code }}</td>
+          <td class="name" data-l="Name">{{ sup.name }}</td>
+          <td class="no-print stack" data-l="Actions">
             <a class="btn" href="{{ url_for('site_evaluate_new', sup_user_id=sup.id) }}">Evaluate</a>
             <form method="post"
                   action="{{ url_for('site_supervisors_remove', link_id=link.id) }}"
@@ -62,11 +134,11 @@
         </tr>
         {% else %}
         <tr>
-          <td colspan="3" class="center muted">No supervisors assigned yet.</td>
+          <td colspan="3" class="center muted empty-row" data-l="">No supervisors assigned yet.</td>
         </tr>
         {% endfor %}
       </tbody>
-    </table>
+    </table></div>
   </section>
 </section>
 {% endblock %}

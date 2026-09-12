@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>z NSH_ — Workforce & HSE Management</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif; background: #f8fafc; color: #1e293b; }
+    a { text-decoration: none; color: inherit; }
+
+    nav {
+      background: #0f172a; padding: 0 2rem;
+      display: flex; align-items: center; justify-content: space-between; height: 60px;
+    }
+    .brand { color: #fff; font-weight: 700; font-size: 1.1rem; }
+    .brand span { color: #3b82f6; }
+    .nav-links { display: flex; gap: 1rem; align-items: center; }
+    .nav-links a { color: #94a3b8; font-size: 0.9rem; }
+    .nav-links a:hover { color: #fff; }
+    .btn-login {
+      background: #2563eb; color: #fff !important;
+      padding: 0.4rem 1.1rem; border-radius: 7px; font-size: 0.9rem; font-weight: 600;
+    }
+    .btn-login:hover { background: #1d4ed8 !important; }
+
+    .hero {
+      text-align: center; padding: 80px 2rem 60px;
+      background: linear-gradient(160deg, #0f172a 0%, #1e3a5f 100%); color: #fff;
+    }
+    .hero h1 { font-size: clamp(1.8rem, 4vw, 3rem); font-weight: 800; margin-bottom: 1rem; line-height: 1.25; }
+    .hero p { font-size: 1.1rem; color: #94a3b8; max-width: 560px; margin: 0 auto 2rem; }
+    .hero-btns { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .btn-white {
+      background: #fff; color: #0f172a;
+      padding: 0.75rem 2rem; border-radius: 9px; font-weight: 700; font-size: 1rem;
+    }
+    .btn-white:hover { background: #f1f5f9; }
+    .btn-ghost {
+      background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,0.3);
+      padding: 0.75rem 2rem; border-radius: 9px; font-weight: 600; font-size: 1rem;
+    }
+    .btn-ghost:hover { border-color: #fff; }
+
+    .features {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1.5rem; max-width: 960px; margin: 60px auto; padding: 0 2rem;
+    }
+    .feature {
+      background: #fff; border-radius: 14px; padding: 1.8rem;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.07);
+    }
+    .feature-icon { font-size: 2rem; margin-bottom: 0.75rem; }
+    .feature h3 { font-size: 1rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .feature p { font-size: 0.88rem; color: #64748b; line-height: 1.6; }
+
+    footer {
+      text-align: center; padding: 2rem; color: #94a3b8; font-size: 0.82rem;
+      border-top: 1px solid #e2e8f0; margin-top: 40px;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="brand">z <span>NSH_</span></div>
+  <div class="nav-links">
+    <a href="{{ url_for('login') }}" class="btn-login">Sign in</a>
+  </div>
+</nav>
+
+<div class="hero">
+  <h1>Workforce & HSE<br>Management Platform</h1>
+  <p>Track employees, safety officers, daily evaluations, and HSE activities — all in one place.</p>
+  <div class="hero-btns">
+    <a href="{{ url_for('register') }}" class="btn-white">Get Started Free</a>
+    <a href="{{ url_for('login') }}" class="btn-ghost">Sign in</a>
+  </div>
+</div>
+
+<div class="features">
+  <div class="feature">
+    <div class="feature-icon">👷</div>
+    <h3>Employee Management</h3>
+    <p>Manage your workforce, track attendance, and run weekly evaluations.</p>
+  </div>
+  <div class="feature">
+    <div class="feature-icon">🦺</div>
+    <h3>HSE Tracking</h3>
+    <p>Daily check-ins, safety observations, TBTs, near misses, and BBS cards.</p>
+  </div>
+  <div class="feature">
+    <div class="feature-icon">📊</div>
+    <h3>Reports & KPIs</h3>
+    <p>Weekly and daily performance reports with scoring and band ratings.</p>
+  </div>
+  <div class="feature">
+    <div class="feature-icon">📱</div>
+    <h3>Mobile App</h3>
+    <p>iOS app for supervisors to submit evaluations and attendance on the go.</p>
+  </div>
+</div>
+
+<footer>
+  © 2026 z NSH_ Platform · Built by <a href="https://z-app.biz" style="color:#2563eb;">z</a>
+</footer>
+
+</body>
+</html>

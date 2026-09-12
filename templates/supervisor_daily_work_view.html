@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block title %}Daily Work Report — {{ report.report_date }}{% endblock %}
+{% block content %}
+<section class="card">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px">
+    <div>
+      <h2 style="margin:0 0 4px">Daily Work Report</h2>
+      <p class="muted" style="margin:0; font-size:13px">
+        Supervisor: <strong>{{ report.supervisor.name }}</strong> &nbsp;|&nbsp;
+        ID: {{ report.supervisor.supervisor_code }} &nbsp;|&nbsp;
+        Date: <strong>{{ report.report_date.strftime('%d %B %Y') }}</strong>
+      </p>
+      {% if report.report_employees %}
+      <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">
+        {% for re in report.report_employees %}
+        <span style="display:inline-flex;align-items:center;gap:6px;background:#1e3a5f;color:#fff;border-radius:20px;padding:4px 12px;font-size:13px">
+          👷 <strong>{{ re.employee.name }}</strong>
+          <span style="opacity:.75;font-size:12px">{{ re.employee.emp_number }}</span>
+        </span>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+    <div style="display:flex; gap:8px; flex-wrap:wrap">
+      <a class="btn primary" href="{{ url_for('supervisor_daily_work_pdf', report_id=report.id) }}" target="_blank">Export PDF</a>
+      {% if g.role != 'admin' %}
+      <a class="btn" href="{{ url_for('supervisor_daily_work_edit', report_id=report.id) }}" style="background:#f59e0b;color:#fff;border-color:#f59e0b">Edit Report</a>
+      <a class="btn" href="{{ url_for('supervisor_daily_work_list') }}">Back to List</a>
+      {% else %}
+      <a class="btn" href="{{ url_for('admin_daily_work') }}">Back to Admin View</a>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if report.notes %}
+  <div style="background:#f0f8ff; border:1px solid #bde0f8; border-radius:8px; padding:10px 14px; margin-top:14px">
+    <strong>Notes:</strong> {{ report.notes }}
+  </div>
+  {% endif %}
+
+  <div style="margin-top:18px">
+    {% if report.items %}
+      {% for item in report.items %}
+      <div class="card" style="border-left:4px solid var(--primary); margin-bottom:14px">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:6px; margin-bottom:10px">
+          <div>
+            <span style="font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase; letter-spacing:.5px">Work Item {{ loop.index }}</span>
+            <h3 style="margin:2px 0; color:var(--primary)">{{ item.area }}</h3>
+          </div>
+          {% if item.start_time or item.end_time %}
+          <div style="background:#e8f4fd; border-radius:20px; padding:4px 14px; font-size:13px; color:var(--primary); white-space:nowrap">
+            🕐 {{ item.start_time or '—' }} – {{ item.end_time or '—' }}
+          </div>
+          {% endif %}
+        </div>
+
+        <p style="margin:0 0 10px; white-space:pre-wrap; line-height:1.6">{{ item.description }}</p>
+
+        {% if item.photos %}
+        <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:8px">
+          {% for photo in item.photos %}
+          <a href="{{ url_for('supervisor_daily_work_photo', report_id=report.id, filename=photo.filename) }}" target="_blank">
+            <img src="{{ url_for('supervisor_daily_work_photo', report_id=report.id, filename=photo.filename) }}"
+                 style="width:90px; height:90px; object-fit:cover; border-radius:8px; border:1px solid var(--border);"
+                 alt="Photo {{ loop.index }}">
+          </a>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </div>
+      {% endfor %}
+    {% else %}
+    <p class="muted">No work items recorded.</p>
+    {% endif %}
+  </div>
+
+  <p class="muted" style="font-size:12px; margin-top:10px; text-align:right">
+    Submitted: {{ report.created_at | local_dt }}
+  </p>
+</section>
+{% endblock %}

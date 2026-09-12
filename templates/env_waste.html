@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>سجل النفايات</h1>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}<div class="alert alert-{{ cat }}">{{ msg }}</div>{% endfor %}
+{% endwith %}
+
+<section class="card">
+  <h2>إضافة سجل نفاية</h2>
+  <form method="post" style="display:grid;gap:.5rem;grid-template-columns:1fr 1fr">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <label>التاريخ *
+      <input type="date" name="record_date" value="{{ today }}" required>
+    </label>
+    <label>نوع النفاية *
+      <select name="waste_type" required>
+        {% for val, label in waste_types %}<option value="{{ val }}">{{ label }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>الكمية (كجم)
+      <input type="number" name="quantity_kg" step="0.1" min="0" placeholder="0.0">
+    </label>
+    <label>رقم الحاوية
+      <input type="text" name="container_id" placeholder="مثال: C-04">
+    </label>
+    <label>طريقة التخلص
+      <input type="text" name="disposal_method" placeholder="مثال: حرق / مدفن / إعادة تدوير">
+    </label>
+    <label>رمز المنطقة
+      <input type="text" name="area_code" placeholder="مثال: Z-1">
+    </label>
+    <label style="grid-column:1/-1">ملاحظات
+      <textarea name="notes" rows="2"></textarea>
+    </label>
+    <div style="grid-column:1/-1">
+      <button type="submit" class="btn primary">حفظ</button>
+    </div>
+  </form>
+</section>
+
+{% if records %}
+<table class="rtable" style="margin-top:1rem">
+  <thead>
+    <tr><th>التاريخ</th><th>النوع</th><th>الكمية (كجم)</th><th>الحاوية</th><th>طريقة التخلص</th><th>المنطقة</th><th>المسجِّل</th></tr>
+  </thead>
+  <tbody>
+  {% for r in records %}
+    <tr>
+      <td>{{ r.record_date }}</td>
+      <td>{{ r.waste_type }}</td>
+      <td>{{ r.quantity_kg or '—' }}</td>
+      <td>{{ r.container_id or '—' }}</td>
+      <td>{{ r.disposal_method or '—' }}</td>
+      <td>{{ r.area_code or '—' }}</td>
+      <td>{{ r.recorder.name if r.recorder else '—' }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  <p class="hint" style="margin-top:1rem">لا توجد سجلات.</p>
+{% endif %}
+{% endblock %}

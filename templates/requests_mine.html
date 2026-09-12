@@ -1,0 +1,190 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .req-grid   { display:flex; flex-direction:column; gap:16px; max-width:820px; margin:0 auto; }
+  .req-card   { background:#fff; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.07); padding:18px 20px; }
+  .req-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; }
+  .req-emp    { font-size:13px; color:#666; direction:rtl; margin-bottom:4px; }
+  .req-dates  { font-size:12px; color:#888; font-family:monospace; direction:ltr; text-align:right; }
+  .req-reason { font-size:13px; color:#555; direction:rtl; margin-top:6px; border-top:1px solid #f0f0f0; padding-top:8px; }
+  .req-comment{ font-size:12px; color:#b7770d; background:#fff8ec; border-radius:6px; padding:6px 10px; margin-top:6px; direction:rtl; }
+
+  /* شريط التتبع */
+  .track-wrap { display:flex; align-items:flex-start; margin:14px 0; direction:ltr; }
+  .track-step { display:flex; flex-direction:column; align-items:center; flex:1; gap:4px; }
+  .track-dot  { width:30px; height:30px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:13px; flex-shrink:0; }
+  .track-dot-done    { background:#2563eb; color:#fff; }
+  .track-dot-green   { background:#2ecc71; color:#fff; }
+  .track-dot-red     { background:#e74c3c; color:#fff; }
+  .track-dot-pending { background:#e8ecf5; color:#aaa; }
+  .track-label       { font-size:9px; color:#999; text-align:center; line-height:1.3; }
+  .track-label-done  { color:#2563eb; font-weight:600; }
+  .track-line        { flex:1; height:2px; background:#e8ecf5; margin:14px 2px 0; max-width:28px; }
+  .track-line-done   { background:#2563eb; }
+
+  /* أزرار الإجراء */
+  .req-action { margin-top:12px; }
+  .info-box   { border-radius:8px; padding:10px 14px; font-size:13px; direction:rtl; display:flex; align-items:center; gap:8px; }
+  .info-blue  { background:#e8f0ff; color:#2563eb; }
+  .info-red   { background:#fdecea; color:#e74c3c; }
+  .info-yellow{ background:#fff3cd; color:#856404; }
+  .info-green { background:#d5f5e3; color:#1a7a3a; }
+  .btn-action { display:flex; align-items:center; justify-content:center; gap:8px; padding:11px; border-radius:10px; font-weight:600; font-size:14px; text-decoration:none; width:100%; box-sizing:border-box; margin-top:8px; }
+  .btn-blue   { background:#e8f0ff; color:#2563eb; }
+  .btn-orange { background:#fff3e0; color:#e67e22; }
+  .btn-red    { background:#fdecea; color:#e74c3c; }
+  .btn-green  { background:#d5f5e3; color:#1a7a3a; }
+</style>
+
+<div style="direction:rtl">
+  <h1 style="margin-bottom:20px">طلباتي</h1>
+</div>
+
+{% set type_map  = {'leave':'إجازة','sick':'سكليف','secondment':'إعارة','permission':'استئذان','warning':'إنذار','late':'تأخر','other':'أخرى'} %}
+{% set status_ar = {'approved':'مقبول','rejected':'مرفوض','pending':'قيد المراجعة'} %}
+
+<div class="req-grid">
+{% for r in rows %}
+{% set task     = tasks_map.get(r.id) %}
+{% set approved = r.status == 'approved' %}
+{% set rejected = r.status == 'rejected' %}
+{% set at_hr    = task is not none %}
+
+{# ─── خطوات التتبع حسب النوع ─── #}
+{% if r.type == 'leave' %}
+  {% set step_labels = ['أُرسل','موافقة','لدى HR','وقّع النموذج'] %}
+  {% set step_icons  = ['✉','✓','👤','✍'] %}
+  {% set leave_done  = r.leave_form and r.leave_form.signed %}
+  {% set step_done   = [true, approved or rejected, at_hr, leave_done] %}
+{% elif r.type == 'permission' %}
+  {% set step_labels = ['أُرسل','قرار الإدارة','لدى HR','وقّع النموذج'] %}
+  {% set step_icons  = ['✉','✓','👤','✍'] %}
+  {% set step_done   = [true, approved or rejected, at_hr, r.permission_sig is not none] %}
+{% elif r.type == 'warning' %}
+  {% set has_reason  = task and task.official_reason %}
+  {% set step_labels = ['أُرسل','قرار الإدارة','لدى HR','جاهز للتوقيع'] %}
+  {% set step_icons  = ['✉','✓','👤','📄'] %}
+  {% set step_done   = [true, approved or rejected, at_hr, has_reason] %}
+{% else %}
+  {% set step_labels = ['أُرسل','قرار الإدارة','لدى HR'] %}
+  {% set step_icons  = ['✉','✓','👤'] %}
+  {% set step_done   = [true, approved or rejected, at_hr] %}
+{% endif %}
+
+<div class="req-card">
+
+  <!-- رأس البطاقة -->
+  <div class="req-header" style="direction:rtl">
+    <span style="font-weight:700; font-size:15px; color:#1a1f3a">{{ type_map.get(r.type, r.type) }}</span>
+    <span class="badge {{ 'success' if approved else ('danger' if rejected else 'warning') }}" style="font-size:12px">
+      {{ status_ar.get(r.status, r.status) }}
+    </span>
+  </div>
+
+  <div class="req-emp">
+    {{ r.employee.name if r.employee else '—' }}
+    {% if r.employee %} <span class="mono">({{ r.employee.emp_number }})</span>{% endif %}
+  </div>
+
+  {% if r.start_date or r.end_date %}
+  <div class="req-dates">{{ r.start_date or '—' }} → {{ r.end_date or '—' }}</div>
+  {% endif %}
+
+  {% if r.reason %}
+  <div class="req-reason">{{ 'وصف المخالفة: ' if r.type == 'warning' else '' }}{{ r.reason }}</div>
+  {% endif %}
+
+  {% if r.admin_comment %}
+  <div class="req-comment">💬 {{ r.admin_comment }}</div>
+  {% endif %}
+
+  <!-- شريط التتبع -->
+  <div class="track-wrap">
+    {% for idx in range(step_labels|length) %}
+      {% set lbl  = step_labels[idx] %}
+      {% set icon = step_icons[idx] %}
+      {% set done = step_done[idx] %}
+      {% set is_reject_step = (idx == 1 and rejected) %}
+
+      <div class="track-step">
+        <div class="track-dot {{ 'track-dot-red' if is_reject_step else ('track-dot-done' if done else 'track-dot-pending') }}">
+          {{ '✗' if is_reject_step else (icon if done else '○') }}
+        </div>
+        <span class="track-label {{ 'track-label-done' if done else '' }}">{{ lbl }}</span>
+      </div>
+
+      {% if idx < step_labels|length - 1 %}
+      <div class="track-line {{ 'track-line-done' if done else '' }}"></div>
+      {% endif %}
+    {% endfor %}
+  </div>
+
+  <!-- ─── إجراء حسب النوع ─── -->
+  <div class="req-action">
+    {% if approved %}
+
+      {# إجازة #}
+      {% if r.type == 'leave' %}
+        {% if r.leave_form %}
+          {% if r.leave_form.signed %}
+            <div class="info-box info-green" style="margin-bottom:8px">✓ تم توقيع نموذج الإجازة</div>
+            <a href="{{ url_for('web_leave_pdf', req_id=r.id) }}" class="btn-action btn-green" target="_blank">⬇ تحميل PDF الإجازة</a>
+          {% else %}
+            <a href="{{ url_for('web_leave_sign', req_id=r.id) }}" class="btn-action btn-blue">✍ وقّع نموذج الإجازة</a>
+          {% endif %}
+        {% else %}
+          <div class="info-box info-yellow">⏳ جاري إعداد النموذج...</div>
+        {% endif %}
+
+      {# سكليف #}
+      {% elif r.type == 'sick' %}
+        <div class="info-box info-red">
+          🏥 تم تسجيل الغياب تلقائياً
+          {% if r.attachments %}
+            &nbsp;—&nbsp;
+            {% for att in r.attachments %}
+            <a href="{{ url_for('request_attachment_download', att_id=att.id) }}" style="color:#2563eb" target="_blank">📎 عرض الملف الطبي</a>
+            {% endfor %}
+          {% endif %}
+        </div>
+
+      {# استئذان #}
+      {% elif r.type == 'permission' %}
+        {% if r.permission_sig %}
+          <div class="info-box info-green">✓ تم توقيع نموذج الاستئذان</div>
+        {% else %}
+          <a href="{{ url_for('web_permission_sign', req_id=r.id) }}" class="btn-action btn-orange">✍ وقّع نموذج الاستئذان</a>
+        {% endif %}
+
+      {# إنذار #}
+      {% elif r.type == 'warning' %}
+        {% set has_reason = task and task.official_reason %}
+        {% if has_reason %}
+          {% if r.warning_sig %}
+            <div class="info-box info-green" style="margin-bottom:8px">✓ تم توقيع نموذج الإنذار</div>
+            {% if task.warning_pdf %}
+            <a href="{{ url_for('web_warning_pdf', req_id=r.id) }}" class="btn-action btn-green" target="_blank">⬇ تحميل PDF الإنذار</a>
+            {% endif %}
+          {% else %}
+            <a href="{{ url_for('web_warning_sign', req_id=r.id) }}" class="btn-action btn-red">📄 فتح نموذج الإنذار</a>
+          {% endif %}
+        {% else %}
+          <div class="info-box info-yellow">⏳ في انتظار تحديد السبب الرسمي من HR</div>
+        {% endif %}
+
+      {% endif %}
+
+    {% elif rejected %}
+      <div class="info-box info-red">✗ تم رفض الطلب</div>
+
+    {% else %}
+      <div class="info-box" style="background:#f5f5f5;color:#888">⌛ قيد المراجعة</div>
+    {% endif %}
+  </div>
+
+</div>
+{% else %}
+<div style="text-align:center; color:#aaa; padding:40px">لا توجد طلبات بعد.</div>
+{% endfor %}
+</div>
+{% endblock %}

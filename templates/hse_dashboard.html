@@ -1,0 +1,508 @@
+﻿{% extends "base.html" %}
+{% block title %}HSE Dashboard{% endblock %}
+{% block content %}
+<style>
+/* ── HSE Dashboard styles ── */
+.hse-kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+@media(max-width:768px){.hse-kpi-grid{grid-template-columns:repeat(2,1fr)}}
+
+.hse-kpi{background:#fff;border:1px solid var(--border);border-radius:12px;
+         padding:16px;position:relative;overflow:hidden}
+.hse-kpi::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px}
+.hse-kpi.green::before{background:#22c55e}
+.hse-kpi.blue::before{background:#3b82f6}
+.hse-kpi.red::before{background:#ef4444}
+.hse-kpi.amber::before{background:#f59e0b}
+.hse-kpi.teal::before{background:#14b8a6}
+.hse-kpi-label{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px}
+.hse-kpi-num{font-size:2rem;font-weight:700;line-height:1.1;margin:6px 0 2px}
+.hse-kpi-sub{font-size:12px;color:var(--muted)}
+
+/* officer status tiles */
+.officer-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px}
+.officer-tile{border-radius:10px;padding:12px;border:1px solid}
+.officer-tile.in{background:#f0fdf4;border-color:#86efac}
+.officer-tile.out{background:#fef2f2;border-color:#fca5a5}
+.officer-tile .o-name{font-weight:600;font-size:14px}
+.officer-tile .o-status{font-size:12px;margin-top:3px}
+.officer-tile .o-loc{font-size:11px;color:var(--muted);margin-top:2px}
+.officer-tile .o-link{font-size:11px;display:block;margin-top:6px;color:var(--primary)}
+
+/* activity bar */
+.act-bar-wrap{background:#e5e7eb;border-radius:4px;height:8px;min-width:60px;overflow:hidden}
+.act-bar{height:100%;border-radius:4px;background:var(--primary);transition:width .3s}
+
+/* obs type pills */
+.obs-type-row{display:flex;gap:12px;flex-wrap:wrap;margin:8px 0}
+.obs-pill{padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600}
+
+/* risk badge */
+.risk-H{background:#fee2e2;color:#b91c1c;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700}
+
+/* section header */
+.sec-h{display:flex;align-items:center;justify-content:space-between;margin:0 0 12px}
+.sec-h h3{margin:0;font-size:15px}
+</style>
+
+<!-- Page header -->
+<div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+  <div>
+    <h2 style="margin:0 0 2px">HSE Safety Dashboard</h2>
+    <p class="muted" style="margin:0;font-size:13px">
+      {{ today.strftime('%A, %d %B %Y') }}
+      &nbsp;·&nbsp; Week: {{ week_start.strftime('%d %b') }} – {{ today.strftime('%d %b') }}
+    </p>
+  </div>
+  <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <a href="{{ url_for('hse_daily_observations_picker') }}" class="btn no-print"
+       style="background:#0f172a;color:#fff;border-color:#0f172a">📋 Daily Obs PDF</a>
+    <a href="{{ url_for('hse_report_picker') }}" class="btn primary no-print">Weekly Reports</a>
+  </div>
+</div>
+
+<!-- ── KPI Cards (8-card grid) ── -->
+<div class="hse-kpi-grid" style="grid-template-columns:repeat(4,1fr)">
+  <div class="hse-kpi green">
+    <div class="hse-kpi-label">Checked In Today</div>
+    <div class="hse-kpi-num">{{ today_checkins|length }} <span style="font-size:1rem;color:var(--muted)">/ {{ officers|length }}</span></div>
+    <div class="hse-kpi-sub">
+      {% if officers|length > 0 %}{{ ((today_checkins|length / officers|length) * 100)|round|int }}% attendance{% else %}No officers{% endif %}
+    </div>
+  </div>
+
+  <div class="hse-kpi blue">
+    <div class="hse-kpi-label">Observations (Week)</div>
+    <div class="hse-kpi-num">{{ total_obs_week }}</div>
+    <div class="hse-kpi-sub">{{ obs_unsafe_act }} unsafe · {{ obs_positive }} positive</div>
+  </div>
+
+  <div class="hse-kpi {{ 'red' if high_risk|length > 0 else 'teal' }}">
+    <div class="hse-kpi-label">Open High-Risk</div>
+    <div class="hse-kpi-num">{{ high_risk|length }}</div>
+    <div class="hse-kpi-sub">{% if high_risk|length > 0 %}Requires immediate action{% else %}All clear{% endif %}</div>
+  </div>
+
+  <div class="hse-kpi amber">
+    <div class="hse-kpi-label">TBTs (Week)</div>
+    <div class="hse-kpi-num">{{ total_tbt_week }}</div>
+    <div class="hse-kpi-sub">{{ total_jso_week }} JSO</div>
+  </div>
+
+  <div class="hse-kpi {{ 'red' if open_ca > 0 else 'teal' }}">
+    <div class="hse-kpi-label">Corrective Actions</div>
+    <div class="hse-kpi-num">{{ open_ca }}</div>
+    <div class="hse-kpi-sub">{{ overdue_ca|length }} overdue</div>
+  </div>
+
+  <div class="hse-kpi blue">
+    <div class="hse-kpi-label">Active PTW</div>
+    <div class="hse-kpi-num">{{ total_ptw_active }}</div>
+    <div class="hse-kpi-sub">{{ ptw_expiring|length }} expiring soon</div>
+  </div>
+</div>
+
+<!-- ── Today's Check-in ── -->
+<div class="card">
+  <div class="sec-h">
+    <h3>Today's Check-in Status</h3>
+    <span class="muted" style="font-size:12px">{{ today.strftime('%d %b %Y') }}</span>
+  </div>
+  <div class="officer-grid">
+    {% for o in officers %}
+    <div class="officer-tile {{ 'in' if o.id in today_checkins else 'out' }}">
+      <div class="o-name">{{ o.name }}</div>
+      {% if o.id in today_checkins %}
+        <div class="o-status" style="color:var(--success)">✓ Checked in</div>
+        <div class="o-loc">📍 {{ today_checkins[o.id].location }}</div>
+      {% else %}
+        <div class="o-status" style="color:var(--danger)">✗ Not checked in</div>
+      {% endif %}
+      <a class="o-link" href="{{ url_for('hse_officer_detail', officer_id=o.id) }}">View history →</a>
+    </div>
+    {% else %}
+    <p class="muted">No safety officers found.</p>
+    {% endfor %}
+  </div>
+</div>
+
+<!-- ── Weekly Activity ── -->
+<div class="card">
+  <div class="sec-h">
+    <h3>Weekly Activity Summary</h3>
+    <span class="muted" style="font-size:12px">{{ week_start.strftime('%d %b') }} – {{ today.strftime('%d %b') }}</span>
+  </div>
+
+  <!-- Obs type breakdown -->
+  {% if total_obs_week > 0 %}
+  <div class="obs-type-row" style="margin-bottom:14px">
+    <span class="obs-pill" style="background:#fee2e2;color:#b91c1c">⚠ Unsafe Act: {{ obs_unsafe_act }}</span>
+    <span class="obs-pill" style="background:#fef3c7;color:#92400e">🔧 Unsafe Condition: {{ obs_unsafe_cond }}</span>
+    <span class="obs-pill" style="background:#d1fae5;color:#065f46">✓ Positive: {{ obs_positive }}</span>
+  </div>
+  {% endif %}
+
+  <div style="overflow-x:auto">
+    <table class="table compact" style="min-width:760px">
+      <thead>
+        <tr>
+          <th>Officer</th>
+          <th class="center">Obs</th>
+          <th class="center">JSO</th>
+          <th class="center">TBT</th>
+          <th class="center">PTW</th>
+          <th class="center">Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for o in officers %}
+        {% set w = weekly[o.id] %}
+        <tr data-expand-row="detail_{{ o.id }}"
+            {% if w.total == 0 %}style="background:#fffbeb"{% endif %}>
+          <td>
+            <span class="expand-arrow" style="color:var(--muted);font-size:10px;margin-right:4px">▶</span>
+            <a href="{{ url_for('hse_officer_detail', officer_id=o.id) }}" style="font-weight:600">{{ o.name }}</a>
+            {% if w.total == 0 %}<span style="color:var(--warning);font-size:11px;margin-left:4px">⚠</span>{% endif %}
+          </td>
+          <td class="center">{% if w.obs > 0 %}<strong>{{ w.obs }}</strong>{% else %}<span class="muted">0</span>{% endif %}</td>
+          <td class="center">{% if w.jso > 0 %}<strong>{{ w.jso }}</strong>{% else %}<span class="muted">0</span>{% endif %}</td>
+          <td class="center">{% if w.tbt > 0 %}<strong>{{ w.tbt }}</strong>{% else %}<span class="muted">0</span>{% endif %}</td>
+          <td class="center">{% if w.ptw > 0 %}<strong>{{ w.ptw }}</strong>{% else %}<span class="muted">—</span>{% endif %}</td>
+          <td class="center">
+            <span style="background:#e0f2fe;color:#0369a1;padding:2px 8px;border-radius:10px;font-size:12px;font-weight:700">{{ w.score }}</span>
+          </td>
+        </tr>
+        <!-- Expandable detail row -->
+        <tr id="detail_{{ o.id }}" style="display:none;background:#f8fafc">
+          <td colspan="6" style="padding:10px 20px;font-size:12px">
+            {% set ci = today_checkins.get(o.id) %}
+            <div style="display:flex;flex-wrap:wrap;gap:16px">
+              <div>
+                <span style="color:var(--muted)">Check-in today:</span>
+                {% if ci %}
+                  <strong style="color:var(--success)">✓ {{ ci.location or '—' }}</strong>
+                {% else %}
+                  <strong style="color:var(--danger)">✗ Not checked in</strong>
+                {% endif %}
+              </div>
+              <div>
+                <span style="color:var(--muted)">Score this week:</span>
+                <strong style="color:#0369a1">{{ w.score }}</strong>
+              </div>
+              <div>
+                <a href="{{ url_for('hse_officer_detail', officer_id=o.id) }}"
+                   style="color:#0369a1;font-weight:600;text-decoration:none">
+                  View full history →
+                </a>
+              </div>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="muted" style="padding:12px">No safety officers found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── Inactive Officers Warning ── -->
+{% if inactive_officers %}
+<div class="card" style="border-left:4px solid #f59e0b">
+  <div class="sec-h">
+    <h3 style="color:#92400e">⚠ Officers with Zero Activity This Week</h3>
+  </div>
+  <div style="display:flex;gap:8px;flex-wrap:wrap">
+    {% for o in inactive_officers %}
+    <a href="{{ url_for('hse_officer_detail', officer_id=o.id) }}"
+       style="background:#fef3c7;border:1px solid #fcd34d;padding:6px 14px;border-radius:20px;font-size:13px;font-weight:600;color:#92400e;text-decoration:none">
+      {{ o.name }}
+    </a>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Corrective Actions ── -->
+{% if overdue_ca %}
+<div class="card" style="border-left:4px solid var(--danger)">
+  <div class="sec-h">
+    <h3 style="color:var(--danger)">⏰ Overdue Corrective Actions</h3>
+    <span style="background:#fee2e2;color:#b91c1c;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700">{{ overdue_ca|length }} overdue</span>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="table" style="min-width:500px;font-size:13px">
+      <thead>
+        <tr><th>Due Date</th><th>Assigned To</th><th>Action Required</th><th>Status</th><th class="no-print"></th></tr>
+      </thead>
+      <tbody>
+        {% for ca in overdue_ca %}
+        <tr>
+          <td class="nowrap" style="color:var(--danger);font-weight:600">{{ ca.due_date.strftime('%d %b %Y') }}</td>
+          <td>{{ ca.assigned_to or '—' }}</td>
+          <td>{{ (ca.action_required or '')[:80] }}{% if ca.action_required and ca.action_required|length > 80 %}…{% endif %}</td>
+          <td>
+            <span style="background:{% if ca.status=='in_progress' %}#dbeafe{% else %}#fee2e2{% endif %};
+                         color:{% if ca.status=='in_progress' %}#1d4ed8{% else %}#b91c1c{% endif %};
+                         padding:2px 8px;border-radius:10px;font-size:11px;font-weight:600">
+              {{ ca.status.replace('_',' ').title() }}
+            </span>
+          </td>
+          <td class="no-print">
+            <form method="post" action="{{ url_for('hse_corrective_update', ca_id=ca.id) }}" style="display:inline">
+              <select name="status" style="font-size:11px;padding:2px 4px">
+                <option value="in_progress">In Progress</option>
+                <option value="completed">Completed</option>
+              </select>
+              <button type="submit" class="btn primary" style="padding:2px 8px;font-size:11px">Update</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── PTW Expiring Soon ── -->
+{% if ptw_expiring %}
+<div class="card" style="border-left:4px solid #f59e0b">
+  <div class="sec-h">
+    <h3 style="color:#92400e">📋 PTW Expiring in 48 Hours</h3>
+    <span style="background:#fef3c7;color:#92400e;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700">{{ ptw_expiring|length }}</span>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="table" style="min-width:460px;font-size:13px">
+      <thead>
+        <tr><th>Permit #</th><th>Type</th><th>Location</th><th>Expiry</th><th>Officer</th></tr>
+      </thead>
+      <tbody>
+        {% for p in ptw_expiring %}
+        <tr>
+          <td class="mono" style="font-weight:600">{{ p.permit_number }}</td>
+          <td>{{ p.permit_type }}</td>
+          <td>{{ p.location or '—' }}</td>
+          <td class="nowrap" style="color:#92400e;font-weight:600">{{ p.week_end.strftime('%d %b') }}</td>
+          <td>{{ officer_map.get(p.officer_id).name if p.officer_id in officer_map else '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- ── Trend Charts ── -->
+<div class="card no-print">
+  <div class="sec-h">
+    <h3>Trend Charts</h3>
+    <span class="muted" style="font-size:12px">Last 4 weeks</span>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">
+    <div>
+      <p style="font-size:12px;font-weight:600;margin:0 0 8px;color:var(--muted)">OBSERVATIONS BY TYPE</p>
+      <canvas id="obsChart" height="160"></canvas>
+    </div>
+    <div>
+      <p style="font-size:12px;font-weight:600;margin:0 0 8px;color:var(--muted)">OFFICER PERFORMANCE SCORE</p>
+      <canvas id="scoreChart" height="160"></canvas>
+    </div>
+    <div>
+      <p style="font-size:12px;font-weight:600;margin:0 0 8px;color:var(--muted)">OBSERVATION CATEGORIES (THIS MONTH)</p>
+      <canvas id="catChart" height="160"></canvas>
+    </div>
+  </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(async () => {
+  let data;
+  try { data = await (await fetch("/api/hse/charts")).json(); } catch { return; }
+  const def = { responsive: true, plugins: { legend: { position: "bottom", labels: { boxWidth: 12, font: { size: 11 } } } } };
+
+  new Chart(document.getElementById("obsChart"), {
+    type: "bar",
+    data: {
+      labels: data.obs_trend.labels,
+      datasets: [
+        { label: "Unsafe Act",   data: data.obs_trend.unsafe_act,   backgroundColor: "#fca5a5" },
+        { label: "Unsafe Cond.", data: data.obs_trend.unsafe_cond,  backgroundColor: "#fde68a" },
+        { label: "Positive",     data: data.obs_trend.positive,     backgroundColor: "#86efac" },
+      ]
+    },
+    options: { ...def, scales: { x: { stacked: true }, y: { stacked: true, beginAtZero: true, ticks: { stepSize: 1 } } } }
+  });
+
+  new Chart(document.getElementById("scoreChart"), {
+    type: "bar",
+    data: {
+      labels: data.officer_scores.labels,
+      datasets: [{ label: "Score", data: data.officer_scores.scores,
+        backgroundColor: "#818cf8", borderRadius: 6 }]
+    },
+    options: { ...def, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  const catLabels = Object.keys(data.cat_data);
+  const catVals   = Object.values(data.cat_data);
+  const palette   = ["#60a5fa","#34d399","#f87171","#fbbf24","#a78bfa","#f472b6","#4ade80","#fb923c","#22d3ee","#e879f9"];
+  new Chart(document.getElementById("catChart"), {
+    type: "doughnut",
+    data: {
+      labels: catLabels,
+      datasets: [{ data: catVals, backgroundColor: palette.slice(0, catLabels.length) }]
+    },
+    options: { ...def }
+  });
+})();
+</script>
+
+<!-- ── High-Risk Observations ── -->
+{% if high_risk %}
+<div class="card" style="border-left:4px solid var(--danger)">
+  <div class="sec-h">
+    <h3 style="color:var(--danger)">⚠ Open High-Risk Observations</h3>
+    <span style="background:#fee2e2;color:#b91c1c;padding:3px 10px;border-radius:12px;font-size:12px;font-weight:700">
+      {{ high_risk|length }} open
+    </span>
+  </div>
+  <div style="overflow-x:auto">
+    <table class="table" style="min-width:580px;font-size:13px">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Officer</th>
+          <th>Category</th>
+          <th>Location</th>
+          <th>Description</th>
+          <th class="center no-print">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for obs in high_risk %}
+        <tr>
+          <td class="nowrap">{{ obs.date.strftime('%d %b %Y') }}</td>
+          <td>
+            {% if obs.officer_id in officer_map %}
+            <a href="{{ url_for('hse_officer_detail', officer_id=obs.officer_id) }}">
+              {{ officer_map[obs.officer_id].name }}
+            </a>
+            {% else %}—{% endif %}
+          </td>
+          <td>{{ obs.category or '—' }}</td>
+          <td>{{ obs.location or '—' }}</td>
+          <td>{{ (obs.description or '')[:90] }}{% if obs.description and obs.description|length > 90 %}…{% endif %}</td>
+          <td class="no-print" style="white-space:nowrap">
+            <button onclick="toggleCA({{ obs.id }})" class="btn primary"
+                    style="padding:2px 8px;font-size:11px">+ CA</button>
+            <a href="{{ url_for('hse_observation_close', obs_id=obs.id) }}"
+               class="btn" style="padding:2px 8px;font-size:11px">Close</a>
+          </td>
+        </tr>
+        <!-- Inline CA form -->
+        <tr id="ca_form_{{ obs.id }}" style="display:none;background:#fafafa">
+          <td colspan="6" style="padding:10px 14px">
+            <form method="post" action="{{ url_for('hse_corrective_add') }}" style="display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end">
+              <input type="hidden" name="observation_id" value="{{ obs.id }}">
+              <label style="flex:1;min-width:160px">Assigned To
+                <input type="text" name="assigned_to" placeholder="Name / team" style="width:100%;box-sizing:border-box">
+              </label>
+              <label style="min-width:140px">Due Date *
+                <input type="date" name="due_date" required style="width:100%;box-sizing:border-box">
+              </label>
+              <label style="flex:2;min-width:200px">Action Required *
+                <input type="text" name="action_required" required placeholder="Describe the action..." style="width:100%;box-sizing:border-box">
+              </label>
+              <button type="submit" class="btn primary" style="padding:6px 16px">Save CA</button>
+              <button type="button" onclick="toggleCA({{ obs.id }})" class="btn" style="padding:6px 10px">✕</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% else %}
+<div class="card" style="border-left:4px solid var(--success)">
+  <p style="margin:0;color:var(--success)">✓ No open high-risk observations — area is clear.</p>
+</div>
+{% endif %}
+
+<!-- ══════════════════════════════════════════════════════════════ -->
+<!-- ── Welfare Module Summary ─────────────────────────────────── -->
+<!-- ══════════════════════════════════════════════════════════════ -->
+{% if wlf_rows %}
+<div style="margin-top:24px">
+  <div style="display:flex;justify-content:space-between;align-items:center;
+              flex-wrap:wrap;gap:8px;margin-bottom:10px">
+    <h2 style="margin:0;font-size:1.05rem;font-weight:800;color:#0f172a">
+      Welfare — Daily Snapshot
+      <span style="font-size:.82rem;font-weight:400;color:#64748b;margin-left:6px">
+        {{ today.strftime('%d %b %Y') }}
+      </span>
+    </h2>
+    <a href="{{ url_for('welfare_supervisor') }}"
+       style="padding:6px 14px;border:1px solid #cbd5e1;border-radius:8px;
+              color:#0f172a;font-size:.85rem;font-weight:700;text-decoration:none">
+      Full Welfare View →
+    </a>
+  </div>
+
+  <!-- Welfare KPI mini-row -->
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));
+              gap:10px;margin-bottom:14px">
+    <div class="hse-kpi teal">
+      <div class="hse-kpi-label">Officers</div>
+      <div class="hse-kpi-num">{{ wlf_officers_count }}</div>
+      <div class="hse-kpi-sub">welfare team</div>
+    </div>
+    <div class="hse-kpi {{ 'green' if wlf_total_rounds_today > 0 else 'amber' }}">
+      <div class="hse-kpi-label">Submissions Today</div>
+      <div class="hse-kpi-num">{{ wlf_total_rounds_today }}</div>
+      <div class="hse-kpi-sub">submitted</div>
+    </div>
+    <div class="hse-kpi {{ 'red' if wlf_total_crit_open > 0 else 'green' }}">
+      <div class="hse-kpi-label">Critical/High Open</div>
+      <div class="hse-kpi-num">{{ wlf_total_crit_open }}</div>
+      <div class="hse-kpi-sub">findings</div>
+    </div>
+    <div class="hse-kpi {{ 'amber' if wlf_total_complaints_week > 0 else 'teal' }}">
+      <div class="hse-kpi-label">Complaints (Week)</div>
+      <div class="hse-kpi-num">{{ wlf_total_complaints_week }}</div>
+      <div class="hse-kpi-sub">this week</div>
+    </div>
+  </div>
+
+  <div style="text-align:right;margin-top:6px">
+    <a href="{{ url_for('welfare_supervisor') }}"
+       style="font-size:.83rem;color:#64748b;text-decoration:none">
+      📋 Welfare &amp; Env Reports →
+    </a>
+  </div>
+</div>
+{% endif %}
+
+<script>
+// ── Toggle inline CA form ──────────────────────────────────────────────
+function toggleCA(obsId) {
+  const row = document.getElementById("ca_form_" + obsId);
+  if (row) row.style.display = row.style.display === "none" ? "table-row" : "none";
+}
+
+// ── Expandable officer rows ───────────────────────────────────────────
+document.querySelectorAll("[data-expand-row]").forEach(function(row) {
+  row.style.cursor = "pointer";
+  row.addEventListener("click", function(e) {
+    if (e.target.tagName === "A") return; // don't expand if clicking a link
+    const detailId = row.getAttribute("data-expand-row");
+    const detail   = document.getElementById(detailId);
+    if (!detail) return;
+    const isOpen = detail.style.display !== "none";
+    detail.style.display = isOpen ? "none" : "table-row";
+    const arrow = row.querySelector(".expand-arrow");
+    if (arrow) arrow.textContent = isOpen ? "▶" : "▼";
+  });
+});
+</script>
+{% endblock %}

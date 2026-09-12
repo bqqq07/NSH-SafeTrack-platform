@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Notifications</h2>
+{% for n in notes %}
+  <div class="card" style="margin-bottom:.5rem; padding:.5rem; border:1px solid #ddd;border-radius:6px">
+    <div>{{ n.message }}</div>
+    <small>{{ n.created_at }}</small>
+    {% if not n.is_read %}
+      <form method="post" action="{{ url_for('notifications_mark', note_id=n.id) }}">
+        <button class="btn">Mark as read</button>
+      </form>
+    {% endif %}
+  </div>
+{% else %}
+  <p>No notifications.</p>
+{% endfor %}
+{% endblock %}

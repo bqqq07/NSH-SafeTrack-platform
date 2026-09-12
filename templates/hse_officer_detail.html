@@ -1,0 +1,381 @@
+{% extends "base.html" %}
+{% block content %}
+{% include "partials/_rtable.html" %}
+<style>
+  /* .table.compact مضبوط على table-layout:fixed عالمياً — نبطله هنا */
+  .rtable.compact{ table-layout:auto !important }
+
+  @media (max-width:768px){
+    /* لا سكرول أفقي على الجوال — البطاقات تأخذ العرض كامل */
+    .rtable-wrap{ overflow-x:visible !important }
+    .rtable.compact{ min-width:0 !important; width:100% !important }
+    .rtable.compact td{ box-sizing:border-box; max-width:100% }
+    /* الوصف داخل نفس البطاقة: العنوان فوق والنص تحته بعرض كامل */
+    .rtable td.stack{ display:block }
+    .rtable td.stack::before{ display:block; margin-bottom:4px }
+    .rtable td.desc-col{ white-space:normal; line-height:1.5 }
+  }
+  /* على الكمبيوتر: الوصف كان سطراً منفصلاً — نخفيه لإبقاء الجدول بخمسة أعمدة */
+  @media (min-width:769px){
+    /* عمود الوصف في PTW فقط يُخفى على الكمبيوتر (الجدول أصلاً 5 أعمدة) */
+    .rtable .desc-col.ptw-desc{ display:none }
+  }
+</style>
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+  <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+    <a href="{{ url_for('hse_dashboard') }}" class="btn">← Dashboard</a>
+    <h2 style="margin:0">{{ officer.name }}</h2>
+    <span class="muted" style="font-size:13px">Safety Officer — Full History</span>
+    {% if officer.ptw_training_active %}
+    <span style="background:#ede9fe;color:#5b21b6;font-size:12px;padding:3px 10px;border-radius:6px;font-weight:700">🎓 PTW Training Active</span>
+    {% endif %}
+  </div>
+  <div style="display:flex;gap:6px;flex-wrap:wrap" class="no-print">
+    <a href="{{ url_for('hse_officer_detail_excel', officer_id=officer.id) }}{{ ('?from=' + date_from + ('&to=' + date_to if date_to else '')) if date_from else ('?to=' + date_to if date_to else '') }}"
+       class="btn">Excel</a>
+    <a href="{{ url_for('hse_officer_detail_pdf', officer_id=officer.id) }}{{ ('?from=' + date_from + ('&to=' + date_to if date_to else '')) if date_from else ('?to=' + date_to if date_to else '') }}"
+       class="btn">PDF</a>
+  </div>
+</div>
+
+<!-- Date filter -->
+<div class="card" style="padding:10px">
+  <form method="get" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+    <label style="flex-direction:row;align-items:center;gap:6px;margin:0">
+      From <input type="date" name="from" value="{{ date_from }}" style="padding:6px">
+    </label>
+    <label style="flex-direction:row;align-items:center;gap:6px;margin:0">
+      To <input type="date" name="to" value="{{ date_to }}" style="padding:6px">
+    </label>
+    <button type="submit" class="btn">Filter</button>
+    <a href="{{ url_for('hse_officer_detail', officer_id=officer.id) }}" class="btn">Clear</a>
+  </form>
+</div>
+
+<!-- Quick summary counts -->
+<div style="display:flex;flex-wrap:wrap;gap:10px;margin-bottom:14px">
+  {% set this_week_score = weekly_scores[-1].score if weekly_scores else 0 %}
+  {% for label, count, color, anchor in [
+      ('Check-ins',    checkins|length,      '#22c55e', 'sec-checkins'),
+      ('Observations', observations|length,  '#3b82f6', 'sec-obs'),
+      ('JSO Closures', jsos|length,          '#6366f1', 'sec-jso'),
+      ('TBTs',         tbts|length,          '#f59e0b', 'sec-tbt'),
+      ('Near Misses',  nearmisses|length,    '#ef4444', 'sec-nm'),
+      ('BBS Records',  bbs_records|length,   '#14b8a6', 'sec-bbs'),
+      ('PTW',          ptw_records|length,   '#8b5cf6', 'sec-ptw'),
+      ('Inspections',  insp_records|length,  '#0ea5e9', 'sec-insp'),
+  ] %}
+  <a href="#{{ anchor }}" style="text-decoration:none">
+  <div style="padding:10px 16px;background:#fff;border:1px solid var(--border);border-radius:8px;text-align:center;min-width:100px;border-top:3px solid {{ color }};cursor:pointer;transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 2px 8px rgba(0,0,0,.12)'" onmouseout="this.style.boxShadow=''">
+    <div style="font-size:22px;font-weight:700;color:{{ color }}">{{ count }}</div>
+    <div style="font-size:12px;color:var(--muted)">{{ label }}</div>
+  </div>
+  </a>
+  {% endfor %}
+  <div style="padding:10px 16px;background:#e0f2fe;border:1px solid #bae6fd;border-radius:8px;text-align:center;min-width:100px;border-top:3px solid #0369a1">
+    <div style="font-size:22px;font-weight:700;color:#0369a1">{{ this_week_score }}</div>
+    <div style="font-size:12px;color:#0369a1">This Week Score</div>
+  </div>
+</div>
+
+<!-- Weekly Score Chart -->
+<div class="card no-print" style="max-width:680px">
+  <h3 style="margin-top:0">Performance Score — Last 8 Weeks</h3>
+  <canvas id="scoreChart" height="100"></canvas>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+(function(){
+  const labels = {{ weekly_scores | map(attribute='label') | list | tojson }};
+  const scores = {{ weekly_scores | map(attribute='score') | list | tojson }};
+  new Chart(document.getElementById("scoreChart"), {
+    type: "bar",
+    data: {
+      labels,
+      datasets: [{ label: "Score", data: scores,
+        backgroundColor: scores.map(s => s >= 15 ? "#22c55e" : s >= 8 ? "#f59e0b" : "#ef4444"),
+        borderRadius: 6 }]
+    },
+    options: {
+      responsive: true,
+      plugins: { legend: { display: false } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+})();
+</script>
+
+<!-- Check-ins -->
+<div id="sec-checkins"></div>
+{% if checkins %}
+<div class="card">
+  <h3 style="margin-top:0">Check-ins ({{ checkins|length }})</h3>
+  <table style="width:100%;border-collapse:collapse">
+    <thead><tr style="background:var(--bg)">
+      <th style="padding:8px;text-align:left;font-size:13px">Date</th>
+      <th style="padding:8px;text-align:left;font-size:13px">Location</th>
+    </tr></thead>
+    <tbody>
+    {% for ci in checkins %}
+    <tr style="border-top:1px solid var(--border)">
+      <td style="padding:8px;font-size:13px;white-space:nowrap">{{ ci.date.strftime('%d %b %Y') }}</td>
+      <td style="padding:8px;font-size:13px">{{ ci.location }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- Observations -->
+<div id="sec-obs"></div>
+{% if observations %}
+<div class="card">
+  <h3 style="margin-top:0">Observations ({{ observations|length }})</h3>
+  {% for o in observations %}
+  <div style="padding:10px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;
+              border-left:4px solid {{ '#C62828' if o.risk_level=='H' else '#EDB458' if o.risk_level=='M' else '#3A7CA5' }}">
+    <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">
+      <strong>{{ o.date.strftime('%d %b %Y') }}</strong>
+      <span style="font-size:12px;color:{{ 'var(--danger)' if o.status=='open' else 'var(--success)' }}">
+        ● {{ o.status.upper() }}
+      </span>
+    </div>
+    <div style="font-size:13px;margin-top:4px">
+      {{ o.obs_type.replace('_',' ').title() }}
+      {% if o.category %} — {{ o.category }}{% endif %}
+      {% if o.risk_level %}
+        <span style="background:{{ '#C62828' if o.risk_level=='H' else '#EDB458' if o.risk_level=='M' else '#3A7CA5' }};
+                     color:#fff;padding:1px 7px;border-radius:10px;font-size:11px;margin-left:4px">{{ o.risk_level }}</span>
+      {% endif %}
+    </div>
+    {% if o.location %}<div style="font-size:12px;color:var(--muted);margin-top:2px">📍 {{ o.location }}</div>{% endif %}
+    {% if o.description %}<p style="margin:4px 0 0;font-size:13px">{{ o.description }}</p>{% endif %}
+    {% if obs_photos[o.id] %}
+    <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+      {% for ph in obs_photos[o.id] %}
+      <a href="{{ url_for('hse_photo', filename=ph.photo_path) }}" target="_blank">
+        <img src="{{ url_for('hse_photo', filename=ph.photo_path) }}"
+             style="width:64px;height:64px;object-fit:cover;border-radius:4px;border:1px solid var(--border)"
+             title="{{ ph.photo_type }}">
+      </a>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if o.status == 'closed' and o.closure_action %}
+    <div style="margin-top:6px;font-size:12px;background:#f0fdf4;padding:6px 8px;border-radius:4px">
+      <strong>Closure:</strong> {{ o.closure_action }}{% if o.closed_at %} ({{ o.closed_at.strftime('%d %b %Y') }}){% endif %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- JSO Closures -->
+<div id="sec-jso"></div>
+{% if jsos %}
+<div class="card">
+  <h3 style="margin-top:0">JSO Closures ({{ jsos|length }})</h3>
+  {% for item in jsos %}
+  <div style="padding:8px;border-top:1px solid var(--border)">
+    <strong>JSO #{{ item.jso_number }}</strong>
+    <span style="color:var(--muted);font-size:13px;margin-left:8px">{{ item.date.strftime('%d %b %Y') }}</span>
+    {% if item.location %}<span style="color:var(--muted);font-size:12px;margin-left:8px">📍 {{ item.location }}</span>{% endif %}
+    {% if item.action_taken %}<p style="margin:4px 0 0;font-size:13px">{{ item.action_taken }}</p>{% endif %}
+    {% if item.photo_path %}
+    <a href="{{ url_for('hse_photo', filename=item.photo_path) }}" target="_blank">
+      <img src="{{ url_for('hse_photo', filename=item.photo_path) }}"
+           style="width:64px;height:52px;object-fit:cover;border-radius:4px;border:1px solid var(--border);margin-top:6px">
+    </a>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- TBTs -->
+<div id="sec-tbt"></div>
+{% if tbts %}
+<div class="card">
+  <h3 style="margin-top:0">Toolbox Talks ({{ tbts|length }})</h3>
+  {% for t in tbts %}
+  <div style="padding:8px;border-top:1px solid var(--border)">
+    <strong>{{ t.topic or '(No topic)' }}</strong>
+    <span style="color:var(--muted);font-size:13px;margin-left:8px">{{ t.date.strftime('%d %b %Y') }}</span>
+    <span style="background:var(--primary);color:#fff;padding:1px 8px;border-radius:10px;font-size:11px;margin-left:6px">
+      {{ tbt_counts[t.id] }} attendees
+    </span>
+    {% if t.location %}<div style="font-size:12px;color:var(--muted);margin-top:2px">📍 {{ t.location }}</div>{% endif %}
+    {% if tbt_attendees[t.id] %}
+    <div style="margin-top:6px;font-size:12px;color:var(--muted)">
+      {% for a in tbt_attendees[t.id] %}{{ a.emp_name }}{% if not loop.last %}, {% endif %}{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- Near Misses -->
+<div id="sec-nm"></div>
+{% if nearmisses %}
+<div class="card" style="border-left:4px solid var(--danger)">
+  <h3 style="margin-top:0">Near Miss Reports ({{ nearmisses|length }})</h3>
+  {% for nm in nearmisses %}
+  <div style="padding:8px;border-top:1px solid var(--border)">
+    <strong>{{ nm.date.strftime('%d %b %Y') }}</strong>
+    {% if nm.location %}<span style="color:var(--muted);font-size:12px;margin-left:8px">📍 {{ nm.location }}</span>{% endif %}
+    {% if nm.description %}<p style="margin:4px 0 0;font-size:13px">{{ nm.description }}</p>{% endif %}
+    {% if nm.immediate_cause %}<p style="margin:3px 0 0;font-size:12px;color:var(--muted)"><strong>Cause:</strong> {{ nm.immediate_cause }}</p>{% endif %}
+    {% if nm.action_taken %}<p style="margin:3px 0 0;font-size:12px;color:var(--muted)"><strong>Action:</strong> {{ nm.action_taken }}</p>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+
+<!-- BBS -->
+<div id="sec-bbs"></div>
+{% if bbs_records %}
+<div class="card">
+  <h3 style="margin-top:0">BBS Daily Counts ({{ bbs_records|length }} days,
+    total {{ bbs_records | sum(attribute='card_count') }} cards)</h3>
+  <table style="width:100%;border-collapse:collapse">
+    <thead><tr style="background:var(--bg)">
+      <th style="padding:8px;text-align:left;font-size:13px">Date</th>
+      <th style="padding:8px;text-align:right;font-size:13px">Cards</th>
+      <th style="padding:8px;text-align:left;font-size:13px">Notes</th>
+    </tr></thead>
+    <tbody>
+    {% for rec in bbs_records %}
+    <tr style="border-top:1px solid var(--border)">
+      <td style="padding:8px;font-size:13px">{{ rec.date.strftime('%d %b %Y') }}</td>
+      <td style="padding:8px;text-align:right;font-weight:600">{{ rec.card_count }}</td>
+      <td style="padding:8px;font-size:13px;color:var(--muted)">{{ rec.notes or '' }}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<!-- PTW Records -->
+<div id="sec-ptw"></div>
+<div class="card" style="border-top:3px solid #8b5cf6">
+  <h3 style="margin-top:0">
+    Permits to Work — PTW
+    {% set active_ptw = ptw_records|selectattr('status','equalto','active')|list %}
+    <span style="font-weight:400;font-size:14px;color:var(--muted)">({{ ptw_records|length }} total</span>
+    {% if active_ptw %}
+    <span style="background:#d1fae5;color:#065f46;padding:2px 10px;border-radius:10px;font-size:12px;font-weight:700;margin-left:4px">{{ active_ptw|length }} Active</span>
+    {% endif %}
+    <span style="font-weight:400;font-size:14px;color:var(--muted)">)</span>
+  </h3>
+  {% if ptw_records %}
+  <div class="rtable-wrap" style="overflow-x:auto">
+    <table class="table compact rtable">
+      <thead>
+        <tr>
+          <th>Permit #</th>
+          <th>Type</th>
+          <th>Location</th>
+          <th>Week</th>
+          <th class="center">Status</th>
+          <th class="desc-col ptw-desc">Description</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for p in ptw_records %}
+        <tr {% if p.status == 'closed' %}style="opacity:.6"{% endif %}>
+          <td class="mono name" data-l="Permit #" style="font-weight:600">{{ p.permit_number }}</td>
+          <td data-l="Type"><span style="background:#dbeafe;color:#1d4ed8;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:600">{{ p.permit_type }}</span></td>
+          <td data-l="Location">{{ p.location or '—' }}</td>
+          <td class="nowrap" data-l="Week" style="font-size:12px">{{ p.week_start.strftime('%d %b %Y') }} – {{ p.week_end.strftime('%d %b %Y') }}</td>
+          <td class="center" data-l="Status">
+            <span style="padding:2px 10px;border-radius:10px;font-size:11px;font-weight:700;
+              background:{% if p.status=='active' %}#d1fae5{% elif p.status=='suspended' %}#fef3c7{% else %}#f3f4f6{% endif %};
+              color:{% if p.status=='active' %}#065f46{% elif p.status=='suspended' %}#92400e{% else %}#6b7280{% endif %}">
+              {{ p.status.title() }}
+            </span>
+          </td>
+          <td class="desc-col ptw-desc stack" data-l="Description"
+              style="font-size:12px;color:var(--muted)">{{ p.description or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <p style="color:var(--muted);font-size:13px;margin:0">No permits recorded for this period.</p>
+  {% endif %}
+</div>
+
+<!-- Man Power Records -->
+<div id="sec-mp"></div>
+{% if mp_records %}
+<div class="card">
+  {% set total_mp = mp_records | sum(attribute='total_count') %}
+  <h3 style="margin-top:0">Man Power ({{ mp_records|length }} days — {{ total_mp }} total workers)</h3>
+  <div class="rtable-wrap" style="overflow-x:auto">
+    <table class="table compact rtable">
+      <thead>
+        <tr><th>Date</th><th>Location</th><th class="center">Total</th><th>Notes</th></tr>
+      </thead>
+      <tbody>
+        {% for rec in mp_records %}
+        <tr>
+          <td class="nowrap name" data-l="Date">{{ rec.date.strftime('%d %b %Y') }}</td>
+          <td data-l="Location">{{ rec.location or '—' }}</td>
+          <td class="center" data-l="Total" style="font-weight:700">{{ rec.total_count }}</td>
+          <td class="stack desc-col" data-l="Notes" style="font-size:12px;color:var(--muted)">{{ rec.notes or '—' }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endif %}
+
+<!-- Inspection Records -->
+<div id="sec-insp"></div>
+{% if insp_records %}
+<div class="card">
+  {% set scored = insp_records | selectattr('overall_score') | list %}
+  {% set avg_score = (scored | sum(attribute='overall_score') / scored|length) | round(1) if scored else none %}
+  <h3 style="margin-top:0">
+    Safety Inspections ({{ insp_records|length }})
+    {% if avg_score is not none %}
+    — Avg:
+    <span style="color:{% if avg_score >= 80 %}var(--success){% elif avg_score >= 60 %}#f59e0b{% else %}var(--danger){% endif %};font-weight:800">
+      {{ avg_score }}%
+    </span>
+    {% endif %}
+  </h3>
+  <div class="rtable-wrap" style="overflow-x:auto"><table class="table compact rtable">
+    <thead>
+      <tr><th>Date</th><th>Location</th><th class="center">Score</th><th>Notes</th></tr>
+    </thead>
+    <tbody>
+      {% for rec in insp_records %}
+      <tr>
+        <td class="nowrap name" data-l="Date">{{ rec.date.strftime('%d %b %Y') }}</td>
+        <td data-l="Location">{{ rec.location or '—' }}</td>
+        <td class="center" data-l="Score">
+          {% if rec.overall_score is not none %}
+          <span style="font-weight:700;color:{% if rec.overall_score >= 80 %}var(--success){% elif rec.overall_score >= 60 %}#f59e0b{% else %}var(--danger){% endif %}">
+            {{ rec.overall_score }}%
+          </span>
+          {% else %}—{% endif %}
+        </td>
+        <td class="stack desc-col" data-l="Notes" style="font-size:12px;color:var(--muted)">{{ rec.notes or '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endif %}
+
+{% if not checkins and not observations and not jsos and not tbts and not nearmisses and not bbs_records and not ptw_records and not mp_records and not insp_records %}
+<div class="card"><p class="muted">No activity recorded for this officer in the selected period.</p></div>
+{% endif %}
+{% endblock %}

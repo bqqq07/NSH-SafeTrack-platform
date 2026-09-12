@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}New complaint{% endblock %}
+{% block content %}
+<div style="max-width:620px;margin:0 auto">
+  <h2>What is this about?</h2>
+  <form method="post" id="cf">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="kind" id="kind" value="facility">
+
+    <div style="display:grid;gap:10px;margin-bottom:16px">
+      <button type="button" id="b1" onclick="pick('facility')"
+              style="text-align:left;padding:16px;border-radius:12px;border:2px solid #22c55e;background:#f0fdf4">
+        <div style="font-weight:800">🔧 Site facility</div>
+        <div style="color:#475569">Water, Shade, Camp, Medical, Documentation</div></button>
+      <button type="button" id="b2" onclick="pick('escalate')"
+              style="text-align:left;padding:16px;border-radius:12px;border:1px solid #cbd5e1;background:#fff">
+        <div style="font-weight:800">↗️ Escalate to supervisor</div>
+        <div style="color:#475569">Anything outside my scope</div></button>
+    </div>
+
+    <label style="font-weight:700">Unit</label>
+    <select name="unit" style="width:100%;padding:12px;border-radius:10px;border:1px solid #cbd5e1;margin-bottom:10px">
+      {% for u in units %}<option value="{{ u }}">Unit {{ u }}</option>{% endfor %}
+    </select>
+
+    <div id="facfields">
+      <label style="font-weight:700">Facility ref (Shelter 19 / WS-07)</label>
+      <input name="ref_no" style="width:100%;padding:12px;border-radius:10px;border:1px solid #cbd5e1;margin-bottom:10px">
+      <label style="font-weight:700">Number of workers raising it</label>
+      <input name="raised_by_n" type="number" value="1" min="1"
+             style="width:110px;padding:12px;border-radius:10px;border:1px solid #cbd5e1;margin-bottom:10px">
+    </div>
+
+    <label style="font-weight:700">Description</label>
+    <textarea name="description" rows="4" required
+              style="width:100%;padding:12px;border-radius:10px;border:1px solid #cbd5e1"></textarea>
+
+    <div style="background:#fef9c3;color:#854d0e;padding:12px;border-radius:10px;margin:12px 0;font-weight:600">
+      Do not promise a fix. Say: "I will pass this to the responsible team."
+    </div>
+
+    <button style="width:100%;padding:16px;border:0;background:#0f172a;color:#fff;
+                   border-radius:12px;font-weight:800">Save</button>
+  </form>
+</div>
+<script>
+function pick(k){
+  document.getElementById('kind').value=k;
+  const a=document.getElementById('b1'), b=document.getElementById('b2');
+  a.style.border = k==='facility' ? '2px solid #22c55e':'1px solid #cbd5e1';
+  a.style.background = k==='facility' ? '#f0fdf4':'#fff';
+  b.style.border = k==='escalate' ? '2px solid #f59e0b':'1px solid #cbd5e1';
+  b.style.background = k==='escalate' ? '#fffbeb':'#fff';
+  document.getElementById('facfields').style.display = k==='facility' ? 'block':'none';
+}
+</script>
+{% endblock %}

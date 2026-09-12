@@ -1,0 +1,145 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="report">
+  <header class="report-header">
+    <div class="report-head-left">
+      <img class="report-logo" src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo">
+    </div>
+    <div class="report-head-center">
+      <h1>Supervisor Reports</h1>
+      <p class="muted">
+        Week: {{ ws.strftime("%d/%m/%Y") }} → {{ we.strftime("%d/%m/%Y") }}
+      </p>
+    </div>
+    <div class="report-head-right"></div>
+  </header>
+
+  <section class="card no-print">
+    <form method="get" action="{{ url_for('admin_reports_weekly') }}" class="grid4" autocomplete="off">
+      <label>Week Start
+        <input type="date" name="week_start" value="{{ ws.isoformat() }}" required>
+      </label>
+      <label>Week End
+        <input type="date" name="week_end" value="{{ we.isoformat() }}" required>
+      </label>
+      <label>Search (Supervisor ID)
+        <input type="text"
+               name="q"
+               value="{{ q or '' }}"
+               placeholder="e.g. 39122"
+               list="sup_list"
+               autocomplete="off">
+        <datalist id="sup_list">
+          {# نعرض اللي قيمته رقم بس عشان ما تتكرر بالأسماء #}
+          {% for val, label in sup_suggestions %}
+            {% if val.isdigit() %}
+              <option value="{{ val }}">{{ label }}</option>
+            {% endif %}
+          {% endfor %}
+        </datalist>
+      </label>
+      <div class="align-end" style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn" type="submit">Apply</button>
+        <a class="btn primary"
+           href="{{ url_for('admin_print_bundle', week_start=ws.isoformat(), week_end=we.isoformat()) }}"
+           target="_blank" rel="noopener">Print All Reports (Bundle)</a>
+        <button class="btn" type="button" onclick="window.print()">Print Page</button>
+      </div>
+    </form>
+    <p class="muted small">Tip: type an exact <b>Supervisor ID</b> to show KPI & the not-evaluated list.</p>
+  </section>
+
+  {% if focus_sup %}
+  <section class="kpi-cards">
+    <div class="kpi">
+      <div class="kpi-title">Supervisor</div>
+      <div class="kpi-value">{{ focus_sup.name or '—' }}</div>
+      <div class="kpi-sub mono">ID: {{ focus_sup.supervisor_code }}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-title">Weekly completion</div>
+      <div class="kpi-value">
+        {% if sup_cov_pct is not none %}{{ '%.1f'|format(sup_cov_pct) }}%{% else %}—{% endif %}
+      </div>
+      <div class="kpi-sub">{{ done_emp_count }}/{{ total_emp }} employees evaluated</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Not Evaluated (This Week)</h2>
+    <div class="table-wrap">
+      <table class="table compact">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Employee</th>
+            <th>Emp No</th>
+            <th>Department</th>
+            <th>Site</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% if missing_emps and missing_emps|length > 0 %}
+            {% for e in missing_emps %}
+            <tr class="row-miss">
+              <td class="center">{{ loop.index }}</td>
+              <td>{{ e.name }}</td>
+              <td class="mono">{{ e.emp_number }}</td>
+              <td>{{ e.department or '—' }}</td>
+              <td>{{ e.site or '—' }}</td>
+            </tr>
+            {% endfor %}
+          {% else %}
+            <tr><td colspan="5" class="center muted">Everyone is evaluated for this week 🎉</td></tr>
+          {% endif %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="card">
+    <h2>Evaluations</h2>
+    <div class="table-wrap">
+      <table class="table compact">
+        <thead>
+          <tr>
+            <th>Supervisor (ID)</th>
+            <th>Employee</th>
+            <th>Emp No</th>
+            <th class="center">Targets /40</th>
+            <th class="center">Performance /60</th>
+            <th class="center">Total /100</th>
+            <th class="center">Band</th>
+            <th class="no-print center">View</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for ev, emp, sup in rows %}
+          <tr>
+            <td>{{ sup.name or '—' }} <span class="muted">({{ sup.supervisor_code }})</span></td>
+            <td>{{ emp.name }}</td>
+            <td class="mono">{{ emp.emp_number }}</td>
+            <td class="center">{{ '%.2f'|format(ev.targets_score or 0) }}</td>
+            <td class="center">{{ '%.2f'|format(ev.perf_score or 0) }}</td>
+            <td class="center"><strong>{{ '%.2f'|format(ev.total_score or 0) }}</strong></td>
+            <td class="center">{{ ev.overall_band or '—' }}</td>
+            <td class="no-print center">
+              <a class="btn"
+                 href="{{ url_for('report_employee',
+                                  emp_id=emp.id,
+                                  week_start=ws.isoformat(),
+                                  week_end=we.isoformat()) }}">
+                Open
+              </a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="8" class="center muted">No evaluations found for the selected week.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</section>
+{% endblock %}

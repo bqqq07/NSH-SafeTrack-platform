@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Daily Evaluations — {{ employee.name }} ({{ employee.emp_number }})</h2>
+
+<form method="get" class="filters">
+  <input type="text" name="q" value="{{ q }}" placeholder="Search text...">
+  <input type="date" name="from" value="{{ d_from }}">
+  <input type="date" name="to" value="{{ d_to }}">
+  <select name="band">
+    <option value="">Band</option>
+    {% for b in ['A','B','C','D','E'] %}
+      <option value="{{b}}" {% if band==b %}selected{% endif %}>{{b}}</option>
+    {% endfor %}
+  </select>
+  <button class="btn">Filter</button>
+  <a class="btn" href="{{ url_for('daily_evaluation_list', emp_id=employee.id) }}">Reset</a>
+</form>
+
+<table class="table">
+  <thead><tr><th>ID</th><th>Week</th><th>Total</th><th>Band</th><th>Actions</th></tr></thead>
+  <tbody>
+    {% for r in rows %}
+      <tr>
+        <td>{{ r.id }}</td>
+        <td>{{ r.week_start }} → {{ r.week_end }}</td>
+        <td>{{ '%.1f' % r.total_score }}</td>
+        <td>{{ r.band }}</td>
+        <td>
+          <a class="btn" href="{{ url_for('daily_evaluation_print', eval_id=r.id) }}" target="_blank">Print</a>
+        </td>
+      </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endblock %}

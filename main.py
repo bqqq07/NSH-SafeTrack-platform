@@ -1,4 +1,4 @@
-# === Imports ===
+﻿# === Imports ===
 try:
     from dotenv import load_dotenv
     load_dotenv()
@@ -12,7 +12,7 @@ from functools import wraps
 from collections import defaultdict, Counter
 from flask import (
     Flask, render_template, render_template_string, request, redirect, url_for,
-    session, flash, abort, g, Response, current_app, send_file, jsonify
+    session, flash, abort, g, Response, current_app, send_file, jsonify, make_response
 )
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import UniqueConstraint, or_, func, text
@@ -26,16 +26,10 @@ BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 
 # === Flask app ===
 app = Flask(__name__, template_folder="templates", static_folder="static")
-import secrets as _secrets
-_secret = os.environ.get("SECRET_KEY")
-if not _secret:
-    _secret = _secrets.token_hex(32)
-    import logging as _logging
-    _logging.getLogger(__name__).warning(
-        "SECRET_KEY not set in environment -- using a random key. "
-        "Sessions will not survive restarts. Set SECRET_KEY in your .env file."
-    )
-app.config["SECRET_KEY"] = _secret
+app.config["SECRET_KEY"] = os.environ.get(
+    "SECRET_KEY",
+    "nsh-safetrack-2024-a7f3c9e2b1d8k4m6p0q5r"
+)
 app.config["SQLALCHEMY_ECHO"] = False  # تم تعطيله في production
 application = app 
 
@@ -70,19 +64,21 @@ app.config["SQLALCHEMY_DATABASE_URI"] = (
 )
 
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+# pool_recycle أقصر من wait_timeout على shared hosting (60-90s).
+# pool_size=1 / max_overflow=2 يقلل الكونكشنات المتزامنة.
+# أخطاء Command Out of Sync / Lost connection يتعامل معها _safe_db_teardown.
+app.config["SQLALCHEMY_POOL_SIZE"]    = 1
+app.config["SQLALCHEMY_MAX_OVERFLOW"] = 2
+app.config["SQLALCHEMY_POOL_TIMEOUT"] = 20
+app.config["SQLALCHEMY_POOL_RECYCLE"] = 25
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_pre_ping": True,
-    # أقل من wait_timeout للسيرفر بهامش — الاستضافة المشتركة تقطع الاتصالات الخاملة
-    "pool_recycle": 180,
-    # عدة Passenger workers × pool كبير = تجاوز حد الاتصالات. نبقي البصمة صغيرة.
-    "pool_size": 3,
-    "max_overflow": 4,
-    "pool_timeout": 20,
-    "pool_use_lifo": True,     # يعيد استخدام الاتصالات الساخنة ويترك الباقي يموت طبيعياً
+    "pool_use_lifo": True,
     "connect_args": {
         "connect_timeout": 10,
         "read_timeout": 30,
         "write_timeout": 30,
+        "init_command": "SET SESSION wait_timeout=60, interactive_timeout=60",
     },
 }
 
@@ -131,8 +127,8 @@ try:
 except ImportError:
     limiter = None  # flask-limiter not installed — run: pip install flask-limiter
 
-# decorator helper: applies rate limit when limiter is available
-_login_limit = (limiter.limit("5 per minute") if limiter is not None else lambda f: f)
+# decorator helper: applies rate limit only on POST (login attempts), not GET page loads
+_login_limit = (limiter.limit("20 per minute", methods=["POST"]) if limiter is not None else lambda f: f)
 
 # ── Swagger / OpenAPI ────────────────────────────────────────────────
 try:
@@ -167,12 +163,36 @@ def load_logged_in_user():
     if request.endpoint and request.endpoint.startswith('static'):
         return
     user_id = session.get("user_id")
-    g.user = db.session.get(User, user_id) if user_id else None
-    g.role = g.user.role if g.user else None
-    g.company_id = session.get("company_id")
-    g.company = db.session.get(Company, g.company_id) if g.company_id else None
+    try:
+        g.user = db.session.get(User, user_id) if user_id else None
+        g.role = g.user.role if g.user else None
+        g.company_id = session.get("company_id")
+        g.company = db.session.get(Company, g.company_id) if g.company_id else None
+    except Exception:
+        try:
+            db.session.remove()
+        except Exception:
+            try:
+                db.engine.dispose()
+            except Exception:
+                pass
+        g.user = None
+        g.role = None
+        g.company_id = None
+        g.company = None
+    g._user_loaded = True
 
 
+@app.teardown_appcontext
+def _safe_db_teardown(exc):
+    """يمنع أخطاء MySQL (Command Out of Sync, Lost connection) من كسر الـ WSGI response."""
+    try:
+        db.session.remove()
+    except Exception:
+        try:
+            db.engine.dispose()
+        except Exception:
+            pass
 
 
 # ===================== Constants =====================
@@ -425,7 +445,7 @@ class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     supervisor_code = db.Column(db.String(50), unique=True, nullable=False)
     name = db.Column(db.String(120), default="")
-    role = db.Column(db.String(20), default="supervisor")  # supervisor | admin | site_supervisor | safety_officer | safety_supervisor | super_admin | welfare_officer | environment_officer
+    role = db.Column(db.String(20), default="supervisor")  # supervisor | admin | site_supervisor | safety_officer | safety_supervisor | super_admin | safety_welfare | environment_officer
     is_active = db.Column(db.Boolean, default=True)
     is_hidden = db.Column(db.Boolean, default=False)
     # SaaS additions
@@ -787,6 +807,29 @@ def ensure_db_and_admin() -> None:
                         "ALTER TABLE warning_signature ADD COLUMN job_title VARCHAR(255) NULL"))
                 app.logger.info("DB migration: added warning_signature.job_title")
 
+            if _insp.has_table("env_checklist"):
+                _existing_ec_cols = {c["name"] for c in _insp.get_columns("env_checklist")}
+                if "signatory_name" not in _existing_ec_cols:
+                    with db.engine.begin() as _conn:
+                        _conn.execute(_text(
+                            "ALTER TABLE env_checklist ADD COLUMN signatory_name VARCHAR(255) NULL"))
+                    app.logger.info("DB migration: added env_checklist.signatory_name")
+                if "signature_data" not in _existing_ec_cols:
+                    with db.engine.begin() as _conn:
+                        _conn.execute(_text(
+                            "ALTER TABLE env_checklist ADD COLUMN signature_data LONGTEXT NULL"))
+                    app.logger.info("DB migration: added env_checklist.signature_data")
+                if "attendees_sigs" not in _existing_ec_cols:
+                    with db.engine.begin() as _conn:
+                        _conn.execute(_text(
+                            "ALTER TABLE env_checklist ADD COLUMN attendees_sigs LONGTEXT NULL"))
+                    app.logger.info("DB migration: added env_checklist.attendees_sigs")
+                if "is_official" not in _existing_ec_cols:
+                    with db.engine.begin() as _conn:
+                        _conn.execute(_text(
+                            "ALTER TABLE env_checklist ADD COLUMN is_official TINYINT(1) NOT NULL DEFAULT 0"))
+                    app.logger.info("DB migration: added env_checklist.is_official")
+
             _existing_emp_cols = {c["name"] for c in _insp.get_columns("employee")}
             if "id_expiry_date" not in _existing_emp_cols:
                 with db.engine.begin() as _conn:
@@ -835,6 +878,10 @@ def _safe_date(s):
         return None
 
 def cur_user():
+    # Use g.user set by load_logged_in_user to avoid repeated DB queries per request.
+    # If load_logged_in_user hasn't run yet (e.g., called outside request context), fall back to DB.
+    if hasattr(g, '_user_loaded'):
+        return g.user
     uid = session.get("user_id")
     return db.session.get(User, uid) if uid else None
 
@@ -2053,11 +2100,15 @@ def index():
         return redirect(url_for("hse_checkin"))
     if role == "safety_supervisor":
         return redirect(url_for("safety_supervisor_home"))
-    if role == "welfare_officer":
+    if role == "safety_manager":
+        return redirect(url_for("safety_manager_dashboard"))
+    if role == "safety_welfare":
         return redirect(url_for("welfare_home"))
     if role == "environment_officer":
         return redirect(url_for("env_dashboard"))
-    return redirect(url_for("employees"))
+    if role == "supervisor":
+        return redirect(url_for("employees"))
+    return redirect(url_for("login"))
 
 # اختيار المشرف والأسبوع لطباعة الحزمة
 @app.route("/site/print", methods=["GET", "POST"])
@@ -2625,12 +2676,14 @@ def login():
             return redirect(url_for("safety_supervisor_home"))
         elif user.role == "safety_manager":
             return redirect(url_for("safety_manager_dashboard"))
-        elif user.role == "welfare_officer":
+        elif user.role == "safety_welfare":
             return redirect(url_for("welfare_home"))
         elif user.role == "environment_officer":
             return redirect(url_for("env_dashboard"))
-        else:
+        elif user.role == "supervisor":
             return redirect(url_for("employees"))
+        else:
+            return redirect(url_for("login"))
 
     return render_template("login.html")
 
@@ -2899,7 +2952,7 @@ def admin_users_set_role(user_id):
         return redirect(url_for("admin_users"))
 
     if new_role not in ["supervisor", "site_supervisor", "safety_officer", "safety_supervisor",
-                        "welfare_officer", "environment_officer"]:
+                        "safety_welfare", "environment_officer"]:
         flash("Invalid role.", "danger")
     else:
         u.role = new_role
@@ -2911,7 +2964,7 @@ def admin_users_set_role(user_id):
 
 # ── Admin: Safety Team Assignment ────────────────────────────────────
 
-OFFICER_ROLES = ("safety_officer", "welfare_officer", "environment_officer")
+OFFICER_ROLES = ("safety_officer", "safety_welfare", "environment_officer")
 
 
 # ── PTW Training: 7 modules × 6 doors (door 6 = reference, no submission) ────────
@@ -3399,7 +3452,7 @@ def admin_officers_report():
                 rows.append({"user": o, "role_label": "Safety Officer",
                              "submissions": submissions, "findings": finds,
                              "detail": f"{submissions} check-ins"})
-            elif o.role == "welfare_officer":
+            elif o.role == "safety_welfare":
                 submissions = WlfLevelWork.query.filter(
                     WlfLevelWork.officer_id == o.id,
                     WlfLevelWork.date.between(date_from, date_to)
@@ -3436,6 +3489,19 @@ def admin_officers_report():
 def employees():
     u = cur_user()
     if u.role not in ("supervisor", "admin"):
+        _role_home = {
+            "safety_welfare": "welfare_home",
+            "environment_officer": "env_dashboard",
+            "safety_officer": "hse_checkin",
+            "safety_supervisor": "safety_supervisor_home",
+            "safety_manager": "safety_manager_dashboard",
+            "hr": "hr_inbox",
+            "site_supervisor": "site_supervisors",
+            "super_admin": "superadmin_dashboard",
+        }
+        dest = _role_home.get(u.role)
+        if dest:
+            return redirect(url_for(dest))
         abort(403)
 
     emps = (Employee.query
@@ -9636,6 +9702,7 @@ class HseObservation(db.Model):
     company_id     = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
     created_at     = db.Column(db.DateTime, default=datetime.utcnow)
     photos         = db.relationship("HseObservationPhoto", backref="observation", lazy="dynamic")
+    officer        = db.relationship("User", foreign_keys=[officer_id])
 
 
 class HseObservationPhoto(db.Model):
@@ -9844,8 +9911,12 @@ def inject_hse_flag():
 
 def _hse_today_location(officer_id):
     today = datetime.now(RIYADH_TZ).date()
-    ci = HseCheckin.query.filter_by(officer_id=officer_id, date=today).first()
-    return ci.location if ci else ""
+    from sqlalchemy import text as _text
+    row = db.session.execute(
+        _text("SELECT location FROM hse_checkin WHERE officer_id=:oid AND date=:dt LIMIT 1"),
+        {"oid": officer_id, "dt": today}
+    ).fetchone()
+    return row[0] if row else ""
 
 
 def _hse_locations():
@@ -9856,6 +9927,30 @@ def _hse_locations():
         q = q.filter(HseCheckin.company_id == _cid)
     rows = q.group_by(HseCheckin.location).order_by(func.count(HseCheckin.location).desc()).all()
     return [r.location for r in rows]
+
+
+def _amiral_units(company_id=None):
+    """Returns list of (display_label, value) tuples for registered pkg/unit combos.
+    Uses UserLocation data so the dropdown reflects actual registered units.
+    Falls back to empty list if no locations registered yet."""
+    try:
+        q = db.session.query(
+            UserLocation.pkg, UserLocation.unit
+        ).filter(UserLocation.pkg != None, UserLocation.unit != None)
+        if company_id:
+            q = q.filter(UserLocation.company_id == company_id)
+        rows = q.distinct().order_by(UserLocation.pkg, UserLocation.unit).all()
+        result = []
+        seen = set()
+        for pkg, unit in rows:
+            val = f"PKG{pkg}/{unit}"
+            if val not in seen:
+                seen.add(val)
+                label = f"PKG-0{pkg} — وحدة {unit}" if pkg < 10 else f"PKG-{pkg} — وحدة {unit}"
+                result.append((label, val))
+        return result
+    except Exception:
+        return []
 
 
 def _notify_hse_supervisors(title, body):
@@ -10007,26 +10102,49 @@ def hse_checkin():
 
 # ── HSE: Daily Observations ───────────────────────────────────────────
 
+_OBS_PAGE_ROLES = (
+    "safety_officer", "safety_welfare", "environment_officer",
+    "safety_supervisor", "safety_manager", "admin", "super_admin",
+)
+
+
 @app.route("/hse/observations", methods=["GET"])
 @login_required
-@hse_officer_required
 def hse_observations():
     u = cur_user()
-    status_filter = request.args.get("status", "open")
+    if not u or getattr(u, "role", None) not in _OBS_PAGE_ROLES:
+        flash("Access denied.", "danger")
+        return redirect(url_for("index"))
+    _c = cid()
+    status_filter = request.args.get("status", "")
     page = request.args.get("page", 1, type=int)
-    if u.role in ("safety_supervisor", "safety_manager", "admin", "super_admin"):
-        officer_ids = [o.id for o in _get_safety_officers(u)]
-        q = HseObservation.query.filter(HseObservation.officer_id.in_(officer_ids))
+    is_supervisor = u.role not in ("safety_officer", "safety_welfare", "environment_officer")
+
+    if is_supervisor:
+        safety_ids = [o.id for o in _get_safety_officers(u)]
+        wlf_env = User.query.filter(
+            User.role.in_(["safety_welfare", "environment_officer"]),
+            User.company_id == _c, User.is_active == True,
+        ).with_entities(User.id).all()
+        all_ids = safety_ids + [r.id for r in wlf_env]
+        q = HseObservation.query.filter(
+            HseObservation.officer_id.in_(all_ids),
+            HseObservation.company_id == _c,
+        )
     else:
-        q = HseObservation.query.filter_by(officer_id=u.id)
+        q = HseObservation.query.filter_by(officer_id=u.id, company_id=_c)
+
     if status_filter in ("open", "closed"):
-        q = q.filter_by(status=status_filter)
-    pagination = q.order_by(HseObservation.date.desc()).paginate(page=page, per_page=15, error_out=False)
+        q = q.filter(HseObservation.status == status_filter)
+    pagination = q.order_by(HseObservation.date.desc()).paginate(
+        page=page, per_page=15, error_out=False)
     obs = pagination.items
     obs_photos = {o.id: list(o.photos) for o in obs}
     return render_template("hse_observations.html",
-                           obs=obs, obs_photos=obs_photos, status_filter=status_filter,
-                           pagination=pagination)
+                           obs=obs, obs_photos=obs_photos,
+                           status_filter=status_filter, pagination=pagination,
+                           is_supervisor=is_supervisor, cur_user_id=u.id,
+                           cur_role=u.role)
 
 
 @app.route("/hse/observation/<int:obs_id>/view", methods=["GET"])
@@ -10227,9 +10345,11 @@ def hse_observation_new():
 
 @app.route("/hse/observation/<int:obs_id>/close", methods=["GET", "POST"])
 @login_required
-@hse_officer_required
 def hse_observation_close(obs_id):
     u = cur_user()
+    if not u or getattr(u, "role", None) not in _OBS_PAGE_ROLES:
+        flash("Access denied.", "danger")
+        return redirect(url_for("index"))
     obs = HseObservation.query.filter_by(id=obs_id, officer_id=u.id).first_or_404()
 
     if obs.status == "closed":
@@ -10700,7 +10820,7 @@ def hse_dashboard():
                          and weekly[o.id]["total"] == 0]
 
     # ── Welfare summary for dashboard ─────────────────────────────────
-    wlf_officers_q = User.query.filter_by(role="welfare_officer", is_active=True)
+    wlf_officers_q = User.query.filter_by(role="safety_welfare", is_active=True)
     if _cid:
         wlf_officers_q = wlf_officers_q.filter(User.company_id == _cid)
     wlf_officers = wlf_officers_q.all()
@@ -11853,6 +11973,11 @@ def hse_report_monthly_pdf():
 
 # ===================== Safety Manager Dashboard =====================
 
+def _wlf_monthly_card_data(officer, first_day, last_day):
+    """Stub — welfare module not yet implemented."""
+    return {"rounds": 0, "avg_score": 0, "finds_closed": 0, "finds_open": 0, "complaints": 0}
+
+
 @app.route("/safety-manager/dashboard", methods=["GET"])
 @login_required
 @safety_manager_required
@@ -11964,7 +12089,7 @@ def safety_manager_dashboard():
         officer_trend_data.append({"name": r["officer_name"], "data": pts})
 
     # ── Welfare summary ────────────────────────────────────────────────
-    wlf_officers_q = User.query.filter_by(role="welfare_officer", is_active=True)
+    wlf_officers_q = User.query.filter_by(role="safety_welfare", is_active=True)
     if _cid:
         wlf_officers_q = wlf_officers_q.filter(User.company_id == _cid)
     wlf_officers = wlf_officers_q.order_by(User.name).all()
@@ -14000,7 +14125,7 @@ def api_hse_my_ca():
 
 # ===================== Welfare & Wellbeing Module =====================
 # Self-contained. Does not modify or read any HSE table.
-# All tables prefixed wlf_ ; all routes prefixed /welfare/ ; role: welfare_officer
+# All tables prefixed wlf_ ; all routes prefixed /welfare/ ; role: safety_welfare
 # ----------------------------------------------------------------------
 
 import json as _wlf_json
@@ -14424,6 +14549,12 @@ def _ptw_door_unlocked(progress, mod_seq, door_seq):
     prev = progress.get((mod_seq, door_seq - 1))
     return prev is not None and prev.status == "approved"
 
+def _ptw_module_unlocked(progress, mod_seq):
+    """Module 1 always open. Module N requires module N-1 fully done."""
+    if mod_seq <= 1:
+        return True
+    return _ptw_module_done(progress, mod_seq - 1)
+
 def _ptw_module_done(progress, mod_seq):
     mod = PTW_MOD_BY_SEQ.get(mod_seq)
     if not mod:
@@ -14448,7 +14579,8 @@ def ptw_training_home():
         done = sum(1 for d in field_doors
                    if progress.get((m["seq"], d["seq"])) and
                       progress[(m["seq"], d["seq"])].status == "approved")
-        mods.append({**m, "done": done, "total": len(field_doors)})
+        mods.append({**m, "done": done, "total": len(field_doors),
+                     "locked": not _ptw_module_unlocked(progress, m["seq"])})
     return render_template("ptw_training_home.html", mods=mods, officer=u)
 
 
@@ -14462,6 +14594,9 @@ def ptw_training_module(mod_seq):
         return redirect(url_for("user_location_page"))
     mod = PTW_MOD_BY_SEQ.get(mod_seq) or abort(404)
     progress = _ptw_progress(u.id)
+    if not _ptw_module_unlocked(progress, mod_seq):
+        flash("Complete the previous module first before accessing this one.", "warning")
+        return redirect(url_for("ptw_training_home"))
     doors = []
     for d in mod["doors"]:
         sub = progress.get((mod_seq, d["seq"]))
@@ -14942,27 +15077,77 @@ class WlfAsset(db.Model):
                               onupdate=datetime.utcnow)
 
 
+class ReportFile(db.Model):
+    """PDF reports uploaded by welfare or environment officers."""
+    __tablename__ = "report_file"
+    id          = db.Column(db.Integer, primary_key=True)
+    company_id  = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    role_type   = db.Column(db.String(20), nullable=False)   # welfare / environment
+    report_type = db.Column(db.String(80), nullable=False)   # free text from dropdown+input
+    file_path   = db.Column(db.String(500), nullable=False)
+    report_date = db.Column(db.Date, nullable=False)
+    notes       = db.Column(db.Text, nullable=True)
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    uploader    = db.relationship("User", foreign_keys=[uploaded_by])
+
+
+class ReportTypeOption(db.Model):
+    """Dynamic list of report type names per role (welfare/environment)."""
+    __tablename__ = "report_type_option"
+    id         = db.Column(db.Integer, primary_key=True)
+    company_id = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    role_type  = db.Column(db.String(20), nullable=False)   # welfare / environment
+    name       = db.Column(db.String(80), nullable=False)
+    created_by = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    __table_args__ = (db.UniqueConstraint("company_id", "role_type", "name",
+                                          name="uq_rto_crn"),)
+
+
+class EnvChecklist(db.Model):
+    """Digital fill of P2-EC / P2-WMC / P2-SPC Amiral weekly checklists."""
+    __tablename__ = "env_checklist"
+    id             = db.Column(db.Integer, primary_key=True)
+    company_id     = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
+    officer_id     = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
+    checklist_type = db.Column(db.String(20), nullable=False)   # P2-EC / P2-WMC / P2-SPC
+    area           = db.Column(db.String(200))
+    report_no      = db.Column(db.String(60))
+    subcontractor  = db.Column(db.String(200))
+    filled_date    = db.Column(db.Date, nullable=False)
+    items_json     = db.Column(db.Text)   # JSON [{item, section, status, area_sub, note}]
+    observations   = db.Column(db.Text)
+    signatory_name  = db.Column(db.String(255), nullable=True)
+    signature_data  = db.Column(db.Text, nullable=True)  # base64 PNG from canvas
+    attendees_sigs  = db.Column(db.Text, nullable=True)   # JSON [{name, company, sig}]
+    is_official     = db.Column(db.Boolean, default=False, nullable=False)  # locked official
+    created_at     = db.Column(db.DateTime,
+                               default=lambda: datetime.now(RIYADH_TZ).replace(tzinfo=None))
+    officer        = db.relationship("User", foreign_keys=[officer_id])
+
+
 # ── Welfare access control ───────────────────────────────────────────
 
-def is_welfare_officer(u):
-    return bool(u) and getattr(u, "role", None) == "welfare_officer"
+def is_safety_welfare(u):
+    return bool(u) and getattr(u, "role", None) == "safety_welfare"
 
 
 def is_welfare_viewer(u):
     """Supervisor-side visibility. Does NOT grant HSE access anywhere."""
     if not u or not getattr(u, "is_active", False):
         return False
-    return getattr(u, "role", None) in ("welfare_officer", "safety_supervisor",
+    return getattr(u, "role", None) in ("safety_welfare", "safety_supervisor",
                                         "safety_manager", "admin", "super_admin")
 
 
-def welfare_officer_required(f):
+def safety_welfare_required(f):
     @wraps(f)
     def inner(*args, **kwargs):
         u = cur_user()
         if not u:
             return redirect(url_for("login"))
-        if not (is_welfare_officer(u) or is_welfare_viewer(u)):
+        if not (is_safety_welfare(u) or is_welfare_viewer(u)):
             flash("This page is for the welfare team.", "danger")
             return redirect(url_for("index"))
         return f(*args, **kwargs)
@@ -14975,7 +15160,7 @@ def welfare_supervisor_required(f):
         u = cur_user()
         if not u:
             return redirect(url_for("login"))
-        if is_welfare_officer(u) or not is_welfare_viewer(u):
+        if is_safety_welfare(u) or not is_welfare_viewer(u):
             flash("Supervisor access only.", "danger")
             return redirect(url_for("index"))
         return f(*args, **kwargs)
@@ -15404,8 +15589,8 @@ def inject_welfare_flags():
                 pending_q = q.count()
             except Exception:
                 pending_q = 0
-        return {"g_is_welfare": is_welfare_officer(u),
-                "g_is_welfare_viewer": (is_welfare_viewer(u) and not is_welfare_officer(u)),
+        return {"g_is_welfare": is_safety_welfare(u),
+                "g_is_welfare_viewer": (is_welfare_viewer(u) and not is_safety_welfare(u)),
                 "g_wlf_pending_queries": pending_q}
     except Exception:
         return {"g_is_welfare": False, "g_is_welfare_viewer": False,
@@ -15431,7 +15616,7 @@ def _wlf_today():
 
 def _wlf_officers():
     """Welfare trainees in the current company."""
-    q = User.query.filter(User.role == "welfare_officer", User.is_active == True)
+    q = User.query.filter(User.role == "safety_welfare", User.is_active == True)
     _c = cid()
     if _c:
         q = q.filter(User.company_id == _c)
@@ -15442,7 +15627,7 @@ def _all_officers_scoped():
     """All 3 officer types visible to current supervisor (for report pickers).
     safety_supervisor → only their OfficerTeam assignments.
     Others → all officers in company."""
-    OFFICER_ROLES = ("safety_officer", "welfare_officer", "environment_officer")
+    OFFICER_ROLES = ("safety_officer", "safety_welfare", "environment_officer")
     u = g.user
     if u and u.role == "safety_supervisor":
         assigned_ids = [
@@ -15477,7 +15662,7 @@ def _wlf_officers_scoped():
             return []
         q = User.query.filter(
             User.id.in_(assigned_ids),
-            User.role == "welfare_officer",
+            User.role == "safety_welfare",
             User.is_active == True,
         )
         return q.order_by(User.name.asc()).all()
@@ -15624,1568 +15809,630 @@ def _wlf_gate_state(uid):
 
 @app.route("/welfare/home")
 @login_required
-@welfare_officer_required
+@safety_welfare_required
 def welfare_home():
     u = cur_user()
-    if not is_welfare_officer(u):
+    if not is_safety_welfare(u):
         return redirect(url_for("welfare_supervisor"))
-    today = _wlf_today()
-    _wlf_ensure_progress(u.id)
-    lvl_p, tasks, blocked, all_done = _wlf_gate_state(u.id)
-    lvl = WLF_LEVEL_BY_CODE.get(lvl_p.level_code) if lvl_p else None
-    overdue = _wlf_overdue(u.id)
-    pending_ref = WlfComplaint.query.filter_by(
-        officer_id=u.id, kind="escalate", status="open").count()
-    done_idx = WLF_LEVEL_CODES.index(lvl_p.level_code) if lvl_p else 0
-    pct = round(done_idx * 100.0 / len(WLF_LEVEL_CODES))
-    lvl_status = lvl_p.status if lvl_p else "locked"
     _c = cid()
+    today = datetime.now(RIYADH_TZ).date()
     try:
-        daily_checks = {
-            "heat":      WelfareHeatCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
-            "firstaid":  WelfareFirstaidCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
-            "sanitation": WelfareSanitationCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
-        }
+        recent_obs = (HseObservation.query
+                      .filter_by(officer_id=u.id, company_id=_c)
+                      .order_by(HseObservation.created_at.desc())
+                      .limit(10).all())
+    except Exception:
+        recent_obs = []
+    try:
+        recent_files = (ReportFile.query
+                        .filter_by(uploaded_by=u.id, company_id=_c, role_type="welfare")
+                        .order_by(ReportFile.uploaded_at.desc())
+                        .limit(10).all())
+    except Exception:
+        recent_files = []
+    try:
+        type_options = (ReportTypeOption.query
+                        .filter_by(company_id=_c, role_type="welfare")
+                        .order_by(ReportTypeOption.name).all())
+    except Exception:
+        type_options = []
+    return render_template("welfare_home.html",
+                           today=today,
+                           recent_obs=recent_obs,
+                           recent_files=recent_files,
+                           type_options=type_options)
+
+
+# ── Welfare officer — observations PDF export ────────────────────────
+
+@app.route("/welfare/observations/export")
+@login_required
+@safety_welfare_required
+def welfare_obs_export_pdf():
+    u = cur_user()
+    if not is_safety_welfare(u):
+        return redirect(url_for("welfare_supervisor"))
+    _c = cid()
+    date_str = request.args.get("date", "")
+    try:
+        from datetime import date as _date
+        export_date = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else datetime.now(RIYADH_TZ).date()
+    except ValueError:
+        export_date = datetime.now(RIYADH_TZ).date()
+    obs_list = (HseObservation.query
+                .filter_by(officer_id=u.id, company_id=_c)
+                .filter(HseObservation.date == export_date)
+                .order_by(HseObservation.created_at).all())
+    return _obs_export_pdf(u, obs_list, export_date, "Welfare")
+
+
+@app.route("/env/observations/export")
+@login_required
+@environment_officer_required
+def env_obs_export_pdf():
+    u = cur_user()
+    if not is_environment_officer(u):
+        return redirect(url_for("welfare_supervisor"))
+    _c = cid()
+    date_str = request.args.get("date", "")
+    try:
+        export_date = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else datetime.now(RIYADH_TZ).date()
+    except ValueError:
+        export_date = datetime.now(RIYADH_TZ).date()
+    obs_list = (HseObservation.query
+                .filter_by(officer_id=u.id, company_id=_c)
+                .filter(HseObservation.date == export_date)
+                .order_by(HseObservation.created_at).all())
+    return _obs_export_pdf(u, obs_list, export_date, "Environment")
+
+
+def _obs_export_pdf(u, obs_list, export_date, role_label):
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib import colors
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, HRFlowable
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    import io
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=A4,
+                            rightMargin=2*cm, leftMargin=2*cm,
+                            topMargin=1.5*cm, bottomMargin=1.5*cm)
+    styles = getSampleStyleSheet()
+    bold = ParagraphStyle("bold", parent=styles["Normal"], fontName="Helvetica-Bold", fontSize=11)
+    normal = ParagraphStyle("normal", parent=styles["Normal"], fontSize=9, leading=13)
+    small = ParagraphStyle("small", parent=styles["Normal"], fontSize=8, textColor=colors.grey)
+
+    story = []
+
+    # Header
+    story.append(Paragraph(f"NSH SafeTrack — {role_label} Observations Report", bold))
+    story.append(Paragraph(f"Officer: {u.name}   |   Date: {export_date.strftime('%d %B %Y')}", small))
+    story.append(Spacer(1, 0.3*cm))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e2e8f0")))
+    story.append(Spacer(1, 0.3*cm))
+
+    if not obs_list:
+        story.append(Paragraph("No observations recorded for this date.", normal))
+    else:
+        TYPE_LABEL = {"unsafe_act": "Unsafe Act", "unsafe_condition": "Unsafe Condition", "positive": "Positive"}
+        RISK_COLOR = {"H": colors.HexColor("#b91c1c"), "M": colors.HexColor("#92400e"), "L": colors.HexColor("#166534")}
+        for idx, obs in enumerate(obs_list, 1):
+            story.append(Paragraph(f"#{idx}  {TYPE_LABEL.get(obs.obs_type, obs.obs_type)}"
+                                   + (f"   [{obs.risk_level}]" if obs.risk_level else ""), bold))
+            rows = []
+            if obs.location:
+                rows.append(["Location", obs.location])
+            if obs.category:
+                rows.append(["Category", obs.category])
+            if obs.description:
+                rows.append(["Description", obs.description])
+            if obs.action_taken:
+                rows.append(["Action Taken", obs.action_taken])
+            if rows:
+                tbl = Table([[Paragraph(r[0], small), Paragraph(r[1], normal)] for r in rows],
+                            colWidths=[3.5*cm, None])
+                tbl.setStyle(TableStyle([
+                    ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                    ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
+                    ("TOPPADDING", (0, 0), (-1, -1), 2),
+                ]))
+                story.append(tbl)
+            story.append(Spacer(1, 0.25*cm))
+            if idx < len(obs_list):
+                story.append(HRFlowable(width="100%", thickness=0.5, color=colors.HexColor("#f1f5f9")))
+                story.append(Spacer(1, 0.15*cm))
+
+    # Summary line
+    story.append(Spacer(1, 0.3*cm))
+    story.append(HRFlowable(width="100%", thickness=1, color=colors.HexColor("#e2e8f0")))
+    story.append(Spacer(1, 0.2*cm))
+    story.append(Paragraph(f"Total: {len(obs_list)} observation(s)", small))
+
+    doc.build(story)
+    buf.seek(0)
+    fname = f"{role_label.lower()}_obs_{export_date.isoformat()}.pdf"
+    resp = make_response(buf.getvalue())
+    resp.headers["Content-Type"] = "application/pdf"
+    resp.headers["Content-Disposition"] = f'attachment; filename="{fname}"'
+    return resp
+
+
+# ── helpers ─────────────────────────────────────────────────────────
+
+PDF_UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads", "reports")
+os.makedirs(PDF_UPLOAD_DIR, exist_ok=True)
+
+DEFAULT_WELFARE_TYPES = [
+    "Camp Visit", "Daily Welfare Round", "Heat Index Check",
+    "First Aid Check", "Sanitation Check", "Other",
+]
+DEFAULT_ENV_TYPES = [
+    "Environmental Inspection", "Waste Check", "Dust Check",
+    "Water/Soil Check", "Cylinders Check", "Other",
+]
+
+ENV_CHECKLISTS = {
+    "P2-EC": {
+        "title": "Environmental Checklist – Weekly Inspection",
+        "appendix": "Appendix 4",
+        "report_prefix": "P2-EC",
+        "has_na": False,
+        "col_good": "In good order / condition",
+        "col_imm":  "To be immediately improved",
+        "col_imp":  "To be improved",
+        "note_col": "Product",
+        "compliance_header": "In case of non-compliance, indicate:",
+        "sections": [
+            {
+                "name": "Part 1 – General Site Observations",
+                "items": [
+                    "Site / Working Areas boundaries are Clearly Identified",
+                    "Site access / Entry roads",
+                    "Ungraded Buffer Areas",
+                    "Signs, Fence, Other",
+                    "General Housekeeping (visual)",
+                    "Sufficient Site Trash / Garbage / Waste Containers",
+                    "Condition of Waste Accumulation Areas (if segregated)",
+                    "Condition of Recyclable Solid Waste",
+                    "Condition of Non-Hazardous Solid Waste",
+                    "Condition of Hazardous Waste Storage Area",
+                    "Condition of Sewage tanks / Toilets (Leak or contamination)",
+                    "Hazardous Materials / Storage Area",
+                    "Properly installed erosion controls (e.g., silt fencing)",
+                    "Management of Surface Water",
+                ],
+            },
+            {
+                "name": "Part 2 – General Site Observations",
+                "items": [
+                    "Quality of outfall from sediment basins",
+                    "Properly Dewatering of Excavation",
+                    "Sediment pond / basin for concrete batching plant",
+                    "Hydrostatic tests water discharging",
+                    "Equipment being Maintained free of leaks",
+                    "Management of Materials at Laydown Area",
+                    "Condition of equipment maintenance area",
+                    "Management of Refuelling area",
+                    "Spill kits with Trucks/Equipment",
+                    "Spill kits at Stationary equipment",
+                    "Fuel Tanks free of fuel drips/seepage",
+                    "Fire Fighting / Response equipment",
+                    "Dust Control Measures in place (spraying of water, covers etc.)",
+                    "Vehicle Exhaust Emissions",
+                ],
+            },
+        ],
+    },
+    "P2-WMC": {
+        "title": "Waste Management Checklist – Weekly Inspection",
+        "appendix": "Appendix 5",
+        "report_prefix": "P2-WMC",
+        "has_na": True,
+        "col_good": "In good order / condition",
+        "col_imm":  "To be immediately improved",
+        "col_imp":  "To be improved",
+        "note_col": "Anomaly / Kind of Waste(s)",
+        "compliance_header": "In case of anomaly, to be indicated:",
+        "sections": [
+            {
+                "name": "1 – Collection and Deposits",
+                "items": [
+                    "Wastes are disposed of in the relevant container / areas.",
+                    "Containers / waste areas - clearly labeled for identification",
+                    "Containers / waste areas are adequate to waste types",
+                    "Containers / waste areas - adequate to vol. of waste produced.",
+                    "Containers are provided by appropriate closing to prevent leaking",
+                    "Containers are provided by suitable devices for safe handling, filling and emptying",
+                    "Non-Hazardous waste storage does not last more than a year and its volume is not exceeding 20 m3.",
+                    "Hazardous waste storage does not last more than a year and its volume is not exceeding 10 m3.",
+                    "Foul smell, presence of animals (rats, birds) is noticed?",
+                    "Waste piles are adequately protected from wind and rain",
+                ],
+            },
+            {
+                "name": "2 – Waste Management Documents",
+                "items": [
+                    '"Waste Manifest" is correctly filled in, as per local laws and COMPANY requirements',
+                    "Waste area maps are available and clearly shows the different types of waste storage",
+                    "Waste production is recorded on the relevant form",
+                    "Waste are disposed of at approved disposal areas / facilities?",
+                    "Waste collection is organized by separating different types of wastes (hazardous, not hazardous, recyclable etc.)",
+                    "The waste disposal is compliant with local environmental law and without environmental risks.",
+                    "CONTRACTOR and SUBCONTRACTOR personnel are trained and are aware of environmental care.",
+                ],
+            },
+        ],
+    },
+    "P2-SPC": {
+        "title": "Substances and Products Checklist – Weekly Inspection",
+        "appendix": "Appendix 6",
+        "report_prefix": "P2-SPC",
+        "has_na": False,
+        "col_good": "In good order / condition",
+        "col_imm":  "To be immediately improved",
+        "col_imp":  "To be improved",
+        "note_col": "Product",
+        "compliance_header": "In case of non-compliance, indicate:",
+        "sections": [
+            {
+                "name": "1 – Storage",
+                "items": [
+                    "Storage facility / mixing shelter is inspected and confirmed to be in good condition.",
+                    "SDS, Risk Assessment & inventory available for every substance or chemical product",
+                    "Chemicals are well stored, identified for typology.",
+                    "Storage takes place in appropriate containing tanks.",
+                    "All containers are original, not deteriorated, sealed and labelled.",
+                    "No expired products stored inside",
+                    "Fuel and oil tanks are situated on specific containing tanks",
+                    "Secondary containment tanks are appropriate with 110% capacity and well kept",
+                    "Fire protection devices in compliance with SDS are available",
+                    "Spill kits are available and inspected using dedicated checklist",
+                    "Instructions about use of adsorbent materials are available.",
+                    "The ground, waters, sewer systems etc. are free from spills?",
+                    "Pouring devices used are appropriate or safe for users and env.",
+                    "Natural / Mechanical Ventilation in place and is effective.",
+                    "All containers have caps and are closed when not in use.",
+                    "No half-cut chemical containers are used as paint buckets.",
+                    "Storage is 'numbered' and has 'No Naked Flame', 'No Smoking', 'Authorized Person' 'Hazardous Material' notice posted and clearly visible?",
+                    "No other materials including combustibles are stored inside.",
+                ],
+            },
+        ],
+    },
+}
+
+
+def _seed_report_types(company_id):
+    for name in DEFAULT_WELFARE_TYPES:
+        if not ReportTypeOption.query.filter_by(
+                company_id=company_id, role_type="welfare", name=name).first():
+            db.session.add(ReportTypeOption(
+                company_id=company_id, role_type="welfare", name=name))
+    for name in DEFAULT_ENV_TYPES:
+        if not ReportTypeOption.query.filter_by(
+                company_id=company_id, role_type="environment", name=name).first():
+            db.session.add(ReportTypeOption(
+                company_id=company_id, role_type="environment", name=name))
+    try:
+        db.session.commit()
     except Exception:
         db.session.rollback()
-        daily_checks = {"heat": None, "firstaid": None, "sanitation": None}
-    return render_template("welfare_home.html",
-                           today=today, level=lvl,
-                           tasks=tasks, blocked=blocked, all_done=all_done,
-                           overdue=overdue, pending_ref=pending_ref,
-                           pct=pct,
-                           level_no=done_idx + 1, level_total=len(WLF_LEVEL_CODES),
-                           lvl_status=lvl_status,
-                           checks=daily_checks)
 
 
-@app.route("/welfare/findings")
-@login_required
-@welfare_officer_required
-def welfare_findings():
-    u = cur_user()
-    status = request.args.get("status", "open")
-    today = _wlf_today()
-    q = WlfFinding.query
-    if is_welfare_officer(u):
-        q = q.filter_by(officer_id=u.id)
-    else:
-        _c = cid()
-        if _c:
-            q = q.filter(WlfFinding.company_id == _c)
-    if status == "closed":
-        q = q.filter(WlfFinding.status == "closed")
-    elif status == "overdue":
-        q = q.filter(WlfFinding.status == "open",
-                     WlfFinding.due_date != None, WlfFinding.due_date < today)
-    else:
-        q = q.filter(WlfFinding.status == "open")
-    rows = q.order_by(
-        func.isnull(WlfFinding.due_date).asc(),
-        WlfFinding.due_date.asc(),
-        WlfFinding.id.desc()
-    ).limit(200).all()
-    return render_template("welfare_findings.html", rows=rows, status=status,
-                           today=today, locked=WLF_LOCKED_SEVERITY)
+def _save_report_pdf(file, company_id):
+    """Save uploaded PDF; return relative path or None on failure."""
+    if not file or not file.filename:
+        return None
+    fname = file.filename.lower()
+    if not fname.endswith(".pdf"):
+        return None
+    from werkzeug.utils import secure_filename
+    safe = secure_filename(file.filename)
+    uid = uuid.uuid4().hex[:10]
+    final_name = f"rpt_{uid}_{safe}"
+    subfolder = os.path.join(PDF_UPLOAD_DIR, str(company_id or "0"))
+    os.makedirs(subfolder, exist_ok=True)
+    file.save(os.path.join(subfolder, final_name))
+    return f"{company_id or 0}/{final_name}"
 
 
-@app.route("/welfare/finding/<int:fid>/close", methods=["GET", "POST"])
-@login_required
-@welfare_officer_required
-def welfare_finding_close(fid):
-    u = cur_user()
-    f = WlfFinding.query.filter_by(id=fid).first_or_404()
-    if is_welfare_officer(u) and f.officer_id != u.id:
-        abort(403)
-    # Trainees may not close Critical/High — supervisor verification required
-    if is_welfare_officer(u) and f.severity in WLF_LOCKED_SEVERITY:
-        flash("Critical and High findings require supervisor verification.", "warning")
-        return redirect(url_for("welfare_findings"))
-    if f.status == "closed":
-        return redirect(url_for("welfare_findings", status="closed"))
+# ── Welfare/Env officer — observations list & close ─────────────────
 
-    if request.method == "POST":
-        note = (request.form.get("closure_note") or "").strip()
-        if not note:
-            flash("Closure note is required.", "warning")
-            return redirect(url_for("welfare_finding_close", fid=f.id))
-        path = _save_hse_photo(request.files.get("after_photo"), "wlf", company_id=cid())
-        if not path:
-            flash("An after photo is required to close a finding.", "warning")
-            return redirect(url_for("welfare_finding_close", fid=f.id))
-        db.session.add(WlfPhoto(finding_id=f.id, item_key=f.item_key,
-                                ref_no=f.ref_no, photo_path=path, kind="after"))
-        f.closure_note = note
-        f.status = "closed"
-        f.closed_at = datetime.utcnow()
-        f.closed_by = u.id
-        db.session.commit()
-        flash("Finding closed.", "success")
-        return redirect(url_for("welfare_findings"))
+def _is_welfare_env_officer(u):
+    return getattr(u, "role", None) in ("safety_welfare", "environment_officer")
 
-    before = WlfPhoto.query.filter_by(round_id=f.round_id,
-                                      item_key=f.item_key, kind="before").all()
-    return render_template("welfare_finding_close.html", f=f, before=before)
 
+def _welfare_env_or_supervisor(u):
+    return getattr(u, "role", None) in (
+        "safety_welfare", "environment_officer",
+        "welfare_supervisor", "safety_supervisor",
+        "safety_manager", "admin", "super_admin",
+    )
 
-@app.route("/welfare/complaints")
-@login_required
-@welfare_officer_required
-def welfare_complaints():
-    u = cur_user()
-    q = WlfComplaint.query
-    if is_welfare_officer(u):
-        q = q.filter_by(officer_id=u.id, kind="facility")
-    else:
-        _c = cid()
-        if _c:
-            q = q.filter(WlfComplaint.company_id == _c)
-    rows = q.order_by(WlfComplaint.id.desc()).limit(100).all()
-    return render_template("welfare_complaints.html", rows=rows)
 
-
-@app.route("/welfare/complaint/new", methods=["GET", "POST"])
-@login_required
-@welfare_officer_required
-def welfare_complaint_new():
-    u = cur_user()
-    if request.method == "POST":
-        kind = request.form.get("kind") or "facility"
-        desc = (request.form.get("description") or "").strip()
-        if not desc:
-            flash("Description is required.", "warning")
-            return redirect(url_for("welfare_complaint_new"))
-        try:
-            n = int(request.form.get("raised_by_n") or 1)
-        except Exception:
-            n = 1
-        c = WlfComplaint(officer_id=u.id, company_id=cid(), date=_wlf_today(),
-                         unit=(request.form.get("unit") or "").strip(),
-                         kind=("escalate" if kind == "escalate" else "facility"),
-                         ref_no=(request.form.get("ref_no") or "").strip(),
-                         description=desc, raised_by_n=n,
-                         status=("escalated" if kind == "escalate" else "open"))
-        db.session.add(c)
-        db.session.commit()
-        if c.kind == "escalate":
-            flash("Escalated. Your supervisor will see this on their dashboard.", "success")
-        else:
-            flash("Complaint recorded.", "success")
-        return redirect(url_for("welfare_complaints"))
-    return render_template("welfare_complaint_new.html", units=WLF_UNITS)
-
-
-@app.route("/welfare/flaglog", methods=["GET", "POST"])
-@login_required
-@welfare_officer_required
-def welfare_flaglog():
-    u = cur_user()
-    today = _wlf_today()
-    if request.method == "POST":
-        hour = (request.form.get("hour_label") or "").strip()
-        if hour:
-            row = WlfFlagLog.query.filter_by(officer_id=u.id, date=today,
-                                             hour_label=hour).first()
-            if not row:
-                row = WlfFlagLog(officer_id=u.id, company_id=cid(),
-                                 date=today, hour_label=hour)
-                db.session.add(row)
-            row.flag = request.form.get("flag") or ""
-            row.index_value = (request.form.get("index_value") or "").strip()
-            db.session.commit()
-        return redirect(url_for("welfare_flaglog"))
-    rows = (WlfFlagLog.query.filter_by(officer_id=u.id, date=today)
-            .order_by(WlfFlagLog.hour_label.asc()).all())
-    hist = (WlfFlagLog.query.filter_by(officer_id=u.id)
-            .filter(WlfFlagLog.date < today)
-            .order_by(WlfFlagLog.date.desc(), WlfFlagLog.hour_label.asc())
-            .limit(40).all())
-    return render_template("welfare_flaglog.html", rows=rows, hist=hist,
-                           today=today, flags=WLF_FLAGS)
-
-
-@app.route("/welfare/path")
-@login_required
-@welfare_officer_required
-def welfare_path():
-    u = cur_user()
-    progs = _wlf_ensure_progress(u.id)
-    lvl_p, tasks, blocked, all_done = _wlf_gate_state(u.id)
-    return render_template("welfare_path.html", levels=WLF_LEVELS,
-                           progs=progs, current=lvl_p, tasks=tasks,
-                           blocked=blocked, all_done=all_done)
-
-
-@app.route("/welfare/level/<code>", methods=["GET", "POST"])
-@login_required
-@welfare_officer_required
-def welfare_level(code):
-    u = cur_user()
-    lvl = WLF_LEVEL_BY_CODE.get(code)
-    if not lvl:
-        abort(404)
-    progs = _wlf_ensure_progress(u.id)
-    p = progs.get(code)
-    if not p or p.status == "locked":
-        flash("This level is not unlocked yet.", "info")
-        return redirect(url_for("welfare_path"))
-    if request.method == "POST":
-        act = request.form.get("action")
-        if act == "brief" and not p.briefed_at:
-            p.briefed_at = datetime.utcnow()
-            db.session.commit()
-        elif act == "request_gate":
-            _p, tasks, blocked, all_done = _wlf_gate_state(u.id)
-            if blocked or not all_done:
-                flash(blocked or "Finish all tasks first.", "warning")
-            else:
-                # Handle deliverable file upload
-                _file = request.files.get("deliverable")
-                if _file and _file.filename:
-                    import os as _os, uuid as _uuid
-                    _ext = _os.path.splitext(_file.filename)[1].lower()
-                    _allowed = {".pdf", ".jpg", ".jpeg", ".png"}
-                    if _ext not in _allowed:
-                        flash("Deliverable must be PDF or image.", "warning")
-                        return redirect(url_for("welfare_level", code=code))
-                    _fname = f"wlf_del_{u.id}_{code}_{_uuid.uuid4().hex[:8]}{_ext}"
-                    _fdir = _os.path.join(app.root_path, "static", "hse_photos")
-                    _os.makedirs(_fdir, exist_ok=True)
-                    _file.save(_os.path.join(_fdir, _fname))
-                    p.deliverable = _fname
-                p.status = "pending"
-                p.completed_at = datetime.utcnow()
-                db.session.commit()
-                flash("Sent to your supervisor for approval.", "success")
-        return redirect(url_for("welfare_level", code=code))
-    lvl_p, tasks, blocked, all_done = _wlf_gate_state(u.id)
-    is_current = bool(lvl_p) and lvl_p.level_code == code
-    return render_template("welfare_level.html", lvl=lvl, p=p,
-                           tasks=(tasks if is_current else []),
-                           blocked=(blocked if is_current else None),
-                           all_done=(all_done if is_current else False),
-                           is_current=is_current)
-
-
-@app.route("/welfare/level/<code>/work/new", methods=["GET", "POST"])
-@login_required
-@welfare_officer_required
-def welfare_level_work_new(code):
-    u = cur_user()
-    lvl = WLF_LEVEL_BY_CODE.get(code)
-    if not lvl:
-        abort(404)
-    progs = _wlf_ensure_progress(u.id)
-    p = progs.get(code)
-    if not p or p.status == "locked":
-        flash("This level is not unlocked yet.", "info")
-        return redirect(url_for("welfare_path"))
-    today = _wlf_today()
-    if request.method == "POST":
-        unit  = (request.form.get("unit") or "").strip()
-        notes = (request.form.get("notes") or "").strip()
-        measured = bool(request.form.get("has_measurement"))
-        w = WlfLevelWork(
-            officer_id=u.id, company_id=cid(),
-            level_code=code, date=today,
-            unit=unit or None,
-            has_measurement=measured,
-            notes=notes or None,
-        )
-        db.session.add(w)
-        db.session.commit()
-        flash("Work recorded — great job!", "success")
-        return redirect(url_for("welfare_level", code=code))
-    # counts for progress display
-    done_count = WlfLevelWork.query.filter_by(officer_id=u.id, level_code=code).count()
-    target = lvl["tasks"][0]["target"] if lvl.get("tasks") else 1
-    # recent submissions for this level
-    recent = (WlfLevelWork.query
-              .filter_by(officer_id=u.id, level_code=code)
-              .order_by(WlfLevelWork.date.desc()).limit(10).all())
-    # parse what → field / desk / analysis
-    what_raw = lvl.get("what", "")
-    what_field = what_desk = what_analysis = ""
-    if "\nDesk:" in what_raw:
-        _parts = what_raw.split("\nDesk:", 1)
-        what_field = _parts[0].replace("Field:", "").strip()
-        _rest = _parts[1]
-        if "\nAnalysis:" in _rest:
-            _p2 = _rest.split("\nAnalysis:", 1)
-            what_desk     = _p2[0].strip()
-            what_analysis = _p2[1].strip()
-        else:
-            what_desk = _rest.strip()
-    else:
-        what_field = what_raw.replace("Field:", "").strip()
-    return render_template("welfare_level_work.html",
-                           lvl=lvl, p=p, today=today,
-                           locations=WLF_LOCATIONS,
-                           done_count=done_count, target=target,
-                           recent=recent,
-                           what_field=what_field,
-                           what_desk=what_desk,
-                           what_analysis=what_analysis)
-
-
-def _env_gate_state(uid):
-    p = _env_current_level(uid)
-    lvl = ENV_LEVEL_BY_CODE.get(p.level_code) if p else None
-    if not lvl:
-        return None, [], None, False
-    counters = _env_counters(uid)
-    tasks, all_done = [], True
-    for t in lvl.get("tasks", []):
-        have = counters.get(t["k"], 0)
-        done = have >= t["target"]
-        all_done = all_done and done
-        tasks.append({"label": t["label"], "have": have,
-                      "target": t["target"], "done": done})
-    overdue = _wlf_overdue(uid)
-    blocked = None
-    if overdue:
-        blocked = f"Clear {len(overdue)} overdue finding(s) to unlock the gate"
-    return p, tasks, blocked, all_done
-
-
-# ── Environment routes: trainee ──────────────────────────────────────
-
-@app.route("/env/path")
-@login_required
-@environment_officer_required
-def env_path():
-    u = cur_user()
-    progs = _env_ensure_progress(u.id)
-    lvl_p, tasks, blocked, all_done = _env_gate_state(u.id)
-    return render_template("env_path.html", levels=ENV_LEVELS,
-                           progs=progs, current=lvl_p, tasks=tasks,
-                           blocked=blocked, all_done=all_done)
-
-
-@app.route("/env/level/<code>", methods=["GET", "POST"])
-@login_required
-@environment_officer_required
-def env_level(code):
-    u = cur_user()
-    lvl = ENV_LEVEL_BY_CODE.get(code)
-    if not lvl:
-        abort(404)
-    progs = _env_ensure_progress(u.id)
-    p = progs.get(code)
-    if not p or p.status == "locked":
-        flash("This level is not unlocked yet.", "info")
-        return redirect(url_for("env_path"))
-    if request.method == "POST":
-        act = request.form.get("action")
-        if act == "brief" and not p.briefed_at:
-            p.briefed_at = datetime.utcnow()
-            db.session.commit()
-        elif act == "request_gate":
-            _p, tasks, blocked, all_done = _env_gate_state(u.id)
-            if blocked or not all_done:
-                flash(blocked or "Finish all tasks first.", "warning")
-            else:
-                _file = request.files.get("deliverable")
-                if _file and _file.filename:
-                    import os as _os, uuid as _uuid
-                    _ext = _os.path.splitext(_file.filename)[1].lower()
-                    if _ext not in {".pdf", ".jpg", ".jpeg", ".png"}:
-                        flash("Deliverable must be PDF or image.", "warning")
-                        return redirect(url_for("env_level", code=code))
-                    _fname = f"env_del_{u.id}_{code}_{_uuid.uuid4().hex[:8]}{_ext}"
-                    _fdir = _os.path.join(app.root_path, "static", "hse_photos")
-                    _os.makedirs(_fdir, exist_ok=True)
-                    _file.save(_os.path.join(_fdir, _fname))
-                    p.deliverable = _fname
-                p.status = "pending"
-                p.completed_at = datetime.utcnow()
-                db.session.commit()
-                flash("Sent to your supervisor for approval.", "success")
-        return redirect(url_for("env_level", code=code))
-    lvl_p, tasks, blocked, all_done = _env_gate_state(u.id)
-    is_current = bool(lvl_p) and lvl_p.level_code == code
-    return render_template("env_level.html", lvl=lvl, p=p,
-                           tasks=(tasks if is_current else []),
-                           blocked=(blocked if is_current else None),
-                           all_done=(all_done if is_current else False),
-                           is_current=is_current)
-
-
-@app.route("/env/level/<code>/work/new", methods=["GET", "POST"])
-@login_required
-@environment_officer_required
-def env_level_work_new(code):
-    u = cur_user()
-    lvl = ENV_LEVEL_BY_CODE.get(code)
-    if not lvl:
-        abort(404)
-    progs = _env_ensure_progress(u.id)
-    p = progs.get(code)
-    if not p or p.status == "locked":
-        flash("This level is not unlocked yet.", "info")
-        return redirect(url_for("env_path"))
-    today = _wlf_today()
-    if request.method == "POST":
-        unit     = (request.form.get("unit") or "").strip()
-        notes    = (request.form.get("notes") or "").strip()
-        measured = bool(request.form.get("has_measurement"))
-        w = EnvLevelWork(
-            officer_id=u.id, company_id=cid(),
-            level_code=code, date=today,
-            unit=unit or None,
-            has_measurement=measured,
-            notes=notes or None,
-        )
-        db.session.add(w)
-        db.session.commit()
-        flash("Work recorded — great job!", "success")
-        return redirect(url_for("env_level", code=code))
-    done_count = EnvLevelWork.query.filter_by(officer_id=u.id, level_code=code).count()
-    target = lvl["tasks"][0]["target"] if lvl.get("tasks") else 1
-    recent = (EnvLevelWork.query
-              .filter_by(officer_id=u.id, level_code=code)
-              .order_by(EnvLevelWork.date.desc()).limit(10).all())
-    what_raw = lvl.get("what", "")
-    what_field = what_desk = what_analysis = ""
-    if "\nDesk:" in what_raw:
-        _parts = what_raw.split("\nDesk:", 1)
-        what_field = _parts[0].replace("Field:", "").strip()
-        _rest = _parts[1]
-        if "\nAnalysis:" in _rest:
-            _p2 = _rest.split("\nAnalysis:", 1)
-            what_desk     = _p2[0].strip()
-            what_analysis = _p2[1].strip()
-        else:
-            what_desk = _rest.strip()
-    else:
-        what_field = what_raw.replace("Field:", "").strip()
-    return render_template("env_level_work.html",
-                           lvl=lvl, p=p, today=today,
-                           locations=WLF_LOCATIONS,
-                           done_count=done_count, target=target,
-                           recent=recent,
-                           what_field=what_field,
-                           what_desk=what_desk,
-                           what_analysis=what_analysis)
-
-
-@app.route("/welfare/kpis")
-@login_required
-@welfare_officer_required
-def welfare_kpis():
-    u = cur_user()
-    today = _wlf_today()
-    month_start = today.replace(day=1)
-    c = _wlf_counters(u.id, since=month_start)
-    finds = WlfFinding.query.filter(WlfFinding.officer_id == u.id,
-                                    WlfFinding.date >= month_start).all()
-    closed = [f for f in finds if f.status == "closed"]
-    on_time = sum(1 for f in closed
-                  if f.due_date and f.closed_at and f.closed_at.date() <= f.due_date)
-    pct_on_time = round(on_time * 100.0 / len(closed), 1) if closed else None
-    lvl_p, tasks, blocked, all_done = _wlf_gate_state(u.id)
-    return render_template("welfare_kpis.html", c=c, month_start=month_start,
-                           pct_on_time=pct_on_time, open_n=len(finds) - len(closed),
-                           tasks=tasks, blocked=blocked,
-                           level=(WLF_LEVEL_BY_CODE.get(lvl_p.level_code) if lvl_p else None),
-                           units_total=len(WLF_UNITS))
-
-
-@app.route("/welfare/sw.js")
-def welfare_sw():
-    """Service worker so the field page opens with no signal."""
-    js = """
-const CACHE = 'wlf-v1';
-self.addEventListener('install', e => { self.skipWaiting(); });
-self.addEventListener('activate', e => { e.waitUntil(self.clients.claim()); });
-self.addEventListener('fetch', e => {
-  const url = new URL(e.request.url);
-  if (e.request.method !== 'GET') return;
-  if (!url.pathname.startsWith('/welfare/') && !url.pathname.startsWith('/static/')) return;
-  e.respondWith(
-    fetch(e.request).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(e.request, copy)).catch(()=>{});
-      return res;
-    }).catch(() => caches.match(e.request))
-  );
-});
-"""
-    return Response(js, mimetype="application/javascript")
-
-
-# ── Welfare routes: supervisor ───────────────────────────────────────
-
-@app.route("/welfare/supervisor")
-@login_required
-@welfare_supervisor_required
-def welfare_supervisor():
-    today = _wlf_today()
-    week_start = today - timedelta(days=6)
-    officers = _wlf_officers_scoped()
-    cards = []
-    for o in officers:
-        rounds_w = WlfLevelWork.query.filter(WlfLevelWork.officer_id == o.id,
-                                              WlfLevelWork.date >= week_start).count()
-        overdue = len(_wlf_overdue(o.id))
-        lvl_p, tasks, blocked, all_done = _wlf_gate_state(o.id)
-        # evidence package for gate approval
-        evidence = None
-        if lvl_p and lvl_p.status == "pending":
-            month_start = today.replace(day=1)
-            ev_counters = _wlf_counters(o.id, since=month_start)
-            ev_finds = WlfFinding.query.filter(
-                WlfFinding.officer_id == o.id,
-                WlfFinding.date >= month_start).all()
-            ev_closed = sum(1 for f in ev_finds if f.status == "closed")
-            evidence = {
-                "counters": ev_counters,
-                "finds_open": len(ev_finds) - ev_closed,
-                "finds_closed": ev_closed,
-            }
-        cards.append({
-            "u": o, "rounds_w": rounds_w, "pending_sync": 0,
-            "overdue": overdue, "today": None,
-            "level": (WLF_LEVEL_BY_CODE.get(lvl_p.level_code) if lvl_p else None),
-            "level_status": (lvl_p.status if lvl_p else ""),
-            "level_code": (lvl_p.level_code if lvl_p else ""),
-            "deliverable": (lvl_p.deliverable if lvl_p else None),
-            "tasks": tasks, "blocked": blocked, "all_done": all_done,
-            "evidence": evidence,
-        })
-    esc = (WlfComplaint.query.filter(WlfComplaint.kind == "escalate",
-                                     WlfComplaint.status == "escalated")
-           .order_by(WlfComplaint.id.desc()).limit(20).all())
-    _c = cid()
-    if _c:
-        esc = [e for e in esc if e.company_id == _c]
-    # overdue queries (open > SLA hours)
-    sla_cutoff = datetime.utcnow() - timedelta(hours=WLF_QUERY_SLA_HOURS)
-    oq = (WlfQuery.query.filter(WlfQuery.status == "open",
-                                WlfQuery.created_at <= sla_cutoff)
-          .order_by(WlfQuery.created_at.asc()).all())
-    if _c:
-        oq = [q for q in oq if q.company_id == _c]
-    # gather names for display
-    all_ids = set()
-    for q in oq:
-        all_ids.update([q.asker_id, q.assignee_id])
-    all_ids.discard(None)
-    oq_names = {}
-    if all_ids:
-        from sqlalchemy import text as _t
-        rows_ = db.session.execute(
-            _t("SELECT id, name FROM user WHERE id IN :ids"), {"ids": tuple(all_ids)}
-        ).fetchall()
-        oq_names = {r[0]: r[1] for r in rows_}
-    # open findings (Critical / High) across all officers
-    open_finds = (WlfFinding.query
-                  .filter(WlfFinding.status.in_(["open", "in_progress"]),
-                          WlfFinding.severity.in_(["Critical", "High"]))
-                  .order_by(WlfFinding.severity.asc(), WlfFinding.date.desc())
-                  .limit(50).all())
-    if _c:
-        open_finds = [f for f in open_finds if f.company_id == _c]
-    # map officer names
-    find_officer_ids = {f.officer_id for f in open_finds}
-    find_names = {}
-    if find_officer_ids:
-        from sqlalchemy import text as _t2
-        fn_rows = db.session.execute(
-            _t2("SELECT id, name FROM user WHERE id IN :ids"),
-            {"ids": tuple(find_officer_ids)}
-        ).fetchall()
-        find_names = {r[0]: r[1] for r in fn_rows}
-    return render_template("welfare_supervisor.html", cards=cards, today=today,
-                           escalations=esc, overdue_queries=oq, oq_names=oq_names,
-                           current_season=_wlf_season(),
-                           open_finds=open_finds, find_names=find_names)
-
-
-@app.route("/welfare/approve/<int:uid>/<code>", methods=["POST"])
-@login_required
-@welfare_supervisor_required
-def welfare_approve(uid, code):
-    me = cur_user()
-    p = WlfProgress.query.filter_by(officer_id=uid, level_code=code).first_or_404()
-    if p.status != "pending":
-        flash("This level is not awaiting approval.", "info")
-        return redirect(url_for("welfare_supervisor"))
-    p.status = "done"
-    p.approved_by = me.id
-    p.approved_at = datetime.utcnow()
-    idx = WLF_LEVEL_CODES.index(code)
-    if idx + 1 < len(WLF_LEVEL_CODES):
-        nxt = WlfProgress.query.filter_by(officer_id=uid,
-                                          level_code=WLF_LEVEL_CODES[idx + 1]).first()
-        if nxt and nxt.status == "locked":
-            nxt.status = "active"
-    db.session.commit()
-    flash(f"{code} approved.", "success")
-    return redirect(url_for("welfare_supervisor"))
-
-
-@app.route("/welfare/approve_reject/<int:uid>/<code>", methods=["POST"])
-@login_required
-@welfare_supervisor_required
-def welfare_approve_reject(uid, code):
-    p = WlfProgress.query.filter_by(officer_id=uid, level_code=code).first_or_404()
-    if p.status != "pending":
-        flash("This level is not awaiting approval.", "info")
-        return redirect(url_for("welfare_supervisor"))
-    reason = (request.form.get("reason") or "").strip()
-    p.status = "active"
-    p.notes = (f"Returned by supervisor: {reason}" if reason else "Returned by supervisor")
-    db.session.commit()
-    flash(f"{code} sent back to officer{(': ' + reason) if reason else ''}.", "warning")
-    return redirect(url_for("welfare_supervisor"))
-
-
-@app.route("/env/supervisor")
-@login_required
-@welfare_supervisor_required
-def env_supervisor():
-    """Supervisor view: pending env gate approvals for all environment officers."""
-    _c = cid()
-    q = User.query.filter(User.role == "environment_officer", User.is_active == True)
-    if _c:
-        q = q.filter(User.company_id == _c)
-    officers = q.order_by(User.name.asc()).all()
-
-    cards = []
-    for o in officers:
-        progs = _env_ensure_progress(o.id)
-        lvl_p, tasks, blocked, all_done = _env_gate_state(o.id)
-        lvl = ENV_LEVEL_BY_CODE.get(lvl_p.level_code) if lvl_p else None
-        since_dt = datetime.utcnow() - timedelta(days=30)
-        counters = _env_counters(o.id, since=since_dt.date())
-        rounds_w = (EnvLevelWork.query.filter_by(officer_id=o.id)
-                    .filter(EnvLevelWork.date >= (_wlf_today() - timedelta(days=7)))
-                    .count())
-        overdue = len(_wlf_overdue(o.id))
-        # build evidence package for pending levels
-        evidence = None
-        if lvl_p and lvl_p.status == "pending":
-            last5 = (EnvLevelWork.query.filter_by(officer_id=o.id, level_code=lvl_p.level_code)
-                     .order_by(EnvLevelWork.date.desc()).limit(5).all())
-            finds_closed = WlfFinding.query.filter_by(officer_id=o.id, status="closed").count()
-            finds_open   = WlfFinding.query.filter_by(officer_id=o.id, status="open").count()
-            evidence = {"last5": last5, "counters": counters,
-                        "finds_closed": finds_closed, "finds_open": finds_open,
-                        "photos": []}
-        cards.append({"u": o, "level_code": lvl_p.level_code if lvl_p else "—",
-                      "level": lvl, "level_status": lvl_p.status if lvl_p else None,
-                      "tasks": tasks, "blocked": blocked,
-                      "rounds_w": rounds_w, "overdue": overdue,
-                      "evidence": evidence,
-                      "deliverable": lvl_p.deliverable if lvl_p else None})
-    return render_template("env_supervisor.html", cards=cards,
-                           today=_wlf_today())
-
-
-@app.route("/env/approve/<int:uid>/<code>", methods=["POST"])
-@login_required
-@welfare_supervisor_required
-def env_approve(uid, code):
-    me = cur_user()
-    p = EnvProgress.query.filter_by(officer_id=uid, level_code=code).first_or_404()
-    if p.status != "pending":
-        flash("This level is not awaiting approval.", "info")
-        return redirect(url_for("env_supervisor"))
-    p.status = "done"
-    p.approved_by = me.id
-    p.approved_at = datetime.utcnow()
-    idx = ENV_LEVEL_CODES.index(code)
-    if idx + 1 < len(ENV_LEVEL_CODES):
-        nxt = EnvProgress.query.filter_by(officer_id=uid,
-                                          level_code=ENV_LEVEL_CODES[idx + 1]).first()
-        if nxt and nxt.status == "locked":
-            nxt.status = "active"
-    db.session.commit()
-    flash(f"{code} approved.", "success")
-    return redirect(url_for("env_supervisor"))
-
-
-@app.route("/env/approve_reject/<int:uid>/<code>", methods=["POST"])
-@login_required
-@welfare_supervisor_required
-def env_approve_reject(uid, code):
-    p = EnvProgress.query.filter_by(officer_id=uid, level_code=code).first_or_404()
-    if p.status != "pending":
-        flash("This level is not awaiting approval.", "info")
-        return redirect(url_for("env_supervisor"))
-    reason = (request.form.get("reason") or "").strip()
-    p.status = "active"
-    p.notes = (f"Returned by supervisor: {reason}" if reason else "Returned by supervisor")
-    db.session.commit()
-    flash(f"{code} sent back to officer{(': ' + reason) if reason else ''}.", "warning")
-    return redirect(url_for("env_supervisor"))
-
-
-@app.route("/welfare/escalation/<int:cid_>/ack", methods=["POST"])
-@login_required
-@welfare_supervisor_required
-def welfare_escalation_ack(cid_):
-    c = WlfComplaint.query.filter_by(id=cid_).first_or_404()
-    c.seen_by_sup = True
-    c.status = "closed"
-    db.session.commit()
-    return redirect(url_for("welfare_supervisor"))
-
-
-@app.route("/welfare/finding/<int:fid>/verify", methods=["POST"])
-@login_required
-@welfare_supervisor_required
-def welfare_finding_verify(fid):
-    me = cur_user()
-    f = WlfFinding.query.filter_by(id=fid).first_or_404()
-    f.status = "closed"
-    f.closure_note = ((f.closure_note or "") +
-                      " | Verified by supervisor: " +
-                      (request.form.get("note") or "").strip()).strip(" |")
-    f.closed_at = datetime.utcnow()
-    f.closed_by = me.id
-    db.session.commit()
-    flash("Finding verified and closed.", "success")
-    return redirect(request.referrer or url_for("welfare_supervisor"))
-
-
-def _env_period_stats(officer_id, d_start, d_end):
-    """Compute environment officer stats for any date range."""
-    def _cnt(model):
-        return model.query.filter_by(officer_id=officer_id).filter(
-            model.date >= d_start, model.date <= d_end).count()
-    waste  = _cnt(EnvWasteCheck)
-    soil   = _cnt(EnvSoilWaterCheck)
-    dust   = _cnt(EnvDustCheck)
-    hazcom = _cnt(EnvHazcomCheck)
-    sewage = _cnt(EnvSewageCheck)
-    days   = (d_end - d_start).days + 1
-    incidents_new  = EnvIncident.query.filter_by(officer_id=officer_id).filter(
-        EnvIncident.date >= d_start, EnvIncident.date <= d_end).count()
-    incidents_open = EnvIncident.query.filter_by(officer_id=officer_id, status="open").count()
-    level_work     = EnvLevelWork.query.filter_by(officer_id=officer_id).filter(
-        EnvLevelWork.date >= d_start, EnvLevelWork.date <= d_end).count()
-    total = waste + soil + dust + hazcom + sewage
-    return {
-        "waste": waste, "soil": soil, "dust": dust, "hazcom": hazcom, "sewage": sewage,
-        "total": total, "max": days * 5,
-        "incidents_new": incidents_new, "incidents_open": incidents_open,
-        "level_work": level_work, "zero": total == 0,
-    }
-
-
-def _wlf_week_stats(officer_id, week_start):
-    """Compute this-week welfare stats for one officer from existing DB tables."""
-    week_end = week_start + timedelta(days=6)
-    works = (WlfLevelWork.query
-             .filter_by(officer_id=officer_id)
-             .filter(WlfLevelWork.date >= week_start, WlfLevelWork.date <= week_end)
-             .order_by(WlfLevelWork.date.asc()).all())
-    finds = (WlfFinding.query
-             .filter_by(officer_id=officer_id)
-             .filter(WlfFinding.date >= week_start, WlfFinding.date <= week_end)
-             .all())
-    finds_open   = [f for f in finds if f.status != "closed"]
-    finds_closed = [f for f in finds if f.status == "closed"]
-    complaints = (WlfComplaint.query
-                  .filter_by(officer_id=officer_id)
-                  .filter(WlfComplaint.date >= week_start, WlfComplaint.date <= week_end)
-                  .all())
-    overdue = [f for f in WlfFinding.query.filter_by(officer_id=officer_id,
-               status="open").all()
-               if f.due_date and f.due_date < week_end]
-    scores = [w.score for w in works if w.score is not None]
-    avg_score = round(sum(scores) / len(scores), 1) if scores else None
-    return {
-        "rounds": works, "round_count": len(works),
-        "finds_new": len(finds), "finds_open": len(finds_open),
-        "finds_closed": len(finds_closed),
-        "finds_critical": [f for f in finds_open if f.severity in ("Critical","High")],
-        "complaints": len(complaints), "overdue": len(overdue),
-        "avg_score": avg_score,
-    }
-
-
-@app.route("/welfare/weekly", methods=["GET", "POST"])
-@login_required
-@welfare_officer_required
-def welfare_weekly():
-    u = cur_user()
-    today = _wlf_today()
-    week_start = today - timedelta(days=(today.weekday() + 1) % 7)
-    existing = WlfWeeklyReport.query.filter_by(
-        officer_id=u.id, week_start=week_start).first()
-    stats = _wlf_week_stats(u.id, week_start)
-    if request.method == "POST":
-        note = (request.form.get("officer_note") or "").strip()
-        if existing:
-            existing.officer_note = note or None
-        else:
-            wr = WlfWeeklyReport(company_id=cid(), officer_id=u.id,
-                                 week_start=week_start, officer_note=note or None)
-            db.session.add(wr)
-        db.session.commit()
-        flash("Weekly report shared with supervisor.", "success")
-        return redirect(url_for("welfare_home"))
-    # past 6 weeks
-    past = []
-    for i in range(1, 7):
-        ws = week_start - timedelta(weeks=i)
-        wr = WlfWeeklyReport.query.filter_by(officer_id=u.id, week_start=ws).first()
-        past.append({"week_start": ws, "wr": wr,
-                     "stats": _wlf_week_stats(u.id, ws)})
-    return render_template("welfare_weekly.html",
-                           week_start=week_start, existing=existing,
-                           stats=stats, past=past)
-
-
-@app.route("/welfare/officer/<int:uid>")
-@login_required
-@welfare_supervisor_required
-def welfare_officer_profile(uid):
-    """Full profile page for one welfare officer — visible to supervisor/admin."""
-    from sqlalchemy import desc as _desc2
-    o = User.query.get_or_404(uid)
-    today  = _wlf_today()
-    month_start = today.replace(day=1)
-    import calendar as _cal
-    month_end = month_start.replace(
-        day=_cal.monthrange(month_start.year, month_start.month)[1])
-
-    # ── Last 30 level work submissions ──
-    rounds = (WlfLevelWork.query
-              .filter_by(officer_id=uid)
-              .order_by(_desc2(WlfLevelWork.date), _desc2(WlfLevelWork.id))
-              .limit(30).all())
-
-    # ── All findings ──
-    findings = (WlfFinding.query
-                .filter_by(officer_id=uid)
-                .order_by(_desc2(WlfFinding.date))
-                .limit(50).all())
-    finds_open   = [f for f in findings if f.status == "open"]
-    finds_closed = [f for f in findings if f.status == "closed"]
-
-    # ── Complaints ──
-    complaints = (WlfComplaint.query
-                  .filter_by(officer_id=uid)
-                  .order_by(_desc2(WlfComplaint.date))
-                  .limit(30).all())
-
-    # ── Level progress ──
-    all_progress = {p.level_code: p
-                    for p in WlfProgress.query.filter_by(officer_id=uid).all()}
-    level_rows = []
-    for lvl in WLF_LEVELS:
-        p = all_progress.get(lvl["code"])
-        level_rows.append({"lvl": lvl, "p": p,
-                            "status": p.status if p else "locked"})
-
-    # ── Weekly reports — last 8 ──
-    week_start_sun = today - timedelta(days=(today.isoweekday() % 7))
-    weekly_reports = []
-    for i in range(8):
-        ws = week_start_sun - timedelta(weeks=i)
-        wr = WlfWeeklyReport.query.filter_by(officer_id=uid, week_start=ws).first()
-        s  = _wlf_week_stats(uid, ws)
-        weekly_reports.append({"week_start": ws, "wr": wr, "stats": s})
-
-    # ── Monthly card data ──
-    monthly = _wlf_monthly_card_data(o, month_start, month_end)
-
-    return render_template("welfare_officer_profile.html",
-                           o=o, today=today, rounds=rounds,
-                           findings=findings,
-                           finds_open=finds_open, finds_closed=finds_closed,
-                           complaints=complaints,
-                           level_rows=level_rows, weekly_reports=weekly_reports,
-                           monthly=monthly,
-                           month_start=month_start)
-
-
-@app.route("/welfare/monthly")
-@login_required
-@welfare_supervisor_required
-def welfare_monthly_overview():
-    """One-page overview: all officers, pick a month."""
-    today = _wlf_today()
-    month_str = request.args.get("month", today.strftime("%Y-%m"))
-    try:
-        month_start = datetime.strptime(month_str + "-01", "%Y-%m-%d").date()
-    except ValueError:
-        month_start = today.replace(day=1)
-    import calendar
-    last_day = calendar.monthrange(month_start.year, month_start.month)[1]
-    month_end = month_start.replace(day=last_day)
-    officers = _wlf_officers_scoped()
-    cards = []
-    for o in officers:
-        cards.append(_wlf_monthly_card_data(o, month_start, month_end))
-    return render_template("welfare_monthly_overview.html",
-                           cards=cards, month_start=month_start,
-                           month_str=month_str)
-
-
-@app.route("/welfare/monthly/<int:uid>")
-@login_required
-@welfare_supervisor_required
-def welfare_monthly_card(uid):
-    """Printable single-officer monthly card."""
-    from sqlalchemy import text as _sqlt
-    o = db.session.get(User, uid)
-    if not o:
-        abort(404)
-    today = _wlf_today()
-    month_str = request.args.get("month", today.strftime("%Y-%m"))
-    try:
-        month_start = datetime.strptime(month_str + "-01", "%Y-%m-%d").date()
-    except ValueError:
-        month_start = today.replace(day=1)
-    import calendar
-    last_day = calendar.monthrange(month_start.year, month_start.month)[1]
-    month_end = month_start.replace(day=last_day)
-    data = _wlf_monthly_card_data(o, month_start, month_end)
-    return render_template("welfare_monthly_card.html",
-                           d=data, month_start=month_start, month_str=month_str)
-
-
-def _wlf_monthly_card_data(o, month_start, month_end):
-    """Build the full data dict for one officer's monthly card."""
-    works = (WlfLevelWork.query
-             .filter_by(officer_id=o.id)
-             .filter(WlfLevelWork.date >= month_start, WlfLevelWork.date <= month_end)
-             .all())
-    finds = (WlfFinding.query
-             .filter_by(officer_id=o.id)
-             .filter(WlfFinding.date >= month_start, WlfFinding.date <= month_end)
-             .all())
-    finds_open   = [f for f in finds if f.status != "closed"]
-    finds_closed = [f for f in finds if f.status == "closed"]
-    on_time = sum(1 for f in finds_closed
-                  if f.due_date and f.closed_at and f.closed_at.date() <= f.due_date)
-    complaints = (WlfComplaint.query
-                  .filter_by(officer_id=o.id)
-                  .filter(WlfComplaint.date >= month_start,
-                          WlfComplaint.date <= month_end).all())
-    weekly_shared = (WlfWeeklyReport.query
-                     .filter_by(officer_id=o.id)
-                     .filter(WlfWeeklyReport.week_start >= month_start,
-                             WlfWeeklyReport.week_start <= month_end).all())
-    lvl_p, _, _, _ = _wlf_gate_state(o.id)
-    lvl = WLF_LEVEL_BY_CODE.get(lvl_p.level_code) if lvl_p else None
-    done_idx = WLF_LEVEL_CODES.index(lvl_p.level_code) if lvl_p else 0
-    return {
-        "u": o,
-        "rounds": len(works),
-        "finds_new": len(finds), "finds_closed": len(finds_closed),
-        "finds_open": len(finds_open),
-        "on_time_pct": round(on_time * 100 / len(finds_closed)) if finds_closed else None,
-        "complaints": len(complaints),
-        "weekly_shared": len(weekly_shared),
-        "level_no": done_idx + 1, "level_total": len(WLF_LEVEL_CODES),
-        "level": lvl, "level_status": (lvl_p.status if lvl_p else ""),
-    }
-
-
-@app.route("/welfare/weekly_reports")
-@login_required
-@welfare_supervisor_required
-def welfare_weekly_reports():
-    officers = _wlf_officers_scoped()
-    today = _wlf_today()
-    week_start = today - timedelta(days=(today.weekday() + 1) % 7)
-    rows = []
-    for o in officers:
-        weeks = []
-        for i in range(6):
-            ws = week_start - timedelta(weeks=i)
-            wr = WlfWeeklyReport.query.filter_by(officer_id=o.id, week_start=ws).first()
-            weeks.append({"week_start": ws, "wr": wr,
-                          "stats": _wlf_week_stats(o.id, ws)})
-        rows.append({"u": o, "weeks": weeks})
-    return render_template("welfare_weekly_reports.html",
-                           rows=rows, week_start=week_start)
-
-
-@app.route("/welfare/weekly_comment/<int:wrid>", methods=["POST"])
-@login_required
-@welfare_supervisor_required
-def welfare_weekly_comment(wrid):
-    wr = WlfWeeklyReport.query.filter_by(id=wrid).first_or_404()
-    wr.sup_comment = (request.form.get("comment") or "").strip() or None
-    wr.sup_seen = True
-    db.session.commit()
-    flash("Comment saved.", "success")
-    return redirect(url_for("welfare_weekly_reports"))
-
-
-# ── Welfare: formal weekly report (picker + printable table) ──────────
-
-@app.route("/welfare/report/weekly")
-@login_required
-@welfare_supervisor_required
-def welfare_report_weekly_picker():
-    today = _wlf_today()
-    days_since_sunday = today.isoweekday() % 7
-    default_ws = today - timedelta(days=days_since_sunday)
-    all_officers = _all_officers_scoped()
-    return render_template("welfare_report_weekly_picker.html",
-                           default_ws=default_ws,
-                           all_officers=all_officers)
-
-
-@app.route("/welfare/report/weekly/view")
-@login_required
-@welfare_supervisor_required
-def welfare_report_weekly_view():
-    import calendar as _cal
-    today = _wlf_today()
-    raw = request.args.get("week_start")
-    try:
-        ws = datetime.strptime(raw, "%Y-%m-%d").date() if raw else None
-    except ValueError:
-        ws = None
-    if not ws:
-        days_since_sunday = today.isoweekday() % 7
-        ws = today - timedelta(days=days_since_sunday)
-    we = ws + timedelta(days=6)
-
-    selected_ids_raw = request.args.getlist("officer_ids")
-    selected_ids = [int(x) for x in selected_ids_raw if x.isdigit()] if selected_ids_raw else []
-
-    all_officers = _all_officers_scoped()
-    officers = [o for o in all_officers if o.id in selected_ids] if selected_ids else all_officers
-
-    wlf_rows = []
-    env_rows = []
-    for o in officers:
-        if o.role == "environment_officer":
-            s = _env_period_stats(o.id, ws, we)
-            env_rows.append({"officer_id": o.id, "officer_name": o.name, **s})
-        else:
-            s = _wlf_week_stats(o.id, ws)
-            wr = WlfWeeklyReport.query.filter_by(officer_id=o.id, week_start=ws).first()
-            pts = s["round_count"] * 3 + s["finds_closed"] * 2 - s["overdue"]
-            wlf_rows.append({
-                "officer_id":   o.id,
-                "officer_name": o.name,
-                "role":         o.role,
-                "rounds":       s["round_count"],
-                "finds_new":    s["finds_new"],
-                "finds_closed": s["finds_closed"],
-                "overdue":      s["overdue"],
-                "complaints":   s["complaints"],
-                "shared":       wr is not None,
-                "officer_note": wr.officer_note if wr else None,
-                "points":       pts,
-                "zero":         s["round_count"] == 0,
-            })
-    wlf_rows.sort(key=lambda r: r["points"], reverse=True)
-    env_rows.sort(key=lambda r: r["total"], reverse=True)
-    return render_template("welfare_report_weekly_view.html",
-                           wlf_rows=wlf_rows, env_rows=env_rows, ws=ws, we=we,
-                           now=datetime.now(RIYADH_TZ))
-
-
-# ── Welfare: formal monthly report (picker + printable table) ─────────
-
-@app.route("/welfare/report/monthly")
-@login_required
-@welfare_supervisor_required
-def welfare_report_monthly_picker():
-    today = _wlf_today()
-    all_officers = _all_officers_scoped()
-    return render_template("welfare_report_monthly_picker.html", today=today, all_officers=all_officers)
-
-
-@app.route("/welfare/report/monthly/view")
-@login_required
-@welfare_supervisor_required
-def welfare_report_monthly_view():
-    import calendar as _cal
-    today = _wlf_today()
-    raw_month = request.args.get("month", "")
-    try:
-        if "-" in raw_month:          # format: YYYY-MM  (from <input type="month">)
-            year, month = map(int, raw_month.split("-")[:2])
-        else:
-            year  = int(request.args.get("year",  today.year))
-            month = int(request.args.get("month", today.month))
-    except (ValueError, TypeError):
-        year, month = today.year, today.month
-    month_start = today.replace(year=year, month=month, day=1)
-    last_day    = _cal.monthrange(year, month)[1]
-    month_end   = month_start.replace(day=last_day)
-    month_name  = month_start.strftime("%B")
-
-    selected_ids_raw = request.args.getlist("officer_ids")
-    selected_ids = [int(x) for x in selected_ids_raw if x.isdigit()] if selected_ids_raw else []
-
-    all_officers = _all_officers_scoped()
-    officers = [o for o in all_officers if o.id in selected_ids] if selected_ids else all_officers
-
-    wlf_rows = []
-    env_rows = []
-    for o in officers:
-        if o.role == "environment_officer":
-            s = _env_period_stats(o.id, month_start, month_end)
-            env_rows.append({"officer_id": o.id, "officer_name": o.name, **s})
-        else:
-            d = _wlf_monthly_card_data(o, month_start, month_end)
-            pts = d["rounds"] * 3 + d["finds_closed"] * 2 - d["finds_open"]
-            wlf_rows.append({
-                "officer_id":    o.id,
-                "officer_name":  o.name,
-                "role":          o.role,
-                "rounds":        d["rounds"],
-                "finds_new":     d["finds_new"],
-                "finds_closed":  d["finds_closed"],
-                "finds_open":    d["finds_open"],
-                "on_time_pct":   d["on_time_pct"],
-                "complaints":    d["complaints"],
-                "weekly_shared": d["weekly_shared"],
-                "level_no":      d["level_no"],
-                "level_total":   d["level_total"],
-                "points":        pts,
-                "zero":          d["rounds"] == 0,
-            })
-    wlf_rows.sort(key=lambda r: r["points"], reverse=True)
-    env_rows.sort(key=lambda r: r["total"], reverse=True)
-    return render_template("welfare_report_monthly_view.html",
-                           wlf_rows=wlf_rows, env_rows=env_rows,
-                           year=year, month=month,
-                           month_name=month_name,
-                           first_day=month_start, last_day=month_end,
-                           now=datetime.now(RIYADH_TZ))
-
-
-@app.route("/welfare/compliance-report")
-@login_required
-@safety_manager_required
-def welfare_compliance_report():
-    import calendar as _cal
-    today = datetime.now(RIYADH_TZ).date()
-    raw = request.args.get("month", "")
-    try:
-        if "-" in raw:
-            year, month = map(int, raw.split("-")[:2])
-        else:
-            year, month = today.year, today.month
-    except Exception:
-        year, month = today.year, today.month
-    month_name  = date(year, month, 1).strftime("%B")
-    month_start = date(year, month, 1)
-    month_end   = date(year, month, _cal.monthrange(year, month)[1])
-    _cid = cid()
-    officers_q = User.query.filter_by(role="welfare_officer", is_active=True)
-    if _cid:
-        officers_q = officers_q.filter(User.company_id == _cid)
-    officers = officers_q.order_by(User.name).all()
-    rows = []
-    for o in officers:
-        d = _wlf_monthly_card_data(o, month_start, month_end)
-        rows.append({
-            "officer_id":    o.id,
-            "officer_name":  o.name,
-            "rounds":        d["rounds"],
-            "avg_score":     d["avg_score"],
-            "best_score":    d["best_score"],
-            "finds_new":     d["finds_new"],
-            "finds_closed":  d["finds_closed"],
-            "finds_open":    d["finds_open"],
-            "on_time_pct":   d["on_time_pct"],
-            "complaints":    d["complaints"],
-            "weekly_shared": d["weekly_shared"],
-            "level_no":      d["level_no"],
-            "level_total":   d["level_total"],
-            "zero":          d["rounds"] == 0,
-        })
-    rows.sort(key=lambda r: r["rounds"], reverse=True)
-    return render_template("welfare_compliance_report.html",
-                           rows=rows, year=year, month=month,
-                           month_name=month_name,
-                           first_day=month_start, last_day=month_end,
-                           today=today, now=datetime.now(RIYADH_TZ))
-
-
-@app.route("/welfare/daily")
-@login_required
-@welfare_supervisor_required
-def welfare_daily():
-    d = _safe_date(request.args.get("date")) or _wlf_today()
-    selected_ids_raw = request.args.getlist("officer_ids")
-    selected_ids = [int(x) for x in selected_ids_raw if x.isdigit()] if selected_ids_raw else []
-
-    all_officers = _all_officers_scoped()
-    officers = [o for o in all_officers if o.id in selected_ids] if selected_ids else all_officers
-    blocks = []
-    for o in officers:
-        works = WlfLevelWork.query.filter_by(officer_id=o.id, date=d).all()
-        findings = WlfFinding.query.filter_by(officer_id=o.id, date=d).all()
-        comps = WlfComplaint.query.filter_by(officer_id=o.id, date=d).all()
-        blocks.append({"u": o, "works": works, "findings": findings, "complaints": comps})
-    return render_template("welfare_daily.html", d=d, blocks=blocks,
-                           items_def=_wlf_items(),
-                           all_officers=all_officers,
-                           selected_ids=selected_ids)
-
-
-
-# ── Welfare Query ("Ask the Officer") ────────────────────────────────
-# Internal channel only. No WhatsApp, no email, no phone numbers.
-# v2026-08-28-daily-redesign
-# Visibility: welfare_officer (own queries) · safety_officer (assigned)
-#             · safety_supervisor · admin · super_admin
-# Excluded intentionally: safety_manager
-
-WLF_QUERY_DAILY_CAP = 2       # max queries directed to one officer per day
-WLF_QUERY_SLA_HOURS = 4       # after this, query appears overdue on supervisor dash
-
-
-class WlfQuery(db.Model):
-    __tablename__ = "wlf_query"
-    id            = db.Column(db.Integer, primary_key=True)
-    company_id    = db.Column(db.Integer, db.ForeignKey("company.id"), nullable=True)
-    asker_id      = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=False)
-    assignee_id   = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
-    assign_reason = db.Column(db.String(40))     # checkin / supervisor / last_covered / none
-    date          = db.Column(db.Date, nullable=False)
-    unit          = db.Column(db.String(40))
-    item_key      = db.Column(db.String(40))
-    ref_no        = db.Column(db.String(40))
-    question      = db.Column(db.Text, nullable=False)
-    photo_wanted  = db.Column(db.Boolean, default=False)
-    status        = db.Column(db.String(20), default="open")   # open / answered
-    answer_text   = db.Column(db.Text)
-    answer_photo  = db.Column(db.String(255))
-    answered_by   = db.Column(db.Integer, nullable=True)
-    answered_at   = db.Column(db.DateTime, nullable=True)
-    round_id      = db.Column(db.Integer, db.ForeignKey("wlf_round.id"), nullable=True)
-    created_at    = db.Column(db.DateTime, default=datetime.utcnow)
-
-
-def _wlf_query_access(u):
-    """Query channel visibility. safety_manager excluded intentionally."""
-    if not u or not getattr(u, "is_active", False):
-        return False
-    return getattr(u, "role", None) in ("welfare_officer", "safety_officer",
-                                        "safety_supervisor", "admin", "super_admin")
-
-
-def welfare_query_required(f):
+def welfare_env_access_required(f):
     @wraps(f)
     def inner(*args, **kwargs):
         u = cur_user()
-        if not u:
-            return redirect(url_for("login"))
-        if not _wlf_query_access(u):
-            flash("You do not have access to welfare queries.", "danger")
+        if not u or not _welfare_env_or_supervisor(u):
+            flash("Access denied.", "danger")
             return redirect(url_for("index"))
         return f(*args, **kwargs)
     return inner
 
 
-def _wlf_query_inbox_role(u):
-    """Who replies (not who sends)."""
-    return getattr(u, "role", None) in ("safety_officer", "safety_supervisor",
-                                        "admin", "super_admin")
-
-
-def _wlf_pick_assignee(unit):
-    """Pick who replies: checked-in officer → supervisor → last who covered."""
-    today = _wlf_today()
-    _c = cid()
-
-    def _cap_ok(uid):
-        n = WlfQuery.query.filter(WlfQuery.assignee_id == uid,
-                                  WlfQuery.date == today).count()
-        return n < WLF_QUERY_DAILY_CAP
-
-    # 1) officer checked in to this unit today
-    try:
-        q = HseCheckin.query.filter(HseCheckin.date == today,
-                                    HseCheckin.location.like(f"%{unit}%"))
-        if _c:
-            q = q.filter(HseCheckin.company_id == _c)
-        for ci in q.all():
-            ou = db.session.get(User, ci.officer_id)
-            if ou and ou.is_active and ou.role == "safety_officer" and _cap_ok(ou.id):
-                return ou.id, "checkin"
-    except Exception:
-        pass
-
-    # 2) safety supervisor
-    sq = User.query.filter(User.role == "safety_supervisor", User.is_active == True)
-    if _c:
-        sq = sq.filter(User.company_id == _c)
-    sup = sq.first()
-    if sup:
-        return sup.id, "supervisor"
-
-    # 3) last officer who covered the unit
-    try:
-        lq = (HseCheckin.query.filter(HseCheckin.location.like(f"%{unit}%"))
-              .order_by(HseCheckin.date.desc()))
-        if _c:
-            lq = lq.filter(HseCheckin.company_id == _c)
-        last = lq.first()
-        if last:
-            return last.officer_id, "last_covered"
-    except Exception:
-        pass
-
-    return None, "none"
-
-
-def _wlf_query_overdue(qrow):
-    if qrow.status != "open" or not qrow.created_at:
-        return False
-    return (datetime.utcnow() - qrow.created_at).total_seconds() > WLF_QUERY_SLA_HOURS * 3600
-
-
-@app.route("/welfare/queries")
+@app.route("/welfare/observations")
 @login_required
-@welfare_query_required
-def welfare_queries():
+def welfare_observation_list():
+    return redirect(url_for("hse_observations"))
+
+
+@app.route("/welfare/observations/_old")
+@login_required
+@welfare_env_access_required
+def welfare_observation_list_old():
     u = cur_user()
-    if _wlf_query_inbox_role(u) and u.role != "welfare_officer":
-        return redirect(url_for("welfare_query_inbox"))
-    rows = (WlfQuery.query.filter_by(asker_id=u.id)
-            .order_by(WlfQuery.id.desc()).limit(60).all())
-    names = {}
-    answerers = {}
-    for r in rows:
-        if r.assignee_id and r.assignee_id not in names:
-            ou = db.session.get(User, r.assignee_id)
-            names[r.assignee_id] = ou.name if ou else "—"
+    _c = cid()
+    status_filter = request.args.get("status", "open")
+    page = request.args.get("page", 1, type=int)
+
+    q = HseObservation.query.filter_by(company_id=_c).join(
+        User, User.id == HseObservation.officer_id)
+
+    if _is_welfare_env_officer(u):
+        # Officers see only their own observations
+        q = q.filter(HseObservation.officer_id == u.id)
+    else:
+        # Supervisors/admins see welfare + environment officers
+        q = q.filter(User.role.in_(["safety_welfare", "environment_officer"]))
+
+    if status_filter in ("open", "closed"):
+        q = q.filter(HseObservation.status == status_filter)
+
+    pagination = q.order_by(HseObservation.date.desc()).paginate(
+        page=page, per_page=20, error_out=False)
+    obs_list = pagination.items
+    obs_photos = {o.id: list(o.photos) for o in obs_list}
+    return render_template("welfare_observations.html",
+                           obs_list=obs_list, obs_photos=obs_photos,
+                           status_filter=status_filter, pagination=pagination)
+
+
+@app.route("/welfare/observation/<int:obs_id>/close", methods=["GET", "POST"])
+@login_required
+@welfare_env_access_required
+def welfare_observation_close(obs_id):
+    u = cur_user()
+    _c = cid()
+    obs = HseObservation.query.filter_by(id=obs_id, company_id=_c).first_or_404()
+    # Only the submitting officer (or a supervisor) can close
+    if _is_welfare_env_officer(u) and obs.officer_id != u.id:
+        abort(403)
+    if obs.status == "closed":
+        flash("Already closed.", "info")
+        return redirect(url_for("welfare_observation_list", status="closed"))
+    if request.method == "POST":
+        closure_action = request.form.get("closure_action", "").strip()
+        if not closure_action:
+            flash("Closure note is required.", "warning")
         else:
-            names[None] = "—"
-        if r.answered_by and r.answered_by not in answerers:
-            ou = db.session.get(User, r.answered_by)
-            answerers[r.answered_by] = ou.name if ou else "—"
-    # Build officer list with last-known location for manual selection
-    _c = cid()
-    _oq = User.query.filter_by(role="safety_officer", is_active=True)
-    if _c:
-        _oq = _oq.filter(User.company_id == _c)
-    _officers_raw = _oq.order_by(User.name).all()
-    officer_choices = []
-    for _o in _officers_raw:
-        _last = (HseCheckin.query.filter_by(officer_id=_o.id)
-                 .order_by(HseCheckin.date.desc()).first())
-        officer_choices.append({
-            "id": _o.id, "name": _o.name,
-            "last_unit": (_last.location if _last else "—"),
-        })
-    # Also add supervisors as a fallback choice
-    _sq = User.query.filter(User.role.in_(["safety_supervisor"]), User.is_active == True)
-    if _c:
-        _sq = _sq.filter(User.company_id == _c)
-    for _s in _sq.all():
-        officer_choices.append({"id": _s.id, "name": f"{_s.name} (Supervisor)", "last_unit": "—"})
-    return render_template("welfare_queries.html", rows=rows, names=names,
-                           answerers=answerers,
-                           locations=WLF_LOCATIONS, items=_wlf_items(),
-                           officer_choices=officer_choices,
-                           overdue=_wlf_query_overdue)
+            f = request.files.get("closure_photo")
+            path = _save_hse_photo(f, "wlf_close", company_id=_c)
+            if path:
+                db.session.add(HseObservationPhoto(
+                    observation_id=obs.id, photo_path=path,
+                    photo_type="after", company_id=_c))
+            obs.status = "closed"
+            obs.closed_at = datetime.now(RIYADH_TZ).date()
+            obs.closure_action = closure_action
+            db.session.commit()
+            flash("Observation closed.", "success")
+            return redirect(url_for("welfare_observation_list", status="closed"))
+    return render_template("welfare_observation_close.html", obs=obs)
 
 
-@app.route("/welfare/query/new", methods=["POST"])
+# ── Welfare officer — observation ────────────────────────────────────
+
+@app.route("/welfare/observation/new", methods=["GET", "POST"])
 @login_required
-@welfare_officer_required
-def welfare_query_new():
+@safety_welfare_required
+def welfare_observation_new():
     u = cur_user()
-    unit = (request.form.get("unit") or "").strip()
-    question = (request.form.get("question") or "").strip()
-    if not unit or not question:
-        flash("Unit and question are required.", "warning")
-        return redirect(url_for("welfare_queries"))
-    # Manual assignee selection (Option B)
-    _aid_raw = request.form.get("assignee_id")
-    if _aid_raw and _aid_raw.isdigit():
-        aid, reason = int(_aid_raw), "manual"
-    else:
-        aid, reason = _wlf_pick_assignee(unit)
-    q = WlfQuery(company_id=cid(), asker_id=u.id, assignee_id=aid,
-                 assign_reason=reason, date=_wlf_today(), unit=unit,
-                 item_key=(request.form.get("item_key") or "").strip(),
-                 ref_no=(request.form.get("ref_no") or "").strip(),
-                 question=question,
-                 photo_wanted=bool(request.form.get("photo_wanted")))
-    db.session.add(q)
-    db.session.commit()
-    if aid:
-        try:
-            import threading as _thr
-            _thr.Thread(target=_send_push_to_user,
-                        args=(aid, "Welfare query",
-                              f"Unit {unit}: {question[:60]}"),
-                        daemon=True).start()
-        except Exception:
-            pass
-        flash("Sent.", "success")
-    else:
-        flash("Saved — no officer found for that unit.", "warning")
-    return redirect(url_for("welfare_queries"))
-
-
-@app.route("/welfare/queries/inbox")
-@login_required
-@welfare_query_required
-def welfare_query_inbox():
-    u = cur_user()
-    if not _wlf_query_inbox_role(u):
-        return redirect(url_for("welfare_queries"))
-    mine = u.role == "safety_officer"
-    q = WlfQuery.query
-    if mine:
-        q = q.filter(WlfQuery.assignee_id == u.id)
-    else:
-        _c = cid()
-        if _c:
-            q = q.filter(WlfQuery.company_id == _c)
-    rows = q.order_by(WlfQuery.status.asc(), WlfQuery.id.desc()).limit(120).all()
-    askers = {}
-    answerers = {}
-    for r in rows:
-        if r.asker_id and r.asker_id not in askers:
-            ou = db.session.get(User, r.asker_id)
-            askers[r.asker_id] = ou.name if ou else "—"
-        if r.answered_by and r.answered_by not in answerers:
-            ou = db.session.get(User, r.answered_by)
-            answerers[r.answered_by] = ou.name if ou else "—"
-    answered_n = WlfQuery.query.filter(WlfQuery.answered_by == u.id).count()
-    return render_template("welfare_query_inbox.html", rows=rows, askers=askers,
-                           answerers=answerers, mine=mine, answered_n=answered_n,
-                           overdue=_wlf_query_overdue)
-
-
-@app.route("/welfare/query/<int:qid>/answer", methods=["POST"])
-@login_required
-@welfare_query_required
-def welfare_query_answer(qid):
-    u = cur_user()
-    if not _wlf_query_inbox_role(u):
-        abort(403)
-    q = WlfQuery.query.filter_by(id=qid).first_or_404()
-    if u.role == "safety_officer" and q.assignee_id != u.id:
-        abort(403)
-    txt = (request.form.get("answer_text") or "").strip()
-    if not txt:
-        flash("An answer is required.", "warning")
-        return redirect(url_for("welfare_query_inbox"))
-    path = _save_hse_photo(request.files.get("answer_photo"), "wlfq", company_id=cid())
-    q.answer_text = txt
-    if path:
-        q.answer_photo = path
-    q.status = "answered"
-    q.answered_by = u.id
-    q.answered_at = datetime.utcnow()
-    db.session.commit()
-    try:
-        import threading as _thr
-        _thr.Thread(target=_send_push_to_user,
-                    args=(q.asker_id, "Query answered",
-                          f"Unit {q.unit}: {txt[:60]}"), daemon=True).start()
-    except Exception:
-        pass
-    flash("Answer sent.", "success")
-    return redirect(url_for("welfare_query_inbox"))
-
-
-# ── Welfare: Season toggle ────────────────────────────────────────────
-
-@app.route("/welfare/season", methods=["POST"])
-@login_required
-@welfare_supervisor_required
-def welfare_season_toggle():
-    new_season = request.form.get("season")
-    if new_season not in ("summer", "winter"):
-        flash("Invalid season.", "warning")
+    if not is_safety_welfare(u):
         return redirect(url_for("welfare_supervisor"))
     _c = cid()
-    s = WlfSetting.query.filter_by(key="season", company_id=_c).first()
-    if s:
-        s.value = new_season
-    else:
-        db.session.add(WlfSetting(company_id=_c, key="season", value=new_season))
+    today = datetime.now(RIYADH_TZ).date()
+    if request.method == "POST":
+        obs_type = request.form.get("obs_type", "").strip()
+        if not obs_type:
+            flash("Observation type is required.", "warning")
+            return redirect(url_for("welfare_observation_new"))
+        obs = HseObservation(
+            officer_id=u.id, date=today,
+            location=request.form.get("location", "").strip(),
+            obs_type=obs_type,
+            category=request.form.get("category", "").strip(),
+            risk_level=request.form.get("risk_level") or None,
+            description=request.form.get("description", "").strip(),
+            action_taken=request.form.get("action_taken", "").strip(),
+            company_id=_c,
+        )
+        db.session.add(obs)
+        db.session.flush()
+        for i in range(1, 4):
+            f = request.files.get(f"photo_{i}")
+            path = _save_hse_photo(f, "wlf_obs", company_id=_c)
+            if path:
+                db.session.add(HseObservationPhoto(
+                    observation_id=obs.id, photo_path=path, photo_type="before",
+                    company_id=_c))
+        db.session.commit()
+        flash("Observation saved.", "success")
+        return redirect(url_for("welfare_home"))
+    return render_template("welfare_observation_new.html",
+                           today=today, categories=OBS_CATEGORIES)
+
+
+# ── Welfare officer — PDF report upload ──────────────────────────────
+
+@app.route("/welfare/report/upload", methods=["GET", "POST"])
+@login_required
+@safety_welfare_required
+def welfare_report_upload():
+    u = cur_user()
+    if not is_safety_welfare(u):
+        return redirect(url_for("welfare_supervisor"))
+    _c = cid()
+    _seed_report_types(_c)
+    type_options = (ReportTypeOption.query
+                    .filter_by(company_id=_c, role_type="welfare")
+                    .order_by(ReportTypeOption.name).all())
+    if request.method == "POST":
+        file = request.files.get("pdf_file")
+        report_type = request.form.get("report_type", "").strip()
+        new_type = request.form.get("new_type", "").strip()
+        report_date = _safe_date(request.form.get("report_date")) or datetime.now(RIYADH_TZ).date()
+        notes = request.form.get("notes", "").strip()
+
+        if new_type:
+            report_type = new_type
+            if not ReportTypeOption.query.filter_by(
+                    company_id=_c, role_type="welfare", name=new_type).first():
+                db.session.add(ReportTypeOption(
+                    company_id=_c, role_type="welfare", name=new_type,
+                    created_by=u.id))
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+
+        if not report_type:
+            flash("Please select or enter a report type.", "warning")
+            return redirect(url_for("welfare_report_upload"))
+
+        path = _save_report_pdf(file, _c)
+        if not path:
+            flash("Please upload a valid PDF file (max 10 MB).", "warning")
+            return redirect(url_for("welfare_report_upload"))
+
+        rf = ReportFile(uploaded_by=u.id, company_id=_c, role_type="welfare",
+                        report_type=report_type, file_path=path,
+                        report_date=report_date, notes=notes)
+        db.session.add(rf)
+        db.session.commit()
+        flash("Report uploaded successfully.", "success")
+        return redirect(url_for("welfare_home"))
+
+    return render_template("welfare_report_upload.html",
+                           type_options=type_options,
+                           today=datetime.now(RIYADH_TZ).date())
+
+
+@app.route("/welfare/report/<int:rid>/view")
+@login_required
+@safety_welfare_required
+def welfare_report_view(rid):
+    _c = cid()
+    rf = ReportFile.query.filter_by(id=rid, company_id=_c, role_type="welfare").first_or_404()
+    u = cur_user()
+    if is_safety_welfare(u) and rf.uploaded_by != u.id:
+        abort(403)
+    full_path = os.path.join(PDF_UPLOAD_DIR, rf.file_path)
+    if not os.path.exists(full_path):
+        flash("File not found.", "danger")
+        return redirect(url_for("welfare_home"))
+    return send_file(full_path, mimetype="application/pdf",
+                     download_name=os.path.basename(rf.file_path))
+
+
+@app.route("/welfare/report/<int:rid>/delete", methods=["POST"])
+@login_required
+@welfare_supervisor_required
+def welfare_report_delete(rid):
+    _c = cid()
+    rf = ReportFile.query.filter_by(id=rid, company_id=_c, role_type="welfare").first_or_404()
+    try:
+        full_path = os.path.join(PDF_UPLOAD_DIR, rf.file_path)
+        if os.path.exists(full_path):
+            os.remove(full_path)
+    except Exception:
+        pass
+    db.session.delete(rf)
     db.session.commit()
-    flash(f"Season set to {new_season}.", "success")
+    flash("Report deleted.", "success")
     return redirect(url_for("welfare_supervisor"))
 
 
-# ── Welfare: Asset register ───────────────────────────────────────────
-
-WLF_ASSET_TYPES = [
-    ("water_station", "Water station / cooler bank"),
-    ("shelter",       "Rest shelter"),
-    ("toilet",        "Field toilet unit"),
-    ("handwash",      "Hand-wash point"),
-    ("waste_bin",     "Waste / skip bin"),
-    ("flag_board",    "Heat-flag board"),
-    ("signage",       "Signage / emergency board"),
-    ("muster",        "Muster point"),
-    ("other",         "Other"),
-]
+# ── Welfare supervisor — unified view ────────────────────────────────
 
 
-@app.route("/welfare/assets")
+@app.route("/welfare/supervisor")
 @login_required
-@welfare_officer_required
-def welfare_assets():
+@welfare_supervisor_required
+def welfare_supervisor():
     _c = cid()
-    q = WlfAsset.query
-    if _c:
-        q = q.filter(WlfAsset.company_id == _c)
-    assets = q.order_by(WlfAsset.location_code, WlfAsset.asset_type, WlfAsset.label).all()
-    loc_map = {l["code"]: l["label"] for l in WLF_LOCATIONS}
-    return render_template("welfare_assets.html", assets=assets,
-                           locations=WLF_LOCATIONS, loc_map=loc_map,
-                           asset_types=WLF_ASSET_TYPES)
+    role_filter = request.args.get("role", "all")   # all / welfare / environment
+    date_from = _safe_date(request.args.get("from"))
+    date_to   = _safe_date(request.args.get("to"))
+
+    obs_q = (HseObservation.query.filter_by(company_id=_c)
+             .join(User, User.id == HseObservation.officer_id))
+    if role_filter == "welfare":
+        obs_q = obs_q.filter(User.role == "safety_welfare")
+    elif role_filter == "environment":
+        obs_q = obs_q.filter(User.role == "environment_officer")
+    else:
+        obs_q = obs_q.filter(User.role.in_(["safety_welfare", "environment_officer"]))
+    if date_from:
+        obs_q = obs_q.filter(HseObservation.date >= date_from)
+    if date_to:
+        obs_q = obs_q.filter(HseObservation.date <= date_to)
+    observations = obs_q.order_by(HseObservation.created_at.desc()).limit(200).all()
+
+    files_q = ReportFile.query.filter_by(company_id=_c)
+    if role_filter in ("welfare", "environment"):
+        files_q = files_q.filter_by(role_type=role_filter)
+    if date_from:
+        files_q = files_q.filter(ReportFile.report_date >= date_from)
+    if date_to:
+        files_q = files_q.filter(ReportFile.report_date <= date_to)
+    report_files = files_q.order_by(ReportFile.uploaded_at.desc()).limit(200).all()
+
+    cl_q = EnvChecklist.query.filter_by(company_id=_c)
+    if role_filter == "welfare":
+        cl_q = cl_q.filter(db.literal(False))  # checklists are env-only
+    if date_from:
+        cl_q = cl_q.filter(EnvChecklist.filled_date >= date_from)
+    if date_to:
+        cl_q = cl_q.filter(EnvChecklist.filled_date <= date_to)
+    checklists = cl_q.order_by(EnvChecklist.created_at.desc()).limit(200).all()
+
+    return render_template("welfare_supervisor.html",
+                           observations=observations,
+                           report_files=report_files,
+                           checklists=checklists,
+                           role_filter=role_filter,
+                           date_from=date_from, date_to=date_to)
 
 
-@app.route("/welfare/asset/new", methods=["GET", "POST"])
+@app.route("/welfare/report/<int:rid>/env-delete", methods=["POST"])
 @login_required
-@welfare_officer_required
-def welfare_asset_new():
-    if request.method == "POST":
-        loc  = (request.form.get("location_code") or "").strip()
-        atyp = (request.form.get("asset_type") or "").strip()
-        lbl  = (request.form.get("label") or "").strip()
-        if not loc or not atyp or not lbl:
-            flash("Location, type and label are required.", "warning")
-        else:
-            cap_raw = request.form.get("capacity") or ""
-            cap = int(cap_raw) if cap_raw.isdigit() else None
-            qty_raw = request.form.get("qty") or "1"
-            qty = int(qty_raw) if qty_raw.isdigit() else 1
-            a = WlfAsset(company_id=cid(),
-                         location_code=loc, asset_type=atyp, label=lbl,
-                         qty=qty, capacity=cap,
-                         notes=(request.form.get("notes") or "").strip(),
-                         added_by=cur_user().id)
-            db.session.add(a)
-            db.session.commit()
-            flash("Asset added.", "success")
-        return redirect(url_for("welfare_assets"))
-    return render_template("welfare_asset_new.html",
-                           locations=WLF_LOCATIONS, asset_types=WLF_ASSET_TYPES)
-
-
-@app.route("/welfare/asset/<int:aid>/delete", methods=["POST"])
-@login_required
-@welfare_officer_required
-def welfare_asset_delete(aid):
-    a = WlfAsset.query.filter_by(id=aid).first_or_404()
+@welfare_supervisor_required
+def env_report_delete(rid):
     _c = cid()
-    if _c and a.company_id != _c:
-        flash("Not allowed.", "danger")
-        return redirect(url_for("welfare_assets"))
-    db.session.delete(a)
+    rf = ReportFile.query.filter_by(id=rid, company_id=_c, role_type="environment").first_or_404()
+    try:
+        full_path = os.path.join(PDF_UPLOAD_DIR, rf.file_path)
+        if os.path.exists(full_path):
+            os.remove(full_path)
+    except Exception:
+        pass
+    db.session.delete(rf)
     db.session.commit()
-    flash("Removed.", "success")
-    return redirect(url_for("welfare_assets"))
+    flash("Report deleted.", "success")
+    return redirect(url_for("welfare_supervisor"))
+
 
 
 # ===================== Bootstrapping =====================
@@ -17816,7 +17063,7 @@ def safety_supervisor_officers():
         code = (request.form.get("code") or "").strip()
         name = (request.form.get("name") or "").strip()
         role = (request.form.get("role") or "safety_officer").strip()
-        allowed_roles = {"safety_officer", "welfare_officer", "environment_officer"}
+        allowed_roles = {"safety_officer", "safety_welfare", "environment_officer"}
         if role not in allowed_roles:
             role = "safety_officer"
         if not code:
@@ -18018,534 +17265,1140 @@ def api_safety_sup_officers():
 @environment_officer_required
 def env_dashboard():
     u = cur_user()
+    if not is_environment_officer(u):
+        return redirect(url_for("welfare_supervisor"))
     _c = cid()
     today = datetime.now(RIYADH_TZ).date()
+    recent_obs = (HseObservation.query
+                  .filter_by(officer_id=u.id, company_id=_c)
+                  .order_by(HseObservation.created_at.desc())
+                  .limit(10).all())
+    recent_files = (ReportFile.query
+                    .filter_by(uploaded_by=u.id, company_id=_c, role_type="environment")
+                    .order_by(ReportFile.uploaded_at.desc())
+                    .limit(10).all())
+    recent_checklists = (EnvChecklist.query
+                         .filter_by(officer_id=u.id, company_id=_c)
+                         .order_by(EnvChecklist.created_at.desc())
+                         .limit(10).all())
+    _seed_report_types(_c)
+    type_options = (ReportTypeOption.query
+                    .filter_by(company_id=_c, role_type="environment")
+                    .order_by(ReportTypeOption.name).all())
+    return render_template("env_dashboard.html",
+                           today=today,
+                           recent_obs=recent_obs,
+                           recent_files=recent_files,
+                           recent_checklists=recent_checklists,
+                           type_options=type_options)
+
+
+
+# ── Environment officer — observation ───────────────────────────────
+
+@app.route("/env/observation/new", methods=["GET", "POST"])
+@login_required
+@environment_officer_required
+def env_observation_new():
+    u = cur_user()
+    if not is_environment_officer(u):
+        return redirect(url_for("welfare_supervisor"))
+    _c = cid()
+    today = datetime.now(RIYADH_TZ).date()
+    if request.method == "POST":
+        obs_type = request.form.get("obs_type", "").strip()
+        if not obs_type:
+            flash("Observation type is required.", "warning")
+            return redirect(url_for("env_observation_new"))
+        obs = HseObservation(
+            officer_id=u.id, date=today,
+            location=request.form.get("location", "").strip(),
+            obs_type=obs_type,
+            category=request.form.get("category", "").strip(),
+            risk_level=request.form.get("risk_level") or None,
+            description=request.form.get("description", "").strip(),
+            action_taken=request.form.get("action_taken", "").strip(),
+            company_id=_c,
+        )
+        db.session.add(obs)
+        db.session.flush()
+        for i in range(1, 4):
+            f = request.files.get(f"photo_{i}")
+            path = _save_hse_photo(f, "env_obs", company_id=_c)
+            if path:
+                db.session.add(HseObservationPhoto(
+                    observation_id=obs.id, photo_path=path, photo_type="before",
+                    company_id=_c))
+        db.session.commit()
+        flash("Observation saved.", "success")
+        return redirect(url_for("env_dashboard"))
+    return render_template("env_observation_new.html",
+                           today=today, categories=OBS_CATEGORIES)
+
+
+# ── Environment officer — PDF report upload ──────────────────────────
+
+@app.route("/env/report/upload", methods=["GET", "POST"])
+@login_required
+@environment_officer_required
+def env_report_upload():
+    u = cur_user()
+    if not is_environment_officer(u):
+        return redirect(url_for("welfare_supervisor"))
+    _c = cid()
+    _seed_report_types(_c)
+    type_options = (ReportTypeOption.query
+                    .filter_by(company_id=_c, role_type="environment")
+                    .order_by(ReportTypeOption.name).all())
+    if request.method == "POST":
+        file = request.files.get("pdf_file")
+        report_type = request.form.get("report_type", "").strip()
+        new_type = request.form.get("new_type", "").strip()
+        report_date = _safe_date(request.form.get("report_date")) or datetime.now(RIYADH_TZ).date()
+        notes = request.form.get("notes", "").strip()
+
+        if new_type:
+            report_type = new_type
+            if not ReportTypeOption.query.filter_by(
+                    company_id=_c, role_type="environment", name=new_type).first():
+                db.session.add(ReportTypeOption(
+                    company_id=_c, role_type="environment", name=new_type,
+                    created_by=u.id))
+                try:
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
+
+        if not report_type:
+            flash("Please select or enter a report type.", "warning")
+            return redirect(url_for("env_report_upload"))
+
+        path = _save_report_pdf(file, _c)
+        if not path:
+            flash("Please upload a valid PDF file.", "warning")
+            return redirect(url_for("env_report_upload"))
+
+        rf = ReportFile(uploaded_by=u.id, company_id=_c, role_type="environment",
+                        report_type=report_type, file_path=path,
+                        report_date=report_date, notes=notes)
+        db.session.add(rf)
+        db.session.commit()
+        flash("Report uploaded successfully.", "success")
+        return redirect(url_for("env_dashboard"))
+
+    return render_template("env_report_upload.html",
+                           type_options=type_options,
+                           today=datetime.now(RIYADH_TZ).date())
+
+
+@app.route("/env/report/<int:rid>/view")
+@login_required
+@environment_officer_required
+def env_report_view(rid):
+    _c = cid()
+    rf = ReportFile.query.filter_by(id=rid, company_id=_c, role_type="environment").first_or_404()
+    u = cur_user()
+    if is_environment_officer(u) and rf.uploaded_by != u.id:
+        abort(403)
+    full_path = os.path.join(PDF_UPLOAD_DIR, rf.file_path)
+    if not os.path.exists(full_path):
+        flash("File not found.", "danger")
+        return redirect(url_for("env_dashboard"))
+    return send_file(full_path, mimetype="application/pdf",
+                     download_name=os.path.basename(rf.file_path))
+
+
+# ── Environment officer — checklists (P2-EC / P2-WMC / P2-SPC) ─────────────
+
+@app.route("/env/checklist/new")
+@login_required
+@environment_officer_required
+def env_checklist_new():
+    return render_template("env_checklist_new.html")
+
+
+@app.route("/env/checklist/fill/<ctype>", methods=["GET", "POST"])
+@login_required
+@environment_officer_required
+def env_checklist_fill(ctype):
+    if ctype not in ENV_CHECKLISTS:
+        abort(404)
+    cfg = ENV_CHECKLISTS[ctype]
+    _c = cid()
+    u = cur_user()
+    today = datetime.now(RIYADH_TZ).date()
+
+    # Build a flat ordered list of (section_name, item_text)
+    flat_items = []
+    for sec in cfg["sections"]:
+        for item_text in sec["items"]:
+            flat_items.append((sec["name"], item_text))
+
+    if request.method == "POST":
+        filled_date_str = request.form.get("filled_date") or today.isoformat()
+        try:
+            filled_date = date.fromisoformat(filled_date_str)
+        except ValueError:
+            filled_date = today
+
+        items_data = []
+        for idx, (sec_name, item_text) in enumerate(flat_items):
+            status   = request.form.get(f"s_{idx}", "na" if cfg["has_na"] else "good")
+            area_sub = request.form.get(f"a_{idx}", "").strip()
+            note     = request.form.get(f"n_{idx}", "").strip()
+            items_data.append({
+                "item": item_text, "section": sec_name,
+                "status": status, "area_sub": area_sub, "note": note,
+            })
+
+        # Build area string: types + detail
+        area_types = request.form.getlist("area_types")
+        area_other = request.form.get("area_other", "").strip()
+        area_detail = request.form.get("area_detail", "").strip()
+        if area_other and "Other" in area_types:
+            area_types = [t if t != "Other" else f"Other: {area_other}" for t in area_types]
+        area_str = "; ".join(area_types)
+        if area_detail:
+            area_str = f"{area_detail} | {area_str}" if area_str else area_detail
+
+        # JSO observations
+        jso_rows = []
+        for i in range(4):
+            jno  = request.form.get(f"jso_no_{i}", "").strip()
+            jdsc = request.form.get(f"jso_desc_{i}", "").strip()
+            if jno or jdsc:
+                jso_rows.append({"no": jno, "desc": jdsc})
+        extra_obs = request.form.get("observations", "").strip()
+        obs_payload = json.dumps({"jso": jso_rows, "notes": extra_obs}, ensure_ascii=False)
+
+        custom_no = request.form.get("report_no_custom", "").strip()
+        if custom_no:
+            report_no = f"{cfg['report_prefix']} #{custom_no} / {filled_date.year}"
+        else:
+            count = EnvChecklist.query.filter_by(
+                company_id=_c, checklist_type=ctype).count() + 1
+            report_no = f"{cfg['report_prefix']} #{count:03d} / {filled_date.year}"
+
+        cl = EnvChecklist(
+            company_id=_c, officer_id=u.id, checklist_type=ctype,
+            area=area_str[:199],
+            report_no=report_no,
+            subcontractor=request.form.get("subcontractor", "").strip(),
+            filled_date=filled_date,
+            items_json=json.dumps(items_data, ensure_ascii=False),
+            observations=obs_payload,
+        )
+        db.session.add(cl)
+        try:
+            db.session.commit()
+            flash("Checklist saved.", "success")
+            return redirect(url_for("env_checklist_view", clid=cl.id))
+        except Exception:
+            db.session.rollback()
+            flash("Error saving checklist.", "danger")
+
+    return render_template("env_checklist_fill.html",
+                           cfg=cfg, ctype=ctype, flat_items=flat_items, today=today)
+
+
+@app.route("/env/checklist/<int:clid>")
+@login_required
+@environment_officer_required
+def env_checklist_view(clid):
+    _c = cid()
+    u = cur_user()
+    cl = EnvChecklist.query.filter_by(id=clid, company_id=_c).first_or_404()
+    if is_environment_officer(u) and cl.officer_id != u.id:
+        abort(403)
+    cfg = ENV_CHECKLISTS.get(cl.checklist_type, {})
+    items = json.loads(cl.items_json or "[]")
+    return render_template("env_checklist_view.html", cl=cl, cfg=cfg, items=items)
+
+
+@app.route("/env/checklist/<int:clid>/sign", methods=["POST"])
+@login_required
+@environment_officer_required
+def env_checklist_sign(clid):
+    _c = cid()
+    u = cur_user()
+    cl = EnvChecklist.query.filter_by(id=clid, company_id=_c).first_or_404()
+    if is_environment_officer(u) and cl.officer_id != u.id:
+        abort(403)
+    sig = (request.form.get("signature") or "").strip()
+    name = (request.form.get("signatory_name") or "").strip()
+    if not sig:
+        flash("Signature is required.", "danger")
+        return redirect(url_for("env_checklist_view", clid=clid))
+    cl.signature_data = sig
+    cl.signatory_name = name or None
     try:
-        recent_incidents = EnvIncident.query.filter_by(company_id=_c, status="open").order_by(EnvIncident.date.desc()).limit(5).all()
-        checks_today = {
-            "waste":     EnvWasteCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
-            "soil":      EnvSoilWaterCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
-            "dust":      EnvDustCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
-            "hazcom":    EnvHazcomCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
-            "cylinders": EnvCylindersCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
-            "spills":    EnvSoilWaterCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
-            "norm":      EnvNormCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first(),
-        }
+        db.session.commit()
+        flash("Signature saved.", "success")
     except Exception:
         db.session.rollback()
-        recent_incidents = []
-        checks_today = {"waste": None, "soil": None, "dust": None, "hazcom": None,
-                        "cylinders": None, "spills": None, "norm": None}
-    return render_template("env_dashboard.html", today=today, checks=checks_today,
-                           incidents=recent_incidents)
+        flash("Error saving signature.", "danger")
+    return redirect(url_for("env_checklist_view", clid=clid))
 
 
-@app.route("/env/waste/", methods=["GET", "POST"])
-@environment_officer_required
-def env_waste():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    existing = EnvWasteCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
-    history = EnvWasteCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvWasteCheck.date.desc()).limit(10).all()
-    if request.method == "POST" and not existing:
-        r = request.form
-        rec = EnvWasteCheck(officer_id=u.id, company_id=_c, date=today,
-            segregation_ok=bool(r.get("segregation_ok")),
-            bins_labeled=bool(r.get("bins_labeled")),
-            hazardous_area_ok=bool(r.get("hazardous_area_ok")),
-            disposal_records_ok=bool(r.get("disposal_records_ok")),
-            bins_overflow=bool(r.get("bins_overflow")),
-            contractor_ok=bool(r.get("contractor_ok")),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص النفايات.", "success")
-        return redirect(url_for("env_dashboard"))
-    return render_template("env_waste_check.html", today=today, existing=existing, history=history)
-
-
-@app.route("/env/soil/", methods=["GET", "POST"])
-@environment_officer_required
-def env_soil():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    existing = EnvSoilWaterCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
-    history = EnvSoilWaterCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvSoilWaterCheck.date.desc()).limit(10).all()
-    if request.method == "POST" and not existing:
-        r = request.form
-        rec = EnvSoilWaterCheck(officer_id=u.id, company_id=_c, date=today,
-            spill_kit_ok=bool(r.get("spill_kit_ok")),
-            drip_trays_ok=bool(r.get("drip_trays_ok")),
-            no_soil_staining=bool(r.get("no_soil_staining")),
-            drainage_clear=bool(r.get("drainage_clear")),
-            wadi_buffer_ok=bool(r.get("wadi_buffer_ok")),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص التربة والمياه.", "success")
-        return redirect(url_for("env_dashboard"))
-    return render_template("env_soil_water_check.html", today=today, existing=existing, history=history)
-
-
-@app.route("/env/dust/", methods=["GET", "POST"])
-@environment_officer_required
-def env_dust():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    existing = EnvDustCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
-    history = EnvDustCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvDustCheck.date.desc()).limit(10).all()
-    if request.method == "POST" and not existing:
-        r = request.form
-        rec = EnvDustCheck(officer_id=u.id, company_id=_c, date=today,
-            watering_done=bool(r.get("watering_done")),
-            wind_speed_ok=bool(r.get("wind_speed_ok")),
-            covered_trucks=bool(r.get("covered_trucks")),
-            haul_road_treated=bool(r.get("haul_road_treated")),
-            complaints_count=int(r.get("complaints_count") or 0),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص مكافحة الغبار.", "success")
-        return redirect(url_for("env_dashboard"))
-    return render_template("env_dust_check.html", today=today, existing=existing, history=history)
-
-
-@app.route("/env/hazcom/", methods=["GET", "POST"])
-@environment_officer_required
-def env_hazcom():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    history = EnvHazcomCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvHazcomCheck.date.desc()).limit(10).all()
-    if request.method == "POST":
-        r = request.form
-        rec = EnvHazcomCheck(officer_id=u.id, company_id=_c, date=today,
-            location=r.get("location",""),
-            sds_available=bool(r.get("sds_available")),
-            labels_ok=bool(r.get("labels_ok")),
-            storage_segregated=bool(r.get("storage_segregated")),
-            spill_kit_present=bool(r.get("spill_kit_present")),
-            ppe_available=bool(r.get("ppe_available")),
-            active_chem_work=bool(r.get("active_chem_work")),
-            ptw_number=r.get("ptw_number",""),
-            ptw_valid=bool(r.get("ptw_valid")),
-            ptw_controls_met=bool(r.get("ptw_controls_met")),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص HAZCOM.", "success")
-        return redirect(url_for("env_dashboard"))
-    return render_template("env_hazcom_check.html", today=today, history=history)
-
-
-@app.route("/env/sewage/", methods=["GET", "POST"])
-@environment_officer_required
-def env_sewage():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    existing = EnvSewageCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
-    history = EnvSewageCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvSewageCheck.date.desc()).limit(10).all()
-    if request.method == "POST" and not existing:
-        r = request.form
-        rec = EnvSewageCheck(officer_id=u.id, company_id=_c, date=today,
-            no_leaks=bool(r.get("no_leaks")),
-            collection_points_ok=bool(r.get("collection_points_ok")),
-            disposal_records_ok=bool(r.get("disposal_records_ok")),
-            ground_discoloration=bool(r.get("ground_discoloration")),
-            odor_complaints=int(r.get("odor_complaints") or 0),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص الصرف الصحي.", "success")
-        return redirect(url_for("env_dashboard"))
-    return render_template("env_sewage_check.html", today=today, existing=existing, history=history)
-
-
-@app.route("/env/incident/", methods=["GET", "POST"])
-@environment_officer_required
-def env_incident_list():
+@app.route("/env/checklist/<int:clid>/mark_official", methods=["POST"])
+@login_required
+def env_checklist_mark_official(clid):
+    u = cur_user()
+    if getattr(u, "role", None) != "admin":
+        abort(403)
     _c = cid()
-    incidents = EnvIncident.query.filter_by(company_id=_c).order_by(EnvIncident.date.desc()).all()
-    return render_template("env_incident_list.html", incidents=incidents)
+    cl = EnvChecklist.query.filter_by(id=clid, company_id=_c).first_or_404()
+    if not cl.is_official:
+        cl.is_official = True
+        try:
+            db.session.commit()
+            flash("Checklist marked as official and logos are now locked.", "success")
+        except Exception:
+            db.session.rollback()
+            flash("Error updating checklist.", "danger")
+    return redirect(url_for("env_checklist_view", clid=clid))
 
 
-@app.route("/env/incident/new/", methods=["GET", "POST"])
-@environment_officer_required
-def env_incident_new():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    if request.method == "POST":
-        r = request.form
-        rec = EnvIncident(officer_id=u.id, company_id=_c,
-            date=r.get("date") or today,
-            incident_type=r.get("incident_type",""),
-            location=r.get("location",""),
-            description=r.get("description",""),
-            action_taken=r.get("action_taken",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم تسجيل الحادثة البيئية.", "success")
-        return redirect(url_for("env_incident_list"))
-    return render_template("env_incident_new.html", today=today)
-
-
-@app.route("/env/incident/<int:inc_id>/close/", methods=["POST"])
-@environment_officer_required
-def env_incident_close(inc_id):
-    inc = EnvIncident.query.get_or_404(inc_id)
-    inc.status = "closed"
-    db.session.commit()
-    flash("تم إغلاق الحادثة.", "success")
-    return redirect(url_for("env_incident_list"))
-
-
-# ── New ENV check routes (Amiral CSM 2026) ────────────────────────────
-
-@app.route("/env/cylinders/", methods=["GET", "POST"])
-@environment_officer_required
-def env_cylinders():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    existing = EnvCylindersCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
-    history = EnvCylindersCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvCylindersCheck.date.desc()).limit(10).all()
-    if request.method == "POST" and not existing:
-        r = request.form
-        rec = EnvCylindersCheck(officer_id=u.id, company_id=_c, date=today,
-            package=r.get("package",""), location=r.get("location",""),
-            vertical_secured=bool(r.get("vertical_secured")),
-            empty_separated=bool(r.get("empty_separated")),
-            caps_on=bool(r.get("caps_on")),
-            o2_separation_ok=bool(r.get("o2_separation_ok")),
-            measured_distance_m=float(r.get("measured_distance_m") or 0) or None,
-            temp_ok=bool(r.get("temp_ok")),
-            temp_reading=float(r.get("temp_reading") or 0) or None,
-            no_leaks=bool(r.get("no_leaks")),
-            area_ventilated=bool(r.get("area_ventilated")),
-            no_smoking_sign=bool(r.get("no_smoking_sign")),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص أسطوانات الغاز.", "success")
-        return redirect(url_for("env_dashboard"))
-    return render_template("env_cylinders_check.html", today=today, existing=existing, history=history)
-
-
-@app.route("/env/norm/", methods=["GET", "POST"])
-@environment_officer_required
-def env_norm():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    existing = EnvNormCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
-    history = EnvNormCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvNormCheck.date.desc()).limit(10).all()
-    if request.method == "POST" and not existing:
-        r = request.form
-        rec = EnvNormCheck(officer_id=u.id, company_id=_c, date=today,
-            package=r.get("package",""), location=r.get("location",""),
-            rpo_designated=bool(r.get("rpo_designated")),
-            rpo_name=r.get("rpo_name",""), rpo_contact=r.get("rpo_contact",""),
-            epd_permit_ok=bool(r.get("epd_permit_ok")),
-            norm_records_ok=bool(r.get("norm_records_ok")),
-            ndt_permit_ok=bool(r.get("ndt_permit_ok")),
-            dose_logs_ok=bool(r.get("dose_logs_ok")),
-            norm_equip_handled=bool(r.get("norm_equip_handled")),
-            no_exposed_sources=bool(r.get("no_exposed_sources")),
-            radiation_levels_ok=bool(r.get("radiation_levels_ok")),
-            ndt_active=bool(r.get("ndt_active")),
-            ndt_permit_no=r.get("ndt_permit_no",""),
-            ndt_source_type=r.get("ndt_source_type",""),
-            exclusion_zone_ok=bool(r.get("exclusion_zone_ok")),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص NORM والإشعاع.", "success")
-        return redirect(url_for("env_dashboard"))
-    return render_template("env_norm_check.html", today=today, existing=existing, history=history)
-
-
-@app.route("/env/spills-check/", methods=["GET", "POST"])
-@environment_officer_required
-def env_spills_check():
-    return redirect(url_for("env_soil"))
-
-
-@app.route("/env/blasting/", methods=["GET", "POST"])
-@environment_officer_required
-def env_blasting():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    history = EnvBlastingCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvBlastingCheck.date.desc()).limit(10).all()
-    if request.method == "POST":
-        r = request.form
-        rec = EnvBlastingCheck(officer_id=u.id, company_id=_c, date=today,
-            package=r.get("package",""), location=r.get("location",""),
-            abrasive_type=r.get("abrasive_type",""),
-            no_silica_sand=bool(r.get("no_silica_sand")),
-            abrasive_approved=bool(r.get("abrasive_approved")),
-            waste_collected=bool(r.get("waste_collected")),
-            no_scatter=bool(r.get("no_scatter")),
-            barriers_ok=bool(r.get("barriers_ok")),
-            records_updated=bool(r.get("records_updated")),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص التفجير الكاشط.", "success")
-        return redirect(url_for("env_dashboard"))
-    return render_template("env_blasting_check.html", today=today, history=history)
-
-
-@app.route("/env/roads/", methods=["GET", "POST"])
-@environment_officer_required
-def env_roads():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    history = EnvRoadsCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvRoadsCheck.date.desc()).limit(10).all()
-    if request.method == "POST":
-        r = request.form
-        rec = EnvRoadsCheck(officer_id=u.id, company_id=_c, date=today,
-            package=r.get("package",""), location=r.get("location",""),
-            dust_control_active=bool(r.get("dust_control_active")),
-            watering_roads=bool(r.get("watering_roads")),
-            trucks_covered=bool(r.get("trucks_covered")),
-            debris_removed=bool(r.get("debris_removed")),
-            warnings_ok=bool(r.get("warnings_ok")),
-            no_runoff_to_wadi=bool(r.get("no_runoff_to_wadi")),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص أعمال الطرق.", "success")
-        return redirect(url_for("env_dashboard"))
-    return render_template("env_roads_check.html", today=today, history=history)
-
-
-@app.route("/env/pressure/", methods=["GET", "POST"])
-@environment_officer_required
-def env_pressure():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    history = EnvPressureCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvPressureCheck.date.desc()).limit(10).all()
-    if request.method == "POST":
-        r = request.form
-        rec = EnvPressureCheck(officer_id=u.id, company_id=_c, date=today,
-            package=r.get("package",""), test_item=r.get("test_item",""),
-            water_volume_m3=float(r.get("water_volume_m3") or 0) or None,
-            disposal_plan_approved=bool(r.get("disposal_plan_approved")),
-            no_direct_soil_discharge=bool(r.get("no_direct_soil_discharge")),
-            treated_before_discharge=bool(r.get("treated_before_discharge")),
-            settling_pond_used=bool(r.get("settling_pond_used")),
-            containment_berm_ok=bool(r.get("containment_berm_ok")),
-            ph_reading=float(r.get("ph_reading") or 0) or None,
-            chemical_additives=r.get("chemical_additives",""),
-            quality_ok=bool(int(r.get("quality_ok") or 0)),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص اختبار الضغط.", "success")
-        return redirect(url_for("env_dashboard"))
-    return render_template("env_pressure_check.html", today=today, history=history)
-
-
-@app.route("/env/jetting/", methods=["GET", "POST"])
-@environment_officer_required
-def env_jetting():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    history = EnvJettingCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvJettingCheck.date.desc()).limit(10).all()
-    if request.method == "POST":
-        r = request.form
-        rec = EnvJettingCheck(officer_id=u.id, company_id=_c, date=today,
-            package=r.get("package",""), location=r.get("location",""),
-            pressure_bar=int(r.get("pressure_bar") or 0) or None,
-            water_volume_m3=float(r.get("water_volume_m3") or 0) or None,
-            containment_ok=bool(r.get("containment_ok")),
-            vacuum_truck_on_site=bool(r.get("vacuum_truck_on_site")),
-            berm_around_area=bool(r.get("berm_around_area")),
-            waste_disposed=bool(r.get("waste_disposed")),
-            sludge_collected=bool(r.get("sludge_collected")),
-            hazardous_checked=bool(r.get("hazardous_checked")),
-            manifest_completed=bool(r.get("manifest_completed")),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص الضخ عالي الضغط.", "success")
-        return redirect(url_for("env_dashboard"))
-    return render_template("env_jetting_check.html", today=today, history=history)
-
-
-@app.route("/env/welding/", methods=["GET", "POST"])
-@environment_officer_required
-def env_welding():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    history = EnvWeldingCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvWeldingCheck.date.desc()).limit(10).all()
-    if request.method == "POST":
-        r = request.form
-        rec = EnvWeldingCheck(officer_id=u.id, company_id=_c, date=today,
-            package=r.get("package",""), activity_type=r.get("activity_type",""),
-            welding_rods_stored=bool(r.get("welding_rods_stored")),
-            spent_rods_collected=bool(r.get("spent_rods_collected")),
-            fume_extraction=bool(r.get("fume_extraction")),
-            no_open_burning=bool(r.get("no_open_burning")),
-            paint_waste_contained=bool(r.get("paint_waste_contained")),
-            no_paint_soil_discharge=bool(r.get("no_paint_soil_discharge")),
-            msds_available=bool(r.get("msds_available")),
-            hazwaste_labeled=bool(r.get("hazwaste_labeled")),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص اللحام والطلاء.", "success")
-        return redirect(url_for("env_dashboard"))
-    return render_template("env_welding_check.html", today=today, history=history)
-
-
-@app.route("/env/demolition/", methods=["GET", "POST"])
-@environment_officer_required
-def env_demolition():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    history = EnvDemolitionCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(EnvDemolitionCheck.date.desc()).limit(10).all()
-    if request.method == "POST":
-        r = request.form
-        rec = EnvDemolitionCheck(officer_id=u.id, company_id=_c, date=today,
-            package=r.get("package",""), location=r.get("location",""),
-            asbestos_survey_done=bool(r.get("asbestos_survey_done")),
-            no_asbestos_found=bool(r.get("no_asbestos_found")),
-            asbestos_permit_ok=bool(r.get("asbestos_permit_ok")),
-            debris_sorted=bool(r.get("debris_sorted")),
-            no_burning_debris=bool(r.get("no_burning_debris")),
-            transport_manifest_ok=bool(r.get("transport_manifest_ok")),
-            dust_suppression=bool(r.get("dust_suppression")),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص الهدم.", "success")
-        return redirect(url_for("env_dashboard"))
-    return render_template("env_demolition_check.html", today=today, history=history)
-
-
-@app.route("/env/monitoring/")
-@environment_officer_required
-def env_monitoring():
-    return redirect(url_for("env_dashboard"))
-
-
-# ── New Welfare daily check routes (Amiral WSSM / SAEHC) ──────────────
-
-@app.route("/welfare/heat/", methods=["GET", "POST"])
+@app.route("/env/checklist/<int:clid>/save_attendees", methods=["POST"])
 @login_required
-@welfare_officer_required
-def welfare_heat():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    existing = WelfareHeatCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
-    history = WelfareHeatCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(WelfareHeatCheck.date.desc()).limit(14).all()
-    if request.method == "POST" and not existing:
-        r = request.form
-        rec = WelfareHeatCheck(officer_id=u.id, company_id=_c, date=today,
-            package=r.get("package",""),
-            wbgt_morning=float(r.get("wbgt_morning") or 0) or None,
-            wbgt_noon=float(r.get("wbgt_noon") or 0) or None,
-            max_temp_c=float(r.get("max_temp_c") or 0) or None,
-            water_available=bool(r.get("water_available")),
-            shade_within_100m=bool(r.get("shade_within_100m")),
-            rest_breaks_enforced=bool(r.get("rest_breaks_enforced")),
-            midday_ban_enforced=bool(r.get("midday_ban_enforced")),
-            buddy_system_ok=bool(r.get("buddy_system_ok")),
-            medic_on_site=bool(r.get("medic_on_site")),
-            acclimatization_new=bool(r.get("acclimatization_new")),
-            heat_cases_count=int(r.get("heat_cases_count") or 0),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص إجهاد الحرارة.", "success")
-        return redirect(url_for("welfare_home"))
-    today_month = today.month
-    return render_template("welfare_heat_check.html", today=today, today_month=today_month,
-                           existing=existing, history=history)
+@environment_officer_required
+def env_checklist_save_attendees(clid):
+    _c = cid()
+    cl = EnvChecklist.query.filter_by(id=clid, company_id=_c).first_or_404()
+    attendees_json = request.form.get("attendees_json", "[]").strip()
+    try:
+        parsed = json.loads(attendees_json)
+        cl.attendees_sigs = json.dumps(parsed, ensure_ascii=False)
+        db.session.commit()
+        flash("Attendees signatures saved.", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Error saving attendees.", "danger")
+    return redirect(url_for("env_checklist_view", clid=clid))
 
 
-@app.route("/welfare/firstaid/", methods=["GET", "POST"])
+@app.route("/env/checklist/<int:clid>/pdf")
 @login_required
-@welfare_officer_required
-def welfare_firstaid():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    existing = WelfareFirstaidCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
-    history = WelfareFirstaidCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(WelfareFirstaidCheck.date.desc()).limit(10).all()
-    if request.method == "POST" and not existing:
-        r = request.form
-        rec = WelfareFirstaidCheck(officer_id=u.id, company_id=_c, date=today,
-            package=r.get("package",""),
-            medic_present=bool(r.get("medic_present")),
-            jhah_contact_available=bool(r.get("jhah_contact_available")),
-            bls_certified_workers=bool(r.get("bls_certified_workers")),
-            first_aid_kits_ok=bool(r.get("first_aid_kits_ok")),
-            kits_stocked=bool(r.get("kits_stocked")),
-            kits_accessible=bool(r.get("kits_accessible")),
-            kit_10unit_count=int(r.get("kit_10unit_count") or 0),
-            kit_36unit_count=int(r.get("kit_36unit_count") or 0),
-            aed_available=bool(r.get("aed_available")),
-            evacuation_route_marked=bool(r.get("evacuation_route_marked")),
-            ambulance_access_ok=bool(r.get("ambulance_access_ok")),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص الإسعافات الأولية.", "success")
-        return redirect(url_for("welfare_home"))
-    return render_template("welfare_firstaid_check.html", today=today, existing=existing, history=history)
+@environment_officer_required
+def env_checklist_pdf(clid):
+    _c = cid()
+    u = cur_user()
+    cl = EnvChecklist.query.filter_by(id=clid, company_id=_c).first_or_404()
+    if is_environment_officer(u) and cl.officer_id != u.id:
+        abort(403)
+    cfg = ENV_CHECKLISTS.get(cl.checklist_type, {})
+    items = json.loads(cl.items_json or "[]")
+
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors as rl_colors
+    from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle,
+                                     Paragraph, Spacer, HRFlowable, Image)
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.lib.units import cm
+    from reportlab.lib.enums import TA_CENTER, TA_LEFT
+    import io, os as _os
+
+    buf = io.BytesIO()
+    page = A4   # Portrait — matches DOCX
+    doc = SimpleDocTemplate(buf, pagesize=page,
+                            topMargin=1.2*cm, bottomMargin=1.5*cm,
+                            leftMargin=1.5*cm, rightMargin=1.5*cm)
+    styles = getSampleStyleSheet()
+    # Exact colors from DOCX XML
+    GREY_D9  = rl_colors.HexColor("#D9D9D9")   # section/header grey
+    HDR_GOOD = rl_colors.HexColor("#92D050")   # Good — lime green
+    HDR_IMM  = rl_colors.HexColor("#FF0000")   # Immediately — pure red
+    HDR_IMP  = rl_colors.HexColor("#FFFF00")   # Improve — pure yellow
+    SIG_BLUE = rl_colors.HexColor("#C6D9F1")   # Signatories title — light blue
+    BLACK       = rl_colors.black
+    WHITE       = rl_colors.white
+    AMIRAL_GREEN = rl_colors.HexColor("#065f46")   # only for AMIRAL PROJECT logo box
+
+    norm  = ParagraphStyle("norm",  parent=styles["Normal"], fontSize=8,  leading=10)
+    sm    = ParagraphStyle("sm",    parent=styles["Normal"], fontSize=7,   leading=9)
+    bold  = ParagraphStyle("bold",  parent=styles["Normal"], fontSize=8,   leading=10, fontName="Helvetica-Bold")
+    boldC = ParagraphStyle("boldC", parent=styles["Normal"], fontSize=8,   leading=10, fontName="Helvetica-Bold",   alignment=TA_CENTER)
+    italic= ParagraphStyle("ital",  parent=styles["Normal"], fontSize=8,   leading=10, fontName="Helvetica-Oblique")
+    hdr_s = ParagraphStyle("hdr",   parent=styles["Normal"], fontSize=11,  leading=13, fontName="Helvetica-Bold")
+    story = []
+
+    # ── Section title (matches DOCX heading style) ──
+    appendix  = cfg.get("appendix", "")
+    title_txt = cfg.get("title", cl.checklist_type)
+    story.append(Paragraph(f"<b>{appendix}   {title_txt}</b>", hdr_s))
+    story.append(Spacer(1, 0.25*cm))
+
+    static_dir   = _os.path.join(_os.path.dirname(__file__), "static", "img")
+    amiral_path  = _os.path.join(static_dir, "amiral_logo.png")
+    tecnimnt_path= _os.path.join(static_dir, "tecnimont_logo.png")
+
+    # ── Parse area field: "detail_text | Type1, Type2" or plain ──
+    area_raw = cl.area or ""
+    if " | " in area_raw:
+        area_detail, area_types = area_raw.split(" | ", 1)
+    else:
+        area_detail = ""
+        area_types  = area_raw
+
+    LOC_OPTIONS = ['Workshop', 'Office', 'Laydown Area', 'Camp/Accommodation', 'Other']
+
+    # Build location checkboxes using real bordered boxes (Helvetica doesn't support ☑/☐)
+    def _chk_box(checked):
+        """Return a tiny bordered table cell acting as a checkbox."""
+        tick_tbl = Table([["✓" if checked else ""]], colWidths=[0.3*cm], rowHeights=[0.3*cm])
+        tick_tbl.setStyle(TableStyle([
+            ("BOX",           (0,0), (0,0), 0.5, BLACK),
+            ("ALIGN",         (0,0), (0,0), "CENTER"),
+            ("VALIGN",        (0,0), (0,0), "MIDDLE"),
+            ("FONTNAME",      (0,0), (0,0), "Helvetica-Bold"),
+            ("FONTSIZE",      (0,0), (0,0), 7),
+            ("TOPPADDING",    (0,0), (0,0), 0),
+            ("BOTTOMPADDING", (0,0), (0,0), 0),
+            ("LEFTPADDING",   (0,0), (0,0), 0),
+            ("RIGHTPADDING",  (0,0), (0,0), 0),
+        ]))
+        return tick_tbl
+
+    sm_bold = ParagraphStyle("sm_bold", parent=styles["Normal"], fontSize=7,
+                             fontName="Helvetica-Bold", leading=9)
+    loc_rows = []
+    for opt in LOC_OPTIONS:
+        is_checked = opt in (area_types or "")
+        loc_rows.append([_chk_box(is_checked), Paragraph(f" {opt}", sm_bold)])
+    loc_inner = Table(loc_rows, colWidths=[0.36*cm, 3.8*cm])
+    loc_inner.setStyle(TableStyle([
+        ("VALIGN",        (0,0), (-1,-1), "MIDDLE"),
+        ("LEFTPADDING",   (0,0), (-1,-1), 1),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 2),
+        ("TOPPADDING",    (0,0), (-1,-1), 1),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 1),
+    ]))
+
+    # Left cell of main header table: area label + area value + location checkboxes
+    area_label = Paragraph("<b>Construction worksite</b><br/><i>(Specify the Area/Unit/Elevation)</i>", sm)
+    area_val   = Paragraph(f"<b>{area_detail}</b>", norm) if area_detail else Paragraph("", norm)
+    left_cell_data = [[area_label], [area_val], [loc_inner]]
+    left_cell_tbl  = Table(left_cell_data, colWidths=["*"])
+    left_cell_tbl.setStyle(TableStyle([
+        ("LEFTPADDING",   (0,0), (-1,-1), 4),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 4),
+        ("TOPPADDING",    (0,0), (-1,-1), 2),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 2),
+    ]))
+
+    # Right cell: TECNIMONT logo (left) + AMIRAL logo (far right) + "AMIRAL PROJECT" text
+    w = doc.width
+    if cl.is_official:
+        tecni_img = Image(tecnimnt_path, width=3.0*cm, height=0.85*cm) if _os.path.exists(tecnimnt_path) else Paragraph("TECNIMONT", bold)
+        amirl_img = Image(amiral_path,   width=1.5*cm, height=0.85*cm) if _os.path.exists(amiral_path)  else Paragraph("AMIRAL", bold)
+    else:
+        tecni_img = Paragraph("", bold)
+        amirl_img = Paragraph("", bold)
+    right_cell_data = [[
+        tecni_img, "",  amirl_img,       # spacer column pushes AMIRAL logo to far right
+    ],[
+        Paragraph("<b>AMIRAL<br/>PROJECT</b>",
+                  ParagraphStyle("ap", parent=styles["Normal"], fontSize=11,
+                                 fontName="Helvetica-Bold", alignment=TA_CENTER,
+                                 textColor=BLACK)),
+        "", "",
+    ]]
+    right_cell_tbl = Table(right_cell_data, colWidths=[3.0*cm, "*", 1.7*cm])
+    right_cell_tbl.setStyle(TableStyle([
+        ("VALIGN",  (0,0), (-1,-1), "MIDDLE"),
+        ("ALIGN",   (0,0), (-1,-1), "CENTER"),
+        ("SPAN",    (0,1), (2,1)),        # AMIRAL PROJECT spans all 3 cols — NO border
+        ("TOPPADDING",    (0,0), (-1,-1), 3),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+        ("LEFTPADDING",   (0,0), (-1,-1), 3),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 3),
+    ]))
+
+    # Main header 2-column table (matches DOCX row 1)
+    hdr_tbl = Table([[left_cell_tbl, right_cell_tbl]],
+                    colWidths=[w * 0.44, w * 0.56])
+    hdr_tbl.setStyle(TableStyle([
+        ("BOX",     (0,0), (-1,-1), 0.75, BLACK),
+        ("INNERGRID",(0,0), (-1,-1), 0.75, BLACK),
+        ("VALIGN",  (0,0), (-1,-1), "TOP"),
+        ("BACKGROUND", (0,0), (0,0), GREY_D9),
+        ("TOPPADDING",    (0,0), (-1,-1), 4),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 4),
+        ("LEFTPADDING",   (0,0), (-1,-1), 0),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 0),
+    ]))
+    story.append(hdr_tbl)
+
+    # Date / Report No / Subcontractor row (matches DOCX row 2)
+    date_str = cl.filled_date.strftime('%d / %m / %Y')
+    info2 = Table([[
+        Paragraph(f"<b>Inspection Date:</b>  {date_str}", norm),
+        Paragraph(f"<b>SUBCONTRACTOR(s) Inspected:</b>  {cl.subcontractor or ''}", norm),
+    ],[
+        Paragraph(f"<b>Inspection Report N.:</b>  {cl.report_no}", norm),
+        "",
+    ]], colWidths=[w * 0.44, w * 0.56])
+    info2.setStyle(TableStyle([
+        ("BOX",      (0,0), (-1,-1), 0.75, BLACK),
+        ("INNERGRID",(0,0), (-1,-1), 0.75, BLACK),
+        ("VALIGN",   (0,0), (-1,-1), "MIDDLE"),
+        ("TOPPADDING",    (0,0), (-1,-1), 8),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 8),
+        ("LEFTPADDING",   (0,0), (-1,-1), 6),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 6),
+        ("SPAN", (1,0), (1,1)),   # subcontractor cell spans both rows on right
+    ]))
+    story.append(info2)
+    story.append(Spacer(1, 0.3*cm))
+
+    # ── Checklist table ──
+    has_na = cfg.get("has_na", False)
+    col_good = cfg.get("col_good", "In good order / condition")
+    col_imm  = cfg.get("col_imm",  "To be immediately improved")
+    col_imp  = cfg.get("col_imp",  "To be improved")
+    comp_hdr = cfg.get("compliance_header", "In case of non-compliance, indicate:")
+    note_col = cfg.get("note_col", "Note")
+
+    TICK = "✓"
+
+    # Helper: checkbox cell — small nested table with visible border
+    def _status_cell(checked):
+        t = Table([["✓" if checked else ""]], colWidths=[0.4*cm], rowHeights=[0.38*cm])
+        t.setStyle(TableStyle([
+            ("BOX",           (0,0), (0,0), 0.5, BLACK),
+            ("ALIGN",         (0,0), (0,0), "CENTER"),
+            ("VALIGN",        (0,0), (0,0), "MIDDLE"),
+            ("FONTSIZE",      (0,0), (0,0), 7),
+            ("TOPPADDING",    (0,0), (0,0), 0),
+            ("BOTTOMPADDING", (0,0), (0,0), 0),
+            ("LEFTPADDING",   (0,0), (0,0), 0),
+            ("RIGHTPADDING",  (0,0), (0,0), 0),
+        ]))
+        return t
+
+    # Col widths for portrait A4 (usable ~17cm)
+    num_status_cols = 3 + (1 if has_na else 0)
+    fixed = (1.2*cm if has_na else 0)
+    status_w = 1.3*cm
+    area_sub_w = 3.0*cm
+    note_w = 3.2*cm
+    item_w = w - fixed - num_status_cols * status_w - area_sub_w - note_w
+
+    col_widths = [item_w]
+    if has_na:
+        col_widths.append(1.5*cm)
+    col_widths += [status_w, status_w, status_w, area_sub_w, note_w]
+
+    ncols = len(col_widths)
+
+    # Smaller style for status column header text (matches DOCX — small font in colored headers)
+    hdr_sm = ParagraphStyle("hdr_sm", parent=styles["Normal"], fontSize=6.5, leading=8,
+                            fontName="Helvetica-Bold", alignment=TA_CENTER)
+    hdr_sm_b = ParagraphStyle("hdr_sm_b", parent=styles["Normal"], fontSize=6.5, leading=8,
+                              fontName="Helvetica-Bold", alignment=TA_CENTER, textColor=BLACK)
+
+    # First section name — placed in header col 0 (matches DOCX exactly)
+    first_section = items[0].get("section", "") if items else ""
+    first_sec_style = ParagraphStyle("fsc", parent=styles["Normal"], fontSize=7.5,
+                                     fontName="Helvetica-BoldOblique", textColor=BLACK,
+                                     leading=10)
+
+    # 2-row header
+    h0 = [Paragraph(first_section, first_sec_style)]
+    if has_na:
+        h0.append(Paragraph("<b>N/A</b>", hdr_sm_b))
+    h0 += [
+        Paragraph(f"<b>{col_good}</b>", hdr_sm_b),
+        Paragraph(f"<b>{col_imm}</b>",  hdr_sm_b),
+        Paragraph(f"<b>{col_imp}</b>",  hdr_sm_b),
+        Paragraph(f"<b>{comp_hdr}</b>", hdr_sm_b),
+        "",
+    ]
+
+    h1 = [""]
+    if has_na:
+        h1.append("")
+    h1 += [
+        Paragraph(f"<b>{TICK}</b>", hdr_sm_b),
+        Paragraph(f"<b>{TICK}</b>", hdr_sm_b),
+        Paragraph(f"<b>{TICK}</b>", hdr_sm_b),
+        Paragraph("<b>Area / SUBCON.</b>", hdr_sm_b),
+        Paragraph(f"<b>{note_col}</b>",    hdr_sm_b),
+    ]
+
+    tbl_rows = [h0, h1]
+    sc0 = 2 if has_na else 1   # 0-indexed col of first status col (good/imm/imp)
+    comp_col_start = ncols - 2  # compliance_header spans last 2 cols
+
+    tbl_styles = [
+        # ── Item/N/A header: DOCX grey D9D9D9, black text ──
+        ("BACKGROUND", (0,0), (sc0-1, 1), GREY_D9),
+        ("TEXTCOLOR",  (0,0), (sc0-1, 1), BLACK),
+        # ── Status column headers: exact DOCX colors, black text ──
+        ("BACKGROUND", (sc0,   0), (sc0,   1), HDR_GOOD),   # #92D050 lime
+        ("BACKGROUND", (sc0+1, 0), (sc0+1, 1), HDR_IMM),    # #FF0000 red
+        ("BACKGROUND", (sc0+2, 0), (sc0+2, 1), HDR_IMP),    # #FFFF00 yellow
+        ("TEXTCOLOR",  (sc0,   0), (sc0+2, 1), BLACK),
+        # ── Compliance cols: DOCX grey D9D9D9, black text ──
+        ("BACKGROUND", (comp_col_start, 0), (-1, 1), GREY_D9),
+        ("TEXTCOLOR",  (comp_col_start, 0), (-1, 1), BLACK),
+        # ── Common header formatting ──
+        ("FONTNAME",   (0,0), (-1,1), "Helvetica-Bold"),
+        ("FONTSIZE",   (0,0), (-1,-1), 7.5),
+        ("ALIGN",      (0,0), (-1,-1), "CENTER"),
+        ("ALIGN",      (0,0), (0,-1), "LEFT"),
+        ("VALIGN",     (0,0), (-1,-1), "MIDDLE"),
+        ("GRID",       (0,0), (-1,-1), 0.5, BLACK),
+        ("TOPPADDING",    (0,0), (-1,-1), 3),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 3),
+        ("LEFTPADDING",   (0,0), (-1,-1), 3),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 3),
+        # ── Span: Item spans rows 0-1 ──
+        ("SPAN", (0,0), (0,1)),
+    ]
+    if has_na:
+        tbl_styles.append(("SPAN", (1,0), (1,1)))
+    tbl_styles.append(("SPAN", (comp_col_start, 0), (ncols-1, 0)))
+    for c in range(sc0, sc0+3):
+        tbl_styles.append(("SPAN", (c, 0), (c, 1)))
+
+    # Section header style: grey D9D9D9, bold italic, black text (matches DOCX)
+    sec_style = ParagraphStyle("sec", parent=styles["Normal"],
+                               fontSize=8, leading=10,
+                               fontName="Helvetica-BoldOblique",
+                               textColor=BLACK)
+    ck_style  = ParagraphStyle("ck", parent=norm, alignment=TA_CENTER)
+
+    def _add_section_header(sec_name):
+        """Insert a full 2-row header repeat (matches DOCX exactly) for a new section."""
+        sh0 = [Paragraph(sec_name, first_sec_style)]
+        if has_na:
+            sh0.append(Paragraph("<b>N/A</b>", hdr_sm_b))
+        sh0 += [
+            Paragraph(f"<b>{col_good}</b>", hdr_sm_b),
+            Paragraph(f"<b>{col_imm}</b>",  hdr_sm_b),
+            Paragraph(f"<b>{col_imp}</b>",  hdr_sm_b),
+            Paragraph(f"<b>{comp_hdr}</b>", hdr_sm_b),
+            "",
+        ]
+        sh1 = [""]
+        if has_na:
+            sh1.append("")
+        sh1 += [
+            Paragraph(f"<b>{TICK}</b>", hdr_sm_b),
+            Paragraph(f"<b>{TICK}</b>", hdr_sm_b),
+            Paragraph(f"<b>{TICK}</b>", hdr_sm_b),
+            Paragraph("<b>Area / SUBCON.</b>", hdr_sm_b),
+            Paragraph(f"<b>{note_col}</b>",    hdr_sm_b),
+        ]
+        r0 = len(tbl_rows)
+        tbl_rows.append(sh0)
+        tbl_rows.append(sh1)
+        r1 = r0 + 1
+        # same styles as main header
+        tbl_styles.extend([
+            ("BACKGROUND", (0, r0), (sc0-1, r1), GREY_D9),
+            ("TEXTCOLOR",  (0, r0), (sc0-1, r1), BLACK),
+            ("BACKGROUND", (sc0,   r0), (sc0,   r1), HDR_GOOD),
+            ("BACKGROUND", (sc0+1, r0), (sc0+1, r1), HDR_IMM),
+            ("BACKGROUND", (sc0+2, r0), (sc0+2, r1), HDR_IMP),
+            ("TEXTCOLOR",  (sc0,   r0), (sc0+2, r1), BLACK),
+            ("BACKGROUND", (comp_col_start, r0), (-1, r1), GREY_D9),
+            ("TEXTCOLOR",  (comp_col_start, r0), (-1, r1), BLACK),
+            ("ALIGN",      (0, r0), (-1, r1), "CENTER"),
+            ("VALIGN",     (0, r0), (-1, r1), "MIDDLE"),
+            ("FONTNAME",   (0, r0), (-1, r1), "Helvetica-Bold"),
+            ("FONTSIZE",   (0, r0), (-1, r1), 6.5),
+            ("TOPPADDING",    (0, r0), (-1, r1), 2),
+            ("BOTTOMPADDING", (0, r0), (-1, r1), 2),
+            ("SPAN", (0, r0), (0, r1)),
+            ("ALIGN", (0, r0), (0, r1), "LEFT"),
+            ("SPAN", (comp_col_start, r0), (ncols-1, r0)),
+        ])
+        for c in range(sc0, sc0+3):
+            tbl_styles.append(("SPAN", (c, r0), (c, r1)))
+        if has_na:
+            tbl_styles.append(("SPAN", (1, r0), (1, r1)))
+
+    current_section = None
+    for idx, it in enumerate(items):
+        sec = it.get("section", "")
+        if sec != current_section:
+            current_section = sec
+            if sec != first_section:   # first section is already in main header
+                _add_section_header(sec)
+
+        st  = it.get("status", "good")
+        r   = len(tbl_rows)
+        row = [Paragraph(it.get("item", ""), norm)]
+        if has_na:
+            row.append(_status_cell(st == "na"))
+        row += [
+            _status_cell(st == "good"),
+            _status_cell(st == "immediately"),
+            _status_cell(st == "improve"),
+            Paragraph(it.get("area_sub", "") or "", sm),
+            Paragraph(it.get("note", "") or "", sm),
+        ]
+        tbl_rows.append(row)
+        # All data rows: white background (DOCX has no colored row backgrounds)
+
+    cl_tbl = Table(tbl_rows, colWidths=col_widths, repeatRows=2)
+    cl_tbl.setStyle(TableStyle(tbl_styles))
+    story.append(cl_tbl)
+    story.append(Spacer(1, 0.5*cm))
+
+    # ── JSO / Notes section ──
+    obs_raw = cl.observations or ""
+    obs_data = {}
+    if obs_raw.startswith("{"):
+        try:
+            obs_data = json.loads(obs_raw)
+        except Exception:
+            obs_data = {}
+
+    jso_rows = obs_data.get("jso", []) if obs_data else []
+    extra_notes = obs_data.get("notes", "") if obs_data else (obs_raw if obs_raw and not obs_raw.startswith("{") else "")
+
+    # Notes label — italic, matches DOCX style
+    story.append(Paragraph(
+        "<i><b>Notes / Observations:</b> Short Description of observation. "
+        "For more details, refer to the observations in JSO using the Ob.No.</i>",
+        ParagraphStyle("obs_lbl", parent=styles["Normal"], fontSize=8, leading=10,
+                       fontName="Helvetica-Oblique")))
+    story.append(Spacer(1, 0.15*cm))
+
+    # JSO table — plain black borders, bold header text (no colored background)
+    jso_data = [[
+        Paragraph("<b>JSO\nOb.No.</b>", boldC),
+        Paragraph("<b>Short Description of Observation</b>", boldC),
+    ]]
+    for row in jso_rows:
+        jso_data.append([Paragraph(row.get("no", ""), norm),
+                         Paragraph(row.get("desc", ""), norm)])
+    # Match DOCX: show many empty rows (at least 20 total)
+    while len(jso_data) < 21:
+        jso_data.append(["", ""])
+
+    jso_tbl = Table(jso_data, colWidths=[2.5*cm, w - 2.5*cm])
+    jso_tbl.setStyle(TableStyle([
+        ("FONTNAME",   (0,0), (-1,0), "Helvetica-Bold"),
+        ("FONTSIZE",   (0,0), (-1,-1), 8),
+        ("GRID",       (0,0), (-1,-1), 0.5, BLACK),
+        ("VALIGN",     (0,0), (-1,-1), "MIDDLE"),
+        ("ALIGN",      (0,0), (0,-1), "CENTER"),
+        ("TOPPADDING",    (0,0), (-1,-1), 5),
+        ("BOTTOMPADDING", (0,0), (-1,-1), 5),
+        ("LEFTPADDING",   (0,0), (-1,-1), 4),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 4),
+    ]))
+    story.append(jso_tbl)
+
+    if extra_notes:
+        story.append(Spacer(1, 0.2*cm))
+        story.append(Paragraph(f"<i>{extra_notes}</i>", norm))
+
+    story.append(Spacer(1, 0.4*cm))
+
+    # ── Signatories table — matches DOCX exactly ──
+    # Title row: light blue (C6D9F1), centered bold
+    # Column headers: grey D9D9D9, bold italic
+    # Data rows: white, tall (for signatures)
+    display_name = cl.signatory_name or (cl.officer.name if cl.officer else "")
+    officer_name = f"{display_name} — Environment Officer" if display_name else "— Environment Officer"
+
+    # Build signature image cell if base64 data exists
+    sig_img_cell = ""
+    if cl.signature_data:
+        try:
+            import base64, io as _io
+            _hdr, _b64 = cl.signature_data.split(",", 1)
+            _raw = base64.b64decode(_b64)
+            from reportlab.platypus import Image as RLImage
+            sig_img_cell = RLImage(_io.BytesIO(_raw), width=3.0*cm, height=0.9*cm)
+        except Exception:
+            sig_img_cell = ""
+
+    # Load attendees from DB
+    import base64 as _b64mod, io as _io
+    att_list = []
+    if cl.attendees_sigs:
+        try:
+            att_list = json.loads(cl.attendees_sigs)
+        except Exception:
+            att_list = []
+
+    def _att_sig_img(sig_str):
+        if not sig_str:
+            return ""
+        try:
+            _, b64 = sig_str.split(",", 1)
+            raw = _b64mod.b64decode(b64)
+            from reportlab.platypus import Image as RLImage
+            return RLImage(_io.BytesIO(raw), width=3.0*cm, height=0.9*cm)
+        except Exception:
+            return ""
+
+    sigh_style = ParagraphStyle("sigh", parent=styles["Normal"], fontSize=8,
+                                fontName="Helvetica-BoldOblique", alignment=TA_CENTER)
+    sig_data = [
+        [Paragraph("<b>Signatories of Attendees</b>",
+                   ParagraphStyle("sigt", parent=styles["Normal"], fontSize=9,
+                                  fontName="Helvetica-Bold", alignment=TA_CENTER)), "", ""],
+        [Paragraph("<i><b>Name and Role</b></i>", sigh_style),
+         Paragraph("<i><b>Company</b></i>", sigh_style),
+         Paragraph("<i><b>Signature</b></i>", sigh_style)],
+        [Paragraph(officer_name, norm), "", sig_img_cell],
+    ]
+    # Add saved attendees
+    for att in att_list:
+        att_name_para = Paragraph(att.get("name", ""), norm)
+        att_comp_para = Paragraph(att.get("company", ""), norm)
+        sig_data.append([att_name_para, att_comp_para, _att_sig_img(att.get("sig", ""))])
+    # Pad to minimum 4 data rows total
+    while len(sig_data) < 6:
+        sig_data.append(["", "", ""])
+
+    n_rows = len(sig_data)
+    row_h = [None, None] + [1.4*cm] * (n_rows - 2)
+    sig_tbl = Table(sig_data, colWidths=["*", 4.5*cm, 4.5*cm], rowHeights=row_h)
+    sig_tbl.setStyle(TableStyle([
+        # Title row: blue background spanning all cols
+        ("SPAN",       (0,0), (2,0)),
+        ("BACKGROUND", (0,0), (2,0), SIG_BLUE),
+        ("FONTNAME",   (0,0), (2,0), "Helvetica-Bold"),
+        ("ALIGN",      (0,0), (2,0), "CENTER"),
+        # Column headers: grey
+        ("BACKGROUND", (0,1), (2,1), GREY_D9),
+        ("FONTNAME",   (0,1), (2,1), "Helvetica-BoldOblique"),
+        ("ALIGN",      (0,1), (2,1), "CENTER"),
+        # All rows
+        ("FONTSIZE",   (0,0), (-1,-1), 8),
+        ("GRID",       (0,0), (-1,-1), 0.5, BLACK),
+        ("VALIGN",     (0,0), (-1,-1), "MIDDLE"),
+        ("TOPPADDING",    (0,0), (2,1), 3),
+        ("BOTTOMPADDING", (0,0), (2,1), 3),
+        ("TOPPADDING",    (0,2), (-1,-1), 3),
+        ("BOTTOMPADDING", (0,2), (-1,-1), 3),
+        ("LEFTPADDING",   (0,0), (-1,-1), 5),
+        ("RIGHTPADDING",  (0,0), (-1,-1), 5),
+    ]))
+    story.append(sig_tbl)
+
+    # NA = Not applicable note
+    if has_na:
+        story.append(Spacer(1, 0.2*cm))
+        story.append(Paragraph("<b>NA = Not applicable</b>",
+                               ParagraphStyle("na", parent=styles["Normal"], fontSize=7.5,
+                                              fontName="Helvetica-Bold")))
+
+    story.append(Spacer(1, 0.3*cm))
+
+    doc.build(story)
+    fname = f"{cl.checklist_type}_{(cl.report_no or 'checklist').replace(' ', '_').replace('/', '-')}.pdf"
+    resp = make_response(buf.getvalue())
+    resp.headers["Content-Type"] = "application/pdf"
+    resp.headers["Content-Disposition"] = f'inline; filename="{fname}"'
+    return resp
 
 
-@app.route("/welfare/sanitation/", methods=["GET", "POST"])
+@app.route("/env/checklist/<int:clid>/delete", methods=["POST"])
 @login_required
-@welfare_officer_required
-def welfare_sanitation():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    existing = WelfareSanitationCheck.query.filter_by(company_id=_c, officer_id=u.id, date=today).first()
-    history = WelfareSanitationCheck.query.filter_by(company_id=_c, officer_id=u.id).order_by(WelfareSanitationCheck.date.desc()).limit(10).all()
-    if request.method == "POST" and not existing:
-        r = request.form
-        rec = WelfareSanitationCheck(officer_id=u.id, company_id=_c, date=today,
-            package=r.get("package",""), location=r.get("location",""),
-            worker_count=int(r.get("worker_count") or 0) or None,
-            toilet_count=int(r.get("toilet_count") or 0) or None,
-            washing_units=int(r.get("washing_units") or 0) or None,
-            toilet_ratio_met=bool(r.get("toilet_ratio_met")),
-            chlorine_ppm=float(r.get("chlorine_ppm") or 0) or None,
-            chlorine_ok=bool(int(r.get("chlorine_ok") or 0)),
-            toilets_clean=bool(r.get("toilets_clean")),
-            soap_paper_available=bool(r.get("soap_paper_available")),
-            waste_bins_emptied=bool(r.get("waste_bins_emptied")),
-            no_standing_water=bool(r.get("no_standing_water")),
-            pest_control_ok=bool(r.get("pest_control_ok")),
-            notes=r.get("notes",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ فحص الصرف الصحي.", "success")
-        return redirect(url_for("welfare_home"))
-    return render_template("welfare_sanitation_check.html", today=today, existing=existing, history=history)
+@welfare_supervisor_required
+def env_checklist_delete(clid):
+    _c = cid()
+    cl = EnvChecklist.query.filter_by(id=clid, company_id=_c).first_or_404()
+    db.session.delete(cl)
+    try:
+        db.session.commit()
+        flash("Checklist deleted.", "success")
+    except Exception:
+        db.session.rollback()
+        flash("Error deleting checklist.", "danger")
+    return redirect(url_for("welfare_supervisor"))
 
 
-@app.route("/welfare/accommodation/", methods=["GET", "POST"])
-@login_required
-@welfare_officer_required
-def welfare_accommodation():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    records = WelfareAccommodation.query.filter_by(company_id=_c).order_by(WelfareAccommodation.inspect_date.desc()).limit(20).all()
-    if request.method == "POST":
-        r = request.form
-        rec = WelfareAccommodation(officer_id=u.id, company_id=_c,
-            inspect_date=r.get("inspect_date") or today,
-            camp_name=r.get("camp_name",""),
-            capacity=int(r.get("capacity") or 0) or None,
-            occupancy=int(r.get("occupancy") or 0) or None,
-            cleanliness=int(r.get("cleanliness") or 0) or None,
-            facilities=int(r.get("facilities") or 0) or None,
-            safety_rating=int(r.get("safety_rating") or 0) or None,
-            space_per_person_ok=bool(r.get("space_per_person_ok")),
-            no_triple_bunks=bool(r.get("no_triple_bunks")),
-            ac_24_7_working=bool(r.get("ac_24_7_working")),
-            pest_control_ok=bool(r.get("pest_control_ok")),
-            occupancy_within_capacity=bool(r.get("occupancy_within_capacity")),
-            emergency_exits_ok=bool(r.get("emergency_exits_ok")),
-            issues_found=r.get("issues_found",""),
-            action_needed=r.get("action_needed",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ تقرير الإقامة.", "success")
-        return redirect(url_for("welfare_accommodation"))
-    return render_template("welfare_accommodation.html", records=records)
+# ── Service Worker & Offline Page ────────────────────────────────────────────
+# sw.js must be served from the root URL so its scope covers all pages.
+
+@app.route('/sw.js')
+def service_worker_js():
+    response = send_file(
+        os.path.join(BASE_DIR, 'static', 'js', 'sw.js'),
+        mimetype='application/javascript'
+    )
+    # No caching — browser must always get the latest version to detect updates
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Service-Worker-Allowed'] = '/'
+    return response
 
 
-@app.route("/welfare/transport/", methods=["GET", "POST"])
-@login_required
-@welfare_officer_required
-def welfare_transport():
-    u = cur_user(); _c = cid(); today = datetime.now(RIYADH_TZ).date()
-    records = WelfareTransport.query.filter_by(company_id=_c).order_by(WelfareTransport.log_date.desc()).limit(30).all()
-    if request.method == "POST":
-        r = request.form
-        rec = WelfareTransport(officer_id=u.id, company_id=_c,
-            log_date=r.get("log_date") or today,
-            vehicle_id=r.get("vehicle_id",""),
-            route=r.get("route",""),
-            passengers=int(r.get("passengers") or 0) or None,
-            capacity=int(r.get("capacity") or 0) or None,
-            driver_name=r.get("driver_name",""),
-            condition_ok=bool(r.get("condition_ok")),
-            ac_working=bool(r.get("ac_working")),
-            seatbelts_ok=bool(r.get("seatbelts_ok")),
-            capacity_not_exceeded=bool(r.get("capacity_not_exceeded")),
-            driver_license_valid=bool(r.get("driver_license_valid")),
-            no_standing_passengers=bool(r.get("no_standing_passengers")),
-            issues_found=r.get("issues_found",""))
-        db.session.add(rec); db.session.commit()
-        flash("تم حفظ سجل الرحلة.", "success")
-        return redirect(url_for("welfare_transport"))
-    return render_template("welfare_transport.html", records=records)
+@app.route('/offline')
+def offline_page():
+    return render_template('offline.html')
+
+
+# ── Offline Sync ──────────────────────────────────────────────────────────────
+# Receives a JSON array of queued records from offline.js and saves them to DB.
+# Path starts with /api/ so CSRF is skipped (handled by session auth check below).
+
+@app.route("/api/sync", methods=["POST"])
+def api_offline_sync():
+    u = cur_user()
+    if not u:
+        return jsonify(error="Unauthorized"), 401
+    if u.role not in ("safety_officer", "safety_supervisor", "safety_welfare",
+                      "environment_officer", "admin", "super_admin"):
+        return jsonify(error="Forbidden"), 403
+
+    items = request.get_json(silent=True) or []
+    failed = []
+
+    for item in items:
+        item_id   = item.get("id", "")
+        item_type = item.get("type", "")
+        data      = item.get("data") or {}
+        try:
+            _sync_dispatch(u, item_type, data)
+        except Exception as exc:
+            app.logger.warning("offline sync error [%s/%s]: %s", item_type, item_id, exc)
+            failed.append(item_id)
+
+    try:
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        app.logger.error("offline sync commit failed: %s", exc)
+        return jsonify(error="Database error"), 500
+
+    return jsonify(ok=True, failed=failed)
+
+
+def _sync_dispatch(u, item_type, data):
+    """Route one queued item to the right save function."""
+    today = datetime.now(RIYADH_TZ).date()
+
+    if item_type == "location":
+        pkg  = data.get("pkg")
+        unit = str(data.get("unit", "")).strip()
+        area = str(data.get("area_text", "")).strip()
+        if not pkg or not unit:
+            raise ValueError("location: missing pkg or unit")
+        loc = UserLocation.query.filter_by(user_id=u.id).first()
+        if not loc:
+            loc = UserLocation(user_id=u.id, company_id=u.company_id)
+            db.session.add(loc)
+        loc.pkg       = int(pkg)
+        loc.unit      = unit
+        loc.area_text = area
+        loc.updated_at = datetime.utcnow()
+        if u.role == "safety_officer":
+            loc_text = f"PKG{pkg} Unit{unit}" + (f" - {area}" if area else "")
+            ci = HseCheckin.query.filter_by(officer_id=u.id, date=today).first()
+            if ci:
+                ci.location = loc_text
+            else:
+                db.session.add(HseCheckin(officer_id=u.id, date=today,
+                                          location=loc_text, company_id=u.company_id))
+
+    elif item_type == "observation":
+        obs_date   = _safe_date(data.get("date")) or today
+        obs_type   = data.get("obs_type", "").strip()
+        if not obs_type:
+            raise ValueError("observation: obs_type required")
+        db.session.add(HseObservation(
+            officer_id  = u.id,
+            date        = obs_date,
+            location    = data.get("location", "").strip(),
+            obs_type    = obs_type,
+            category    = data.get("category", "").strip() or None,
+            risk_level  = data.get("risk_level", "").strip() or None,
+            description = data.get("description", "").strip(),
+            action_taken= data.get("action_taken", "").strip(),
+            company_id  = u.company_id,
+        ))
+
+    elif item_type == "tbt":
+        tbt_date = _safe_date(data.get("date")) or today
+        topic    = data.get("topic", "").strip()
+        if not topic:
+            raise ValueError("tbt: topic required")
+        sup_code = data.get("supervisor_code", "").strip()
+        supervisor = None
+        if sup_code:
+            supervisor = User.query.filter(
+                User.supervisor_code == sup_code, User.is_active == True
+            ).first()
+        tbt = HseTbt(
+            officer_id    = u.id,
+            date          = tbt_date,
+            topic         = topic,
+            location      = data.get("location", "").strip(),
+            supervisor_id = supervisor.id if supervisor else None,
+            company_id    = u.company_id,
+        )
+        db.session.add(tbt)
+        db.session.flush()
+        emp_numbers = data.get("emp_number[]") or []
+        emp_names   = data.get("emp_name[]")   or []
+        if isinstance(emp_numbers, str): emp_numbers = [emp_numbers]
+        if isinstance(emp_names,   str): emp_names   = [emp_names]
+        for num, name in zip(emp_numbers, emp_names):
+            num  = str(num).strip()
+            name = str(name).strip()
+            if num and name:
+                db.session.add(HseTbtAttendance(
+                    tbt_id=tbt.id, emp_number=num,
+                    emp_name=name, company_id=u.company_id,
+                ))
+
+    elif item_type == "near_miss":
+        nm_date         = _safe_date(data.get("date")) or today
+        location        = data.get("location", "").strip()
+        description     = data.get("description", "").strip()
+        immediate_cause = data.get("immediate_cause", "").strip()
+        action_taken    = data.get("action_taken", "").strip()
+        reported_to     = data.get("reported_to", "").strip()
+        if not all([location, description, immediate_cause, action_taken, reported_to]):
+            raise ValueError("near_miss: all fields required")
+        db.session.add(HseNearMiss(
+            officer_id      = u.id,
+            date            = nm_date,
+            location        = location,
+            description     = description,
+            immediate_cause = immediate_cause,
+            action_taken    = action_taken,
+            reported_to     = reported_to,
+            company_id      = u.company_id,
+        ))
+
+    elif item_type == "ptw_door":
+        mod_seq  = int(data.get("_mod_seq") or 0)
+        door_seq = int(data.get("_door_seq") or 0)
+        if not mod_seq or not door_seq:
+            raise ValueError("ptw_door: missing mod_seq or door_seq")
+        # Reject if already submitted and not rejected
+        existing = PtwDoorSubmission.query.filter_by(
+            officer_id=u.id, module_seq=mod_seq, door_seq=door_seq
+        ).first()
+        if existing and existing.status in ("pending", "approved"):
+            return  # already submitted, skip silently
+        # Collect answers q1, q2, q3, ...
+        answers = []
+        i = 1
+        while True:
+            val = data.get(f"q{i}", "").strip()
+            if not val and i > 10:
+                break
+            if val:
+                answers.append(val)
+            elif i > len(answers) + 3:
+                break
+            i += 1
+        if existing and existing.status == "rejected":
+            existing.answers     = json.dumps(answers, ensure_ascii=False)
+            existing.photo_path  = None
+            existing.status      = "pending"
+            existing.submitted_at = datetime.utcnow()
+        else:
+            db.session.add(PtwDoorSubmission(
+                officer_id=u.id, module_seq=mod_seq, door_seq=door_seq,
+                answers=json.dumps(answers, ensure_ascii=False),
+                photo_path=None, status="pending",
+            ))
+
+    elif item_type == "ptw_ref_door":
+        mod_seq  = int(data.get("_mod_seq") or 0)
+        door_seq = int(data.get("_door_seq") or 0)
+        if not mod_seq or not door_seq:
+            raise ValueError("ptw_ref_door: missing mod_seq or door_seq")
+        existing = PtwDoorSubmission.query.filter_by(
+            officer_id=u.id, module_seq=mod_seq, door_seq=door_seq
+        ).first()
+        if existing:
+            return  # already marked, skip
+        db.session.add(PtwDoorSubmission(
+            officer_id=u.id, module_seq=mod_seq, door_seq=door_seq,
+            answers=json.dumps([], ensure_ascii=False),
+            photo_path=None, status="approved",
+        ))
+
+    elif item_type == "env_checklist":
+        ctype = data.get("_ctype", "").strip()
+        if ctype not in ENV_CHECKLISTS:
+            raise ValueError(f"env_checklist: unknown ctype '{ctype}'")
+        cfg = ENV_CHECKLISTS[ctype]
+        item_count = int(data.get("_item_count") or 0)
+        if not item_count:
+            raise ValueError("env_checklist: missing _item_count")
+
+        # Reconstruct items_data from s_N / a_N / n_N fields
+        items_data = []
+        flat_items = []
+        for sec in cfg["sections"]:
+            for item_text in sec["items"]:
+                flat_items.append((sec["name"], item_text))
+        for idx, (sec_name, item_text) in enumerate(flat_items[:item_count]):
+            status = data.get(f"s_{idx}", "na" if cfg.get("has_na") else "good")
+            items_data.append({
+                "item":     item_text,
+                "section":  sec_name,
+                "status":   status,
+                "area_sub": str(data.get(f"a_{idx}", "") or "").strip(),
+                "note":     str(data.get(f"n_{idx}", "") or "").strip(),
+            })
+
+        # area_types: may be single string, list, or False
+        area_types_raw = data.get("area_types")
+        if isinstance(area_types_raw, list):
+            checked_areas = area_types_raw
+        elif area_types_raw and area_types_raw is not True and area_types_raw is not False:
+            checked_areas = [str(area_types_raw)]
+        else:
+            checked_areas = []
+        area_other = str(data.get("area_other") or "").strip()
+        area_detail = str(data.get("area_detail") or "").strip()
+        area_parts  = checked_areas + ([area_other] if area_other else [])
+        area_str    = (", ".join(area_parts) + (" — " + area_detail if area_detail else ""))[:199]
+
+        # JSO rows
+        jso_rows = []
+        for i in range(4):
+            jno  = str(data.get(f"jso_no_{i}") or "").strip()
+            jdsc = str(data.get(f"jso_desc_{i}") or "").strip()
+            if jno or jdsc:
+                jso_rows.append({"no": jno, "desc": jdsc})
+
+        filled_date_str = str(data.get("filled_date") or "").strip()
+        try:
+            filled_date = date.fromisoformat(filled_date_str)
+        except (ValueError, TypeError):
+            filled_date = datetime.now(RIYADH_TZ).date()
+
+        count = EnvChecklist.query.filter_by(company_id=u.company_id, checklist_type=ctype).count() + 1
+        report_no = f"{cfg['report_prefix']} #{count:03d} / {filled_date.year}"
+        custom_no = str(data.get("report_no_custom") or "").strip()
+        if custom_no:
+            report_no = f"{cfg['report_prefix']} #{custom_no} / {filled_date.year}"
+
+        obs_payload = json.dumps(
+            {"jso": jso_rows, "notes": str(data.get("observations") or "").strip()},
+            ensure_ascii=False)
+
+        db.session.add(EnvChecklist(
+            company_id      = u.company_id,
+            officer_id      = u.id,
+            checklist_type  = ctype,
+            area            = area_str,
+            report_no       = report_no,
+            subcontractor   = str(data.get("subcontractor") or "").strip(),
+            filled_date     = filled_date,
+            items_json      = json.dumps(items_data, ensure_ascii=False),
+            observations    = obs_payload,
+        ))
+
+    else:
+        raise ValueError(f"unknown type: {item_type}")
 
 
 # نقطة دخول WSGI لاسم "application"

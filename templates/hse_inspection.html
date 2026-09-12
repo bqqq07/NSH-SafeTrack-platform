@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.chk-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.chk-row:last-child{border-bottom:none}
+.chk-toggle{display:flex;gap:0;border-radius:8px;overflow:hidden;border:1px solid var(--border)}
+.chk-toggle label{padding:5px 14px;font-size:13px;cursor:pointer;user-select:none;transition:background .15s}
+.chk-toggle input[type=radio]{display:none}
+.chk-toggle input[type=radio]:checked + label.ok-lbl{background:#22c55e;color:#fff;font-weight:700}
+.chk-toggle input[type=radio]:checked + label.no-lbl{background:#ef4444;color:#fff;font-weight:700}
+.score-ring{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+            font-size:20px;font-weight:800;border:5px solid}
+</style>
+
+<h2 style="margin-bottom:4px">Safety Inspection Checklist</h2>
+<p class="muted" style="margin-top:0;font-size:13px">{{ today.strftime('%A, %d %B %Y') }}</p>
+
+{% if existing %}
+<div class="card" style="max-width:460px;border-left:4px solid {% if existing.overall_score >= 80 %}var(--success){% elif existing.overall_score >= 60 %}#f59e0b{% else %}var(--danger){% endif %}">
+  <div style="display:flex;align-items:center;gap:16px">
+    <div class="score-ring" style="border-color:{% if existing.overall_score >= 80 %}#22c55e{% elif existing.overall_score >= 60 %}#f59e0b{% else %}#ef4444{% endif %};
+         color:{% if existing.overall_score >= 80 %}#15803d{% elif existing.overall_score >= 60 %}#92400e{% else %}#b91c1c{% endif %}">
+      {{ existing.overall_score|round|int }}%
+    </div>
+    <div>
+      <p style="margin:0;font-weight:700">Today's Inspection Score</p>
+      <p style="margin:0;font-size:13px;color:var(--muted)">{{ existing.location or '' }}</p>
+      <p style="margin:4px 0 0;font-size:12px;color:{% if existing.overall_score >= 80 %}var(--success){% elif existing.overall_score >= 60 %}#f59e0b{% else %}var(--danger){% endif %}">
+        {% if existing.overall_score >= 80 %}Good — area is compliant
+        {% elif existing.overall_score >= 60 %}Needs improvement
+        {% else %}Action required immediately{% endif %}
+      </p>
+    </div>
+  </div>
+  <p style="margin:10px 0 0;font-size:12px;color:var(--muted)">You can re-submit below to update today's record.</p>
+</div>
+{% endif %}
+
+<div class="card" style="max-width:680px">
+  <h3 style="margin-top:0">{{ 'Update Today\'s Checklist' if existing else 'New Inspection Checklist' }}</h3>
+  <form method="post" autocomplete="off">
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <label>Location
+        <input type="text" name="location" value="{{ existing.location if existing else (loc or '') }}"
+               list="loc_list" style="width:100%;box-sizing:border-box">
+        <datalist id="loc_list">{% for l in locations %}<option value="{{ l }}">{% endfor %}</datalist>
+      </label>
+      <label>Notes
+        <input type="text" name="notes" value="{{ existing.notes or '' }}"
+               placeholder="General notes..." style="width:100%;box-sizing:border-box">
+      </label>
+    </div>
+
+    <div id="checklistItems">
+      {% for item_text in items %}
+      {% set i = loop.index0 %}
+      {% set prev = existing_items[i] if existing_items and i < existing_items|length else none %}
+      <div class="chk-row">
+        <div style="flex:1;font-size:13px;font-weight:500">{{ item_text }}</div>
+        <div class="chk-toggle">
+          <input type="radio" name="item_{{ i }}" id="ok_{{ i }}" value="ok"
+                 {% if prev and prev.ok %}checked{% endif %}>
+          <label for="ok_{{ i }}" class="ok-lbl">✓ OK</label>
+          <input type="radio" name="item_{{ i }}" id="no_{{ i }}" value="no"
+                 {% if prev and not prev.ok %}checked{% endif %}>
+          <label for="no_{{ i }}" class="no-lbl">✗ No</label>
+        </div>
+        <input type="text" name="note_{{ i }}" value="{{ prev.note if prev else '' }}"
+               placeholder="Note..." style="width:160px;font-size:12px;box-sizing:border-box">
+      </div>
+      {% endfor %}
+    </div>
+
+    <!-- Live score preview -->
+    <div style="margin:16px 0;padding:12px;background:#f0f9ff;border-radius:8px;display:flex;align-items:center;gap:16px">
+      <div>
+        <p style="margin:0;font-size:12px;color:var(--muted)">SCORE PREVIEW</p>
+        <p style="margin:0;font-size:24px;font-weight:800;color:#0369a1" id="scorePreview">—%</p>
+      </div>
+      <div style="flex:1;background:#e0f2fe;border-radius:4px;height:8px;overflow:hidden">
+        <div id="scoreBar" style="height:100%;background:#0369a1;width:0%;transition:width .3s"></div>
+      </div>
+    </div>
+
+    <button type="submit" class="btn primary" style="width:100%">
+      {{ 'Update Inspection' if existing else 'Submit Inspection' }}
+    </button>
+  </form>
+</div>
+
+<!-- History -->
+{% if history %}
+<div class="card">
+  <h3 style="margin-top:0">Recent Inspections</h3>
+  <table class="table compact">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Location</th>
+        <th class="center">Score</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for rec in history %}
+      <tr>
+        <td class="nowrap">{{ rec.date.strftime('%d %b %Y') }}</td>
+        <td>{{ rec.location or '—' }}</td>
+        <td class="center">
+          {% if rec.overall_score is not none %}
+          <span style="font-weight:700;color:{% if rec.overall_score >= 80 %}var(--success){% elif rec.overall_score >= 60 %}#f59e0b{% else %}var(--danger){% endif %}">
+            {{ rec.overall_score }}%
+          </span>
+          {% else %}—{% endif %}
+        </td>
+        <td style="font-size:12px;color:var(--muted)">{{ rec.notes or '' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<script>
+const TOTAL = {{ items | length }};
+
+function updateScore() {
+  let ok = 0;
+  for (let i = 0; i < TOTAL; i++) {
+    const sel = document.querySelector(`input[name="item_${i}"]:checked`);
+    if (sel && sel.value === "ok") ok++;
+  }
+  const pct = TOTAL > 0 ? Math.round(ok / TOTAL * 100) : 0;
+  document.getElementById("scorePreview").textContent = pct + "%";
+  document.getElementById("scoreBar").style.width = pct + "%";
+  document.getElementById("scoreBar").style.background = pct >= 80 ? "#22c55e" : pct >= 60 ? "#f59e0b" : "#ef4444";
+}
+
+document.querySelectorAll('input[type=radio]').forEach(r => r.addEventListener("change", updateScore));
+updateScore();
+</script>
+{% endblock %}

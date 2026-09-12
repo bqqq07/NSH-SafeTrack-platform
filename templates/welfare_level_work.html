@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}{{ lvl.code }} — Field Work{% endblock %}
+{% block content %}
+<div style="max-width:640px;margin:0 auto">
+
+  {# ── Header ── #}
+  <div style="background:#0f172a;color:#e2e8f0;border-radius:14px;padding:18px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:8px">
+      <div>
+        <span style="display:inline-block;padding:3px 10px;border-radius:20px;font-size:.78rem;
+                     font-weight:700;background:#1e3a5f;color:#93c5fd;letter-spacing:.04em">
+          {{ lvl.module }} · Ch {{ lvl.chapter }}
+        </span>
+        <h2 style="margin:8px 0 4px;font-size:1.3rem">{{ lvl.title }}</h2>
+        <div style="font-size:.8rem;color:#94a3b8">{{ lvl.ref }}</div>
+      </div>
+      <a href="{{ url_for('welfare_level', code=lvl.code) }}"
+         style="color:#94a3b8;text-decoration:none;font-size:.88rem;margin-top:4px">← Back</a>
+    </div>
+
+    {# Progress bar #}
+    <div style="margin-top:14px">
+      {% set pct = [100, (done_count * 100 // target if target else 100)] | min %}
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:.88rem">
+        <span>Progress this level</span>
+        <strong>{{ done_count }} / {{ target }}</strong>
+      </div>
+      <div style="height:10px;background:#1e293b;border-radius:6px;overflow:hidden">
+        <div style="height:10px;background:{% if done_count >= target %}#22c55e{% else %}#38bdf8{% endif %};
+                    width:{{ pct }}%;transition:width .3s"></div>
+      </div>
+      {% if done_count >= target %}
+        <div style="color:#86efac;font-size:.85rem;margin-top:4px;font-weight:700">
+          ✓ Target reached — go to the level page to request gate approval</div>
+      {% else %}
+        <div style="color:#94a3b8;font-size:.85rem;margin-top:4px">
+          {{ target - done_count }} more submission(s) needed</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {# ── Why this matters ── #}
+  <div style="background:#f0f9ff;border-left:4px solid #38bdf8;border-radius:0 10px 10px 0;
+              padding:12px 16px;margin-bottom:14px;font-size:.92rem;color:#0c4a6e">
+    <strong>Why:</strong> {{ lvl.why }}
+  </div>
+
+  {# ── Field tasks (what to physically do) ── #}
+  <div style="border:2px solid #0f172a;border-radius:14px;padding:16px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+      <span style="background:#0f172a;color:#e2e8f0;padding:4px 12px;border-radius:20px;
+                   font-size:.8rem;font-weight:700;letter-spacing:.05em">FIELD</span>
+      <span style="color:#64748b;font-size:.88rem">What to physically inspect today</span>
+    </div>
+    <p style="margin:0;line-height:1.65">{{ what_field }}</p>
+  </div>
+
+  {# ── How-to steps ── #}
+  <div style="border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:14px">
+    <div style="font-weight:800;color:#0f172a;margin-bottom:10px">Step-by-step</div>
+    <div style="white-space:pre-line;font-size:.92rem;line-height:1.7;color:#1e293b">{{ lvl.how }}</div>
+  </div>
+
+  {# ── Right vs Wrong ── #}
+  <details style="border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:14px">
+    <summary style="cursor:pointer;font-weight:700;color:#0f172a">Show examples</summary>
+    <div style="background:#f0fdf4;color:#166534;border-radius:8px;padding:12px;margin-top:10px;
+                font-size:.9rem;line-height:1.6">
+      <strong>✅ Right:</strong><br>{{ lvl.right }}
+    </div>
+    <div style="background:#fff1f2;color:#9f1239;border-radius:8px;padding:12px;margin-top:8px;
+                font-size:.9rem">
+      <strong>❌ Wrong:</strong> {{ lvl.wrong }}
+    </div>
+  </details>
+
+  {# ── Submit form ── #}
+  <div style="background:#fff;border:2px solid #22c55e;border-radius:14px;padding:18px;margin-bottom:14px">
+    <div style="font-weight:800;font-size:1.05rem;margin-bottom:14px;color:#0f172a">
+      Record today's field work — {{ today.strftime('%d %b %Y') }}
+    </div>
+
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      {# Unit selector #}
+      <label style="display:block;font-weight:700;margin-bottom:6px;color:#0f172a">Unit / Area</label>
+      <select name="unit"
+              style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;
+                     font-size:.95rem;margin-bottom:14px;background:#f8fafc">
+        <option value="">— Select location (optional) —</option>
+        {% for loc in locations %}
+          <option value="{{ loc.code }}">{{ loc.label }}</option>
+        {% endfor %}
+      </select>
+
+      {# Notes #}
+      <label style="display:block;font-weight:700;margin-bottom:6px;color:#0f172a">
+        Field notes
+        <span style="font-weight:400;color:#64748b">
+          (observations, violations, measurements recorded)
+        </span>
+      </label>
+      <textarea name="notes" rows="5"
+                placeholder="e.g. WS-07 chlorine 1.2 ppm ✓ · WS-12 open container → Finding F-042 raised ..."
+                style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:8px;
+                       font-size:.95rem;box-sizing:border-box;resize:vertical;
+                       font-family:inherit;margin-bottom:14px"></textarea>
+
+      {# Measurement flag #}
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;
+                    background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;
+                    padding:12px;margin-bottom:18px">
+        <input type="checkbox" name="has_measurement" value="1"
+               style="width:18px;height:18px;margin-top:2px;flex-shrink:0">
+        <span>
+          <strong>I recorded a measurement today</strong><br>
+          <span style="color:#64748b;font-size:.88rem">
+            Chlorine ppm, heat index value, distance (m), temperature, headcount, etc.
+          </span>
+        </span>
+      </label>
+
+      <button type="submit"
+              style="width:100%;padding:16px;border:0;background:#22c55e;color:#04220f;
+                     border-radius:12px;font-weight:800;font-size:1rem;cursor:pointer">
+        ✓ Submit field work
+      </button>
+    </form>
+  </div>
+
+  {# ── Desk & Analysis reminders ── #}
+  {% if what_desk %}
+  <details style="border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:10px">
+    <summary style="cursor:pointer;font-weight:700;color:#0369a1">📋 Desk — what to enter in the system</summary>
+    <p style="margin-top:10px;line-height:1.65;color:#0c4a6e">{{ what_desk }}</p>
+  </details>
+  {% endif %}
+
+  {% if what_analysis %}
+  <details style="border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:14px">
+    <summary style="cursor:pointer;font-weight:700;color:#7c3aed">📊 Analysis — how to prove competence over time</summary>
+    <p style="margin-top:10px;line-height:1.65;color:#4c1d95">{{ what_analysis }}</p>
+  </details>
+  {% endif %}
+
+  {# ── Recent submissions ── #}
+  {% if recent %}
+  <div style="border:1px solid #e2e8f0;border-radius:14px;padding:14px;margin-bottom:14px">
+    <div style="font-weight:700;margin-bottom:10px;color:#0f172a">Recent submissions — {{ lvl.code }}</div>
+    <table style="width:100%;border-collapse:collapse;font-size:.88rem">
+      <thead>
+        <tr style="border-bottom:2px solid #f1f5f9;color:#64748b">
+          <th style="text-align:left;padding:4px 6px">Date</th>
+          <th style="text-align:left;padding:4px 6px">Unit</th>
+          <th style="text-align:center;padding:4px 6px">Measured</th>
+          <th style="text-align:left;padding:4px 6px">Notes</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for w in recent %}
+        <tr style="border-bottom:1px solid #f1f5f9">
+          <td style="padding:6px 6px;white-space:nowrap">{{ w.date.strftime('%d %b') }}</td>
+          <td style="padding:6px 6px">{{ w.unit or '—' }}</td>
+          <td style="padding:6px 6px;text-align:center">
+            {{ '✓' if w.has_measurement else '' }}
+          </td>
+          <td style="padding:6px 6px;color:#475569;max-width:260px;overflow:hidden;
+                     text-overflow:ellipsis;white-space:nowrap">
+            {{ w.notes or '' }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  <a href="{{ url_for('welfare_level', code=lvl.code) }}"
+     style="display:block;text-align:center;padding:12px;color:#475569;
+            text-decoration:none;font-size:.9rem">← Back to {{ lvl.code }} — {{ lvl.title }}</a>
+
+</div>
+{% endblock %}

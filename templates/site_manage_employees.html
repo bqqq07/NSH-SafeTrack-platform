@@ -1,0 +1,261 @@
+{% extends "base.html" %}
+{% block title %}Manage Employees{% endblock %}
+{% block content %}
+{% include "partials/_rtable.html" %}
+<style>
+  .sm-toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .sm-toolbar label{display:flex;flex-direction:column;font-size:.8rem;color:#6b7280;gap:4px}
+  .sm-toolbar select{min-width:220px;padding:.55rem;border:1px solid #d1d5db;border-radius:6px;font-size:.95rem}
+  .sm-tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+  .sm-tab{padding:.35rem .85rem;border:1px solid #d1d5db;border-radius:999px;font-size:.82rem;
+          text-decoration:none;color:#374151;background:#fff;white-space:nowrap}
+  .sm-tab.on{background:#1d4ed8;color:#fff;border-color:#1d4ed8}
+  .sm-st{display:inline-block;padding:.14rem .55rem;border-radius:999px;font-size:.72rem;font-weight:600}
+  .st-active{background:#dcfce7;color:#166534}
+  .st-resigned{background:#fee2e2;color:#991b1b}
+  .st-unassigned{background:#fef3c7;color:#92400e}
+  .sm-act{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+  .sm-act select{padding:.4rem;border:1px solid #d1d5db;border-radius:6px;font-size:.85rem;flex:1 1 140px;min-width:0}
+  .btn.warn{background:#f59e0b;border-color:#f59e0b;color:#fff}
+  .btn.danger{background:#dc2626;border-color:#dc2626;color:#fff}
+  .btn.sm{padding:.3rem .7rem;font-size:.8rem}
+  .sm-bulk{background:#f9fafb;border:1px dashed #cbd5e1;border-radius:8px;padding:10px;margin-bottom:12px;
+           display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .sm-bulk select{padding:.4rem;border:1px solid #d1d5db;border-radius:6px;flex:1 1 160px;min-width:0}
+  .sm-log td, .sm-log th{font-size:.8rem;padding:.4rem .5rem}
+  .chk-cell{width:34px}
+
+  @media (max-width:768px){
+    .sm-toolbar label, .sm-toolbar select{width:100%;min-width:0}
+    .sm-bulk{flex-direction:column;align-items:stretch}
+    .sm-bulk select, .sm-bulk .btn{width:100%}
+    .sm-act{flex-direction:column;align-items:stretch}
+    .sm-act select, .sm-act .btn{width:100%}
+    .rtable td.chk-cell{justify-content:flex-start;gap:8px}
+    .rtable td.chk-cell::before{content:"Select"}
+  }
+</style>
+
+<section class="report">
+  <header class="report-header">
+    <div class="report-head-left">
+      <img class="report-logo" src="{{ url_for('static', filename='img/logo.png') }}" alt="Company logo">
+    </div>
+    <div class="report-head-center">
+      <h1>Manage Employees</h1>
+      <p class="muted">اختر مشرفاً لعرض موظفيه — نقل / فصل / استقالة (بدون حذف نهائي)</p>
+    </div>
+    <div class="report-head-right"></div>
+  </header>
+
+  <section class="card no-print">
+    <form method="get" class="sm-toolbar">
+      <label>Supervisor
+        <select name="sup_id" onchange="this.form.submit()">
+          <option value="">— اختر مشرف —</option>
+          {% for s in my_supervisors %}
+          <option value="{{ s.id }}" {% if sel_sup and sel_sup.id == s.id %}selected{% endif %}>
+            {{ s.name or s.supervisor_code }} ({{ counts.get(s.id, 0) }})
+          </option>
+          {% endfor %}
+        </select>
+      </label>
+      <input type="hidden" name="show" value="{{ show }}">
+      <div class="align-end"><button class="btn primary">Show</button></div>
+    </form>
+  </section>
+
+  {% if sel_sup %}
+  <section class="card">
+    <h2 style="margin-bottom:8px">
+      {{ sel_sup.name or sel_sup.supervisor_code }}
+      <span class="muted mono">({{ sel_sup.supervisor_code }})</span>
+    </h2>
+
+    <div class="sm-tabs no-print">
+      {% for key, lbl in [('active','Active'), ('resigned','Resigned'), ('all','All')] %}
+      <a class="sm-tab {% if show == key %}on{% endif %}"
+         href="{{ url_for('site_manage_employees', sup_id=sel_sup.id, show=key) }}">{{ lbl }}</a>
+      {% endfor %}
+      <a class="sm-tab" href="{{ url_for('site_supervisor_detail', sup_id=sel_sup.id) }}">Weekly ›</a>
+    </div>
+
+    <form method="post" action="{{ url_for('site_employees_bulk_transfer') }}" id="bulkForm">
+      <input type="hidden" name="from_sup_id" value="{{ sel_sup.id }}">
+
+      <div class="sm-bulk no-print">
+        <label style="display:flex;gap:6px;align-items:center;font-size:.85rem;white-space:nowrap">
+          <input type="checkbox" id="chkAll"> تحديد الكل
+          <span class="muted" id="chkCount"></span>
+        </label>
+        <select name="target_sup_id">
+          <option value="">— نقل جماعي إلى… —</option>
+          {% for s in my_supervisors %}{% if s.id != sel_sup.id %}
+          <option value="{{ s.id }}">{{ s.name or s.supervisor_code }}</option>
+          {% endif %}{% endfor %}
+        </select>
+        <button class="btn primary sm" type="submit"
+                onclick="return confirm('تأكيد نقل الموظفين المحددين؟')">نقل المحدد</button>
+      </div>
+
+      <div class="table-wrap"><table class="table rtable">
+        <thead>
+          <tr>
+            <th class="no-print chk-cell"></th>
+            <th>Name</th>
+            <th>Emp. No</th>
+            <th>Dept</th>
+            <th>Status</th>
+            <th class="no-print">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for e in employees %}
+          <tr>
+            <td class="no-print chk-cell" data-l="">
+              {% if e.status == 'active' %}
+              <input type="checkbox" name="emp_ids" value="{{ e.id }}" class="rowChk">
+              {% endif %}
+            </td>
+            <td class="name" data-l="Name">
+              <a href="{{ url_for('site_employee_profile', emp_id=e.id) }}"
+                 style="color:#1d4ed8;text-decoration:none;font-weight:700">{{ e.name }}</a>
+            </td>
+            <td class="mono" data-l="Emp. No">{{ e.emp_number }}</td>
+            <td data-l="Dept">{{ e.department or '—' }}</td>
+            <td data-l="Status">
+              <span class="sm-st st-{{ e.status }}">{{ e.status }}</span>
+              {% if e.resigned_at %}<span class="muted small"> · {{ e.resigned_at }}</span>{% endif %}
+            </td>
+            <td class="no-print stack" data-l="Actions">
+              <div class="sm-act">
+                {% if e.status == 'active' %}
+                  <select form="tf{{ e.id }}" name="target_sup_id" required>
+                    <option value="">نقل إلى…</option>
+                    {% for s in my_supervisors %}{% if s.id != sel_sup.id %}
+                    <option value="{{ s.id }}">{{ s.name or s.supervisor_code }}</option>
+                    {% endif %}{% endfor %}
+                  </select>
+                  <button class="btn primary sm" form="tf{{ e.id }}" type="submit">نقل</button>
+                  <button class="btn warn sm" form="ua{{ e.id }}" type="submit"
+                          onclick="return confirm('فصل {{ e.name }} عن المشرف؟ سينتقل إلى Unassigned.')">فصل</button>
+                  <button class="btn danger sm" form="rs{{ e.id }}" type="submit"
+                          onclick="return confirm('تسجيل استقالة {{ e.name }}؟')">استقالة</button>
+                {% else %}
+                  <select form="rt{{ e.id }}" name="target_sup_id" required>
+                    <option value="">إرجاع إلى…</option>
+                    {% for s in my_supervisors %}
+                    <option value="{{ s.id }}">{{ s.name or s.supervisor_code }}</option>
+                    {% endfor %}
+                  </select>
+                  <button class="btn sm" form="rt{{ e.id }}" type="submit">إرجاع</button>
+                {% endif %}
+                <a class="btn sm" href="{{ url_for('site_employee_profile', emp_id=e.id) }}">الملف</a>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="center muted empty-row" data-l="">لا يوجد موظفون في هذه القائمة.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table></div>
+    </form>
+
+    <!-- نماذج منفصلة حتى لا تتداخل مع نموذج النقل الجماعي -->
+    {% for e in employees %}
+      {% if e.status == 'active' %}
+      <form id="tf{{ e.id }}" method="post" action="{{ url_for('site_employee_transfer', emp_id=e.id) }}" hidden></form>
+      <form id="ua{{ e.id }}" method="post" action="{{ url_for('site_employee_unassign', emp_id=e.id) }}" hidden></form>
+      <form id="rs{{ e.id }}" method="post" action="{{ url_for('site_employee_resign', emp_id=e.id) }}" hidden></form>
+      {% else %}
+      <form id="rt{{ e.id }}" method="post" action="{{ url_for('site_employee_restore', emp_id=e.id) }}" hidden></form>
+      {% endif %}
+    {% endfor %}
+  </section>
+
+  {% if logs %}
+  <section class="card">
+    <h2>آخر الحركات</h2>
+    <div class="table-wrap"><table class="table rtable sm-log">
+      <thead><tr><th>Date</th><th>Action</th><th>From</th><th>To</th><th>By</th></tr></thead>
+      <tbody>
+        {% for l in logs %}
+        <tr>
+          <td class="mono" data-l="Date">{{ l.created_at.strftime('%Y-%m-%d %H:%M') if l.created_at else '—' }}</td>
+          <td data-l="Action">{{ l.action }}</td>
+          <td data-l="From">{{ name_map.get(l.from_user_id, '—') }}</td>
+          <td data-l="To">{{ name_map.get(l.to_user_id, '—') }}</td>
+          <td data-l="By">{{ name_map.get(l.actor_id, '—') }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table></div>
+  </section>
+  {% endif %}
+  {% endif %}
+
+  <div class="no-print actions">
+    <a class="btn" href="{{ url_for('site_supervisors') }}">Back to My Supervisors</a>
+  </div>
+</section>
+
+<!-- Movement modal -->
+<div id="mvModal" class="no-print"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;
+            align-items:center;justify-content:center;padding:14px">
+  <div style="background:#fff;border-radius:12px;max-width:640px;width:100%;max-height:80vh;overflow:auto;padding:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:10px">
+      <strong id="mvTitle">سجل الحركة</strong>
+      <button class="btn sm" onclick="document.getElementById('mvModal').style.display='none'">إغلاق</button>
+    </div>
+    <div id="mvBody" class="muted">جارٍ التحميل…</div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var all = document.getElementById('chkAll');
+  var cnt = document.getElementById('chkCount');
+  function refresh(){
+    var n = document.querySelectorAll('.rowChk:checked').length;
+    if (cnt) cnt.textContent = n ? '(' + n + ')' : '';
+  }
+  if (all) {
+    all.addEventListener('change', function(){
+      document.querySelectorAll('.rowChk').forEach(function(c){ c.checked = all.checked; });
+      refresh();
+    });
+  }
+  document.querySelectorAll('.rowChk').forEach(function(c){
+    c.addEventListener('change', refresh);
+  });
+})();
+
+function showMovement(empId){
+  var m = document.getElementById('mvModal');
+  var b = document.getElementById('mvBody');
+  m.style.display = 'flex';
+  b.innerHTML = 'جارٍ التحميل…';
+  fetch('/site/employee/' + empId + '/movement')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      document.getElementById('mvTitle').textContent =
+        d.employee.name + ' (' + d.employee.emp_number + ')';
+      if (!d.rows.length) { b.innerHTML = '<p class="muted">لا توجد حركات مسجلة.</p>'; return; }
+      var h = '<div class="table-wrap"><table class="table rtable sm-log"><thead><tr>' +
+              '<th>Date</th><th>Action</th><th>From</th><th>To</th><th>By</th><th>Note</th>' +
+              '</tr></thead><tbody>';
+      d.rows.forEach(function(r){
+        h += '<tr><td class="mono" data-l="Date">' + r.at + '</td>' +
+             '<td data-l="Action">' + r.action + '</td>' +
+             '<td data-l="From">' + r.from + '</td>' +
+             '<td data-l="To">' + r.to + '</td>' +
+             '<td data-l="By">' + r.by + '</td>' +
+             '<td data-l="Note">' + (r.note || '—') + '</td></tr>';
+      });
+      b.innerHTML = h + '</tbody></table></div>';
+    })
+    .catch(function(){ b.innerHTML = '<p class="muted">تعذّر تحميل السجل.</p>'; });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Report New Incident</h1>
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}<div class="alert alert-{{ cat }}">{{ msg }}</div>{% endfor %}
+{% endwith %}
+
+<section class="card">
+<form method="post">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+  <div style="display:grid;gap:.75rem;grid-template-columns:1fr 1fr">
+    <label>Incident Date *
+      <input type="date" name="incident_date" required>
+    </label>
+    <label>Time
+      <input type="time" name="incident_time">
+    </label>
+    <label>Location *
+      <input type="text" name="location" required placeholder="Building / area / site description">
+    </label>
+    <label>Area Code
+      <input type="text" name="area_code" placeholder="e.g. Z-4">
+    </label>
+    <label>Incident Type *
+      <select name="incident_type" required>
+        {% for val, label in types %}
+          <option value="{{ val }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    <label>Severity Level
+      <select name="severity">
+        <option value="">Not specified</option>
+        <option value="L">Low</option>
+        <option value="M">Medium</option>
+        <option value="H">High</option>
+        <option value="C">Critical</option>
+      </select>
+    </label>
+    <label style="grid-column:1/-1">Incident Description *
+      <textarea name="description" rows="3" required placeholder="What happened in detail?"></textarea>
+    </label>
+    <label style="grid-column:1/-1">Immediate Cause
+      <textarea name="immediate_cause" rows="2" placeholder="What is the apparent direct cause?"></textarea>
+    </label>
+    <label>Injured Person Name (if any)
+      <input type="text" name="injured_name">
+    </label>
+    <label>Injured Person's Company
+      <input type="text" name="injured_company">
+    </label>
+    <label style="grid-column:1/-1">Witness Names
+      <input type="text" name="witness_names" placeholder="Comma separated">
+    </label>
+  </div>
+  <div style="margin-top:1rem;display:flex;gap:.5rem">
+    <button type="submit" class="btn primary">Submit Report</button>
+    <a href="{{ url_for('incident_list') }}" class="btn">Cancel</a>
+  </div>
+</form>
+</section>
+{% endblock %}

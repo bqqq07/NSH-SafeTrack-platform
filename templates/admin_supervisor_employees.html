@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ sup.name }}{% endblock %}
+{% block content %}
+<style>
+.row-done{background:#e8f9ee}
+.row-missing{background:#fdeaea}
+</style>
+<section class="report">
+  <header class="report-header">
+    <div class="report-head-left">
+      <img class="report-logo" src="{{ url_for('static', filename='img/logo.png') }}" alt="Company logo">
+    </div>
+    <div class="report-head-center">
+      <h1>{{ sup.name }} <span class="muted mono">({{ sup.supervisor_code }})</span></h1>
+      <p class="muted">Week: {{ ws }} → {{ we }}</p>
+    </div>
+    <div class="report-head-right"></div>
+  </header>
+
+  <!-- Week Picker -->
+  <section class="card no-print">
+    <form method="get" class="grid3">
+      <label>Week Start (Sun)
+        <input type="date" name="week_start" value="{{ ws.isoformat() }}" required>
+      </label>
+      <label>Week End (Thu)
+        <input type="date" name="week_end" value="{{ we.isoformat() }}" required>
+      </label>
+      <div class="align-end">
+        <button class="btn primary">Apply</button>
+      </div>
+    </form>
+  </section>
+
+  <section class="card">
+    <div class="grid4">
+      <div>
+        <div class="muted">Employees</div>
+        <div style="font-size:22px;font-weight:700">{{ kpi_target }}</div>
+      </div>
+      <div>
+        <div class="muted">Evaluated</div>
+        <div style="font-size:22px;font-weight:700">{{ kpi_done }} / {{ kpi_target }}</div>
+      </div>
+      <div>
+        <div class="muted">Coverage%</div>
+        <div style="font-size:22px;font-weight:700">{% if kpi_coverage is not none %}{{ '%.0f'|format(kpi_coverage) }}%{% else %}—{% endif %}</div>
+      </div>
+      <div>
+        <div class="muted">Avg Score</div>
+        <div style="font-size:22px;font-weight:700">{{ kpi_avg if kpi_avg is not none else '—' }}</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="card">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Emp. No</th>
+          <th>Department</th>
+          <th class="right">Total /100</th>
+          <th class="right">Band</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr class="{{ 'row-done' if r.ev else 'row-missing' }}">
+          <td>{{ r.emp.name }}</td>
+          <td class="mono">{{ r.emp.emp_number }}</td>
+          <td>{{ r.emp.department or '—' }}</td>
+          <td class="right">{{ '%.2f'|format(r.ev.total_score) if r.ev and r.ev.total_score is not none else '—' }}</td>
+          <td class="right">{{ r.ev.overall_band if r.ev else '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="center muted">No employees.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <div class="no-print actions">
+    <a class="btn" href="{{ url_for('admin_kpi') }}">Back</a>
+  </div>
+</section>
+{% endblock %}

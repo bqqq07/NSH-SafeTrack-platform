@@ -1,0 +1,136 @@
+{% extends "base.html" %}
+{% block title %}Environment — Supervisor{% endblock %}
+{% block content %}
+<div style="max-width:900px;margin:0 auto">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:16px">
+    <h2 style="margin:0;color:#064e3b">🌿 Environment — Supervisor View</h2>
+    <span style="color:#64748b;font-size:.9rem">{{ today }}</span>
+  </div>
+
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in messages %}
+      <div style="padding:10px 14px;border-radius:10px;margin-bottom:10px;font-weight:600;
+                  background:{% if cat=='success' %}#dcfce7{% elif cat=='warning' %}#fef3c7{% else %}#fee2e2{% endif %};
+                  color:{% if cat=='success' %}#166534{% elif cat=='warning' %}#92400e{% else %}#991b1b{% endif %}">
+        {{ msg }}
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  {% for c in cards %}
+  <div style="border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:14px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div style="font-size:1.05rem;font-weight:800;color:#0f172a">{{ c.u.name }}</div>
+      <span style="color:#475569;font-size:.9rem">{{ c.level_code }}{% if c.level %} · {{ c.level.title }}{% endif %}</span>
+    </div>
+
+    <div style="color:#475569;margin-top:6px;font-size:.9rem">
+      Submissions this week: <strong>{{ c.rounds_w }}</strong> ·
+      Overdue findings: <strong style="color:{{ '#991b1b' if c.overdue else '#166534' }}">{{ c.overdue }}</strong>
+    </div>
+
+    {% if c.level_status == 'pending' %}
+    <div style="margin-top:14px;background:#f0fdf4;border:2px solid #86efac;border-radius:12px;padding:16px">
+      <div style="font-weight:800;color:#166534;margin-bottom:10px;font-size:1rem">
+        🏆 {% if c.level %}{{ c.level.module }} · Ch {{ c.level.chapter }} — {{ c.level.title }}{% else %}{{ c.level_code }}{% endif %} · Awaiting your approval
+      </div>
+      {% if c.level %}
+      <div style="font-size:.82rem;color:#475569;margin-bottom:10px">
+        <strong>Ref:</strong> {{ c.level.ref }}
+      </div>
+      {% endif %}
+
+      {% if c.evidence %}
+        {% set ev = c.evidence %}
+
+        <!-- Last 5 submissions -->
+        {% if ev.last5 %}
+        <div style="margin-bottom:12px">
+          <div style="font-weight:700;font-size:.85rem;color:#475569;margin-bottom:6px">Last submissions</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            {% for rr in ev.last5 %}
+              <div style="background:#d1fae5;color:#065f46;border-radius:8px;padding:7px 12px;font-size:.85rem;font-weight:700">
+                {{ rr.date.strftime('%d %b') }}{% if rr.unit %} · {{ rr.unit }}{% endif %}
+                {% if rr.has_measurement %} 📏{% endif %}
+              </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Month counters -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
+          <div style="background:#f8fafc;border-radius:8px;padding:8px 14px;text-align:center;flex:1;min-width:80px">
+            <div style="font-size:1.4rem;font-weight:900;color:#0f172a">{{ ev.counters.rounds_submitted or 0 }}</div>
+            <div style="font-size:.75rem;color:#64748b">Submissions (30d)</div>
+          </div>
+          <div style="background:#f8fafc;border-radius:8px;padding:8px 14px;text-align:center;flex:1;min-width:80px">
+            <div style="font-size:1.4rem;font-weight:900;color:#0f172a">{{ ev.finds_closed }}</div>
+            <div style="font-size:.75rem;color:#64748b">Findings closed</div>
+          </div>
+          <div style="background:{{ '#fee2e2' if ev.finds_open > 0 else '#f8fafc' }};border-radius:8px;padding:8px 14px;text-align:center;flex:1;min-width:80px">
+            <div style="font-size:1.4rem;font-weight:900;color:{{ '#991b1b' if ev.finds_open > 0 else '#0f172a' }}">{{ ev.finds_open }}</div>
+            <div style="font-size:.75rem;color:#64748b">Open findings</div>
+          </div>
+        </div>
+
+        <!-- Task progress -->
+        {% if c.tasks %}
+        <div style="margin-bottom:12px">
+          <div style="font-weight:700;font-size:.85rem;color:#475569;margin-bottom:6px">Gate tasks</div>
+          {% for t in c.tasks %}
+            {% set pct = [(t.have / t.target * 100)|round|int, 100]|min %}
+            <div style="display:flex;align-items:center;gap:8px;margin:4px 0">
+              <span style="font-size:.85rem;color:#334155;min-width:180px">{{ t.label }}</span>
+              <div style="flex:1;height:8px;background:#e2e8f0;border-radius:4px">
+                <div style="height:8px;border-radius:4px;width:{{ pct }}%;
+                             background:{{ '#22c55e' if pct >= 100 else '#10b981' }}"></div>
+              </div>
+              <span style="font-size:.85rem;font-weight:700;color:#0f172a;white-space:nowrap">
+                {{ t.have }}/{{ t.target }}
+              </span>
+            </div>
+          {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Deliverable -->
+        {% if c.deliverable %}
+          <a href="{{ url_for('hse_photo', filename=c.deliverable) }}" target="_blank"
+             style="display:inline-block;margin-bottom:12px;color:#0369a1;font-weight:700">
+            📎 View deliverable</a>
+        {% else %}
+          <div style="color:#b45309;font-size:.85rem;margin-bottom:12px">⚠️ No deliverable attached</div>
+        {% endif %}
+      {% endif %}
+
+      <!-- Approve / Reject -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <form method="post" action="{{ url_for('env_approve', uid=c.u.id, code=c.level_code) }}" style="flex:1">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button style="width:100%;padding:12px;border:0;background:#22c55e;color:#04220f;
+                         border-radius:10px;font-weight:800;font-size:1rem">✅ Approve gate</button>
+        </form>
+        <form method="post" action="{{ url_for('env_approve_reject', uid=c.u.id, code=c.level_code) }}" style="flex:1">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <input name="reason" placeholder="Reason (optional)"
+                 style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #fca5a5;
+                        margin-bottom:6px;box-sizing:border-box;font-size:.9rem">
+          <button style="width:100%;padding:10px;border:0;background:#fee2e2;color:#991b1b;
+                         border-radius:10px;font-weight:700">✗ Send back</button>
+        </form>
+      </div>
+    </div>
+
+    {% elif c.tasks %}
+      <div style="margin-top:8px;color:#64748b;font-size:.9rem">
+        {% for t in c.tasks %}{{ t.label }}: {{ t.have }}/{{ t.target }}{% if not loop.last %} · {% endif %}{% endfor %}
+        {% if c.blocked %}<div style="color:#b45309;font-weight:700">🔒 {{ c.blocked }}</div>{% endif %}
+      </div>
+    {% endif %}
+  </div>
+  {% else %}
+    <p style="color:#64748b">No users with role <code>environment_officer</code> yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

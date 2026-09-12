@@ -1,0 +1,507 @@
+{% extends "base.html" %}
+{% block title %}{{ cl.checklist_type }} — {{ cl.report_no }}{% endblock %}
+{% block content %}
+<style>
+.cl-wrap { max-width:920px; margin:0 auto; font-size:.8rem }
+.cl-table { width:100%; border-collapse:collapse; font-size:.76rem; margin-bottom:0 }
+.cl-table th, .cl-table td {
+  border: 1px solid #94a3b8; padding: 4px 6px; vertical-align: middle;
+}
+.cl-table thead th { background:#064e3b; color:#fff; text-align:center; font-size:.7rem; font-weight:700 }
+.cl-table thead th.th-good { background:#16a34a }
+.cl-table thead th.th-imm  { background:#dc2626 }
+.cl-table thead th.th-imp  { background:#d97706 }
+.cl-table thead th.th-comp { background:#e2e8f0; color:#1e293b }
+.cl-table .sec-row td { background:#d1fae5; font-weight:700; font-style:italic; font-size:.74rem; color:#064e3b; padding:5px 7px }
+.cl-num { text-align:center; color:#64748b; width:28px }
+.cl-status-cell { text-align:center; width:70px }
+.cl-tick { font-size:1rem }
+.jso-table { width:100%; border-collapse:collapse; font-size:.76rem; margin-top:6px }
+.jso-table th, .jso-table td { border:1px solid #94a3b8; padding:4px 7px }
+.jso-table th { background:#064e3b; color:#fff; font-size:.72rem }
+.sig-table { width:100%; border-collapse:collapse; font-size:.76rem; margin-top:6px }
+.sig-table th, .sig-table td { border:1px solid #94a3b8; padding:5px 8px }
+.sig-table th { background:#064e3b; color:#fff; font-size:.72rem }
+</style>
+
+<div class="cl-wrap">
+
+  <!-- Action buttons row -->
+  <div style="display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+    <a href="{{ url_for('env_checklist_pdf', clid=cl.id) }}" target="_blank"
+       style="padding:8px 18px;background:#16a34a;color:#fff;border-radius:8px;
+              text-decoration:none;font-weight:700;font-size:.9rem">📥 Export PDF</a>
+    <a href="{{ url_for('env_dashboard') }}" class="btn" style="font-size:.9rem">← Dashboard</a>
+    {% if g.role in ('welfare_supervisor','safety_supervisor','safety_manager','admin','super_admin') %}
+    <form method="post" action="{{ url_for('env_checklist_delete', clid=cl.id) }}"
+          onsubmit="return confirm('Delete this checklist permanently?')" style="margin:0">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button type="submit" style="padding:8px 14px;background:#fef2f2;color:#b91c1c;
+              border:1px solid #fca5a5;border-radius:8px;font-weight:600;cursor:pointer;font-size:.9rem">
+        🗑 Delete
+      </button>
+    </form>
+    {% endif %}
+    {% if g.role in ('admin','super_admin') %}
+      {% if cl.is_official %}
+        <span style="padding:8px 14px;background:#ecfdf5;color:#065f46;border:1px solid #6ee7b7;
+                     border-radius:8px;font-weight:700;font-size:.85rem">
+          ✅ Official (Locked)
+        </span>
+      {% else %}
+        <form method="post" action="{{ url_for('env_checklist_mark_official', clid=cl.id) }}"
+              onsubmit="return confirm('Mark as official? Logos will be added and this cannot be undone.')"
+              style="margin:0">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" style="padding:8px 14px;background:#1e40af;color:#fff;
+                  border:none;border-radius:8px;font-weight:700;cursor:pointer;font-size:.85rem">
+            🔏 Mark as Official
+          </button>
+        </form>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <!-- Logos header bar (matches DOCX layout exactly) -->
+  <div style="display:flex;align-items:center;justify-content:space-between;
+              border:1px solid #cbd5e1;border-radius:8px;padding:8px 14px;
+              margin-bottom:14px;gap:12px">
+    <div style="display:flex;align-items:center;gap:10px">
+      <img src="{{ url_for('static', filename='img/amiral_logo.png') }}" alt="AMIRAL"
+           style="height:44px;object-fit:contain">
+      <div>
+        <div style="font-size:.75rem;color:#64748b;font-weight:600">{{ cfg.appendix }}</div>
+        <h2 style="margin:2px 0 0;font-size:1rem;font-weight:700">{{ cfg.title }}</h2>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <div style="border:2px solid #1e293b;padding:6px 12px;border-radius:6px;
+                  font-weight:900;font-size:.9rem;color:#000;text-align:center;line-height:1.2">
+        AMIRAL<br>PROJECT
+      </div>
+      <img src="{{ url_for('static', filename='img/tecnimont_logo.png') }}" alt="TECNIMONT"
+           style="height:34px;object-fit:contain">
+    </div>
+  </div>
+
+  <!-- Header info block (matches DOCX) -->
+  <div style="border:2px solid #065f46;border-radius:10px;padding:14px 16px;
+              margin-bottom:16px;display:grid;grid-template-columns:1fr auto;gap:14px">
+    <div>
+      <div style="margin-bottom:8px">
+        <span style="font-size:.78rem;font-weight:700;color:#64748b">Construction worksite — Area/Unit/Elevation:</span>
+        <span style="font-size:.88rem;font-weight:600;margin-left:6px">
+          {% if ' | ' in (cl.area or '') %}
+            {{ cl.area.split(' | ')[0] }}
+          {% else %}
+            {{ cl.area or '—' }}
+          {% endif %}
+        </span>
+      </div>
+      {# area format: "detail | Type1; Type2"  OR  "Type1; Type2"  OR  plain text #}
+      {% if cl.area and ' | ' in cl.area %}
+        {% set area_types = cl.area.split(' | ')[1] %}
+      {% else %}
+        {% set area_types = cl.area or '' %}
+      {% endif %}
+      {% set loc_options = ['Workshop','Office','Laydown Area','Camp/Accommodation','Other'] %}
+      <div style="margin-bottom:8px">
+        <span style="font-size:.76rem;font-weight:700;color:#64748b;display:block;margin-bottom:4px">(Specify the location type)</span>
+        <div style="display:flex;flex-wrap:wrap;gap:6px 14px">
+          {% for opt in loc_options %}
+            {% set checked = opt in area_types %}
+            <label style="display:flex;align-items:center;gap:5px;font-size:.82rem;cursor:default">
+              <span style="display:inline-flex;align-items:center;justify-content:center;
+                           width:16px;height:16px;border:1.5px solid #374151;border-radius:2px;
+                           background:{{ '#065f46' if checked else '#fff' }};flex-shrink:0;
+                           color:#fff;font-size:.75rem;font-weight:700;line-height:1">
+                {{ '✓' if checked else '' }}
+              </span>
+              <span style="color:{{ '#065f46' if checked else '#374151' }};font-weight:{{ '700' if checked else '400' }}">{{ opt }}</span>
+            </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin-top:6px">
+        <div>
+          <span style="font-size:.78rem;font-weight:700;color:#64748b">Inspection Date:</span>
+          <span style="font-size:.88rem;margin-left:6px">{{ cl.filled_date.strftime('%d / %m / %Y') }}</span>
+        </div>
+        <div>
+          <span style="font-size:.78rem;font-weight:700;color:#64748b">Inspection Report N.:</span>
+          <span style="font-size:.88rem;margin-left:6px;font-weight:700">{{ cl.report_no }}</span>
+        </div>
+        <div style="grid-column:1/-1">
+          <span style="font-size:.78rem;font-weight:700;color:#64748b">SUBCONTRACTOR(s) Inspected:</span>
+          <span style="font-size:.88rem;margin-left:6px">{{ cl.subcontractor or '—' }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Summary badges -->
+  {% set good_count = items | selectattr('status','eq','good') | list | length %}
+  {% set imm_count = items | selectattr('status','eq','immediately') | list | length %}
+  {% set imp_count = items | selectattr('status','eq','improve') | list | length %}
+  {% set na_count = items | selectattr('status','eq','na') | list | length %}
+  <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;font-size:.82rem">
+    <span style="padding:4px 12px;border-radius:99px;background:#dcfce7;color:#166534;font-weight:700">
+      ✓ {{ good_count }} Good
+    </span>
+    <span style="padding:4px 12px;border-radius:99px;background:#fee2e2;color:#b91c1c;font-weight:700">
+      ⚠ {{ imm_count }} Immediately Improve
+    </span>
+    <span style="padding:4px 12px;border-radius:99px;background:#fef9c3;color:#92400e;font-weight:700">
+      △ {{ imp_count }} To Be Improved
+    </span>
+    {% if na_count %}
+    <span style="padding:4px 12px;border-radius:99px;background:#f1f5f9;color:#64748b;font-weight:700">
+      N/A {{ na_count }}
+    </span>
+    {% endif %}
+  </div>
+
+  <!-- Checklist table -->
+  <div style="overflow-x:auto;margin-bottom:20px">
+    <table class="cl-table">
+      <thead>
+        <tr>
+          <th rowspan="2" style="text-align:left;min-width:220px">Item</th>
+          {% if cfg.has_na %}<th rowspan="2">Not<br>Applicable<br>(N/A)</th>{% endif %}
+          <th class="th-good">{{ cfg.col_good }}</th>
+          <th class="th-imm">{{ cfg.col_imm }}</th>
+          <th class="th-imp">{{ cfg.col_imp }}</th>
+          <th colspan="2" class="th-comp" style="text-align:center">In case of non-compliance, indicate:</th>
+        </tr>
+        <tr>
+          <th class="th-good" style="font-size:.68rem">✓</th>
+          <th class="th-imm"  style="font-size:.68rem">✓</th>
+          <th class="th-imp"  style="font-size:.68rem">✓</th>
+          <th class="th-comp" style="min-width:90px">Area / SUBCON.</th>
+          <th class="th-comp" style="min-width:90px">{{ cfg.note_col }}</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% set ns = namespace(current_section='') %}
+        {% for it in items %}
+          {% if it.section != ns.current_section %}
+            {% set ns.current_section = it.section %}
+            <tr class="sec-row">
+              <td colspan="{{ 7 if cfg.has_na else 6 }}">{{ it.section }}</td>
+            </tr>
+          {% endif %}
+          <tr style="{% if it.status == 'immediately' %}background:#fff5f5{% elif it.status == 'improve' %}background:#fffdf0{% endif %}">
+            <td>{{ it.item }}</td>
+            {% if cfg.has_na %}
+            <td class="cl-status-cell">
+              {% if it.status == 'na' %}<span class="cl-tick" style="color:#64748b">✓</span>{% endif %}
+            </td>
+            {% endif %}
+            <td class="cl-status-cell">
+              {% if it.status == 'good' %}<span class="cl-tick" style="color:#16a34a">✓</span>{% endif %}
+            </td>
+            <td class="cl-status-cell">
+              {% if it.status == 'immediately' %}<span class="cl-tick" style="color:#dc2626">✓</span>{% endif %}
+            </td>
+            <td class="cl-status-cell">
+              {% if it.status == 'improve' %}<span class="cl-tick" style="color:#ca8a04">✓</span>{% endif %}
+            </td>
+            <td style="font-size:.8rem;color:#374151">{{ it.area_sub or '' }}</td>
+            <td style="font-size:.8rem;color:#374151">{{ it.note or '' }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Notes / Observations -->
+  {% set obs_data = {} %}
+  {% if cl.observations %}
+    {% if cl.observations.startswith('{') %}
+      {# JSON format (new) #}
+      {% set obs_data = cl.observations | from_json %}
+    {% endif %}
+  {% endif %}
+
+  <div style="border:1px solid #94a3b8;border-radius:8px;padding:14px;margin-bottom:18px">
+    <div style="font-weight:700;font-size:.88rem;margin-bottom:8px">
+      Notes / Observations:
+      <span style="font-weight:400;color:#64748b;font-size:.82rem">
+        Short Description of observation. For more details, refer to JSO Ob.No.
+      </span>
+    </div>
+
+    {% if obs_data and obs_data.jso %}
+    <table class="jso-table" style="margin-bottom:12px">
+      <thead>
+        <tr>
+          <th style="width:120px">JSO Ob.No.</th>
+          <th>Short Description of Observation</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in obs_data.jso %}
+        <tr>
+          <td>{{ row.no }}</td>
+          <td>{{ row.desc }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% elif cl.observations and not cl.observations.startswith('{') %}
+    <div style="font-size:.88rem;white-space:pre-wrap;color:#374151">{{ cl.observations }}</div>
+    {% endif %}
+
+    {% if obs_data and obs_data.notes %}
+    <div style="font-size:.88rem;white-space:pre-wrap;color:#374151;
+                background:#f8fafc;border-radius:6px;padding:8px 10px;margin-top:8px">{{ obs_data.notes }}</div>
+    {% endif %}
+  </div>
+
+  {% if cfg.has_na %}
+  <div style="font-size:.8rem;color:#64748b;margin-bottom:14px;font-style:italic">NA = Not applicable</div>
+  {% endif %}
+
+  <!-- Signatories -->
+  <div style="border:1px solid #94a3b8;border-radius:8px;padding:14px;margin-bottom:18px">
+    <div style="font-weight:700;font-size:.88rem;margin-bottom:8px">Signatories of Attendees</div>
+    <table class="sig-table">
+      <thead>
+        <tr>
+          <th>Name and Role</th>
+          <th>Company</th>
+          <th>Signature</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>
+            <div style="font-size:.85rem;font-weight:600">{{ cl.officer.name if cl.officer else '—' }}</div>
+            <div style="font-size:.76rem;color:#64748b">Environment Officer</div>
+          </td>
+          <td style="min-width:120px"></td>
+          <td style="height:56px;min-width:160px">
+            {% if cl.signature_data %}
+              <img src="{{ cl.signature_data }}" style="max-height:52px;max-width:160px;object-fit:contain">
+            {% endif %}
+          </td>
+        </tr>
+        <tr><td style="height:48px"></td><td></td><td></td></tr>
+        <tr><td style="height:48px"></td><td></td><td></td></tr>
+      </tbody>
+    </table>
+
+    {% if not cl.signature_data %}
+    <!-- Signature drawing area -->
+    <div style="margin-top:16px;border:2px dashed #065f46;border-radius:10px;
+                background:#f0fdf4;padding:14px;text-align:center">
+      <p style="font-size:.82rem;color:#64748b;margin:0 0 8px">
+        Sign below using finger or mouse
+      </p>
+      <canvas id="sig-canvas" width="600" height="140"
+              style="border:1px solid #6ee7b7;border-radius:8px;background:#fff;
+                     cursor:crosshair;touch-action:none;
+                     width:100%;max-width:600px;height:140px;display:block;margin:0 auto"></canvas>
+      <div style="margin-top:8px">
+        <button type="button" onclick="clearSig()"
+                style="padding:6px 16px;background:#f1f5f9;border:1px solid #cbd5e1;
+                       border-radius:6px;cursor:pointer;font-size:.82rem">Clear</button>
+      </div>
+    </div>
+
+    <form method="post" action="{{ url_for('env_checklist_sign', clid=cl.id) }}" id="sig-form"
+          style="margin-top:12px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="signature" id="sig-input">
+      <div style="margin-bottom:10px">
+        <label style="font-size:.82rem;font-weight:600;display:block;margin-bottom:4px">
+          Inspector Name:
+        </label>
+        <input name="signatory_name" id="signatory_name"
+               value="{{ cl.officer.name if cl.officer else '' }}"
+               placeholder="Full name of inspector"
+               style="width:100%;padding:7px 10px;border:1px solid #cbd5e1;
+                      border-radius:6px;font-size:.85rem;box-sizing:border-box">
+      </div>
+      <button type="submit" onclick="return submitSig()"
+              style="width:100%;padding:10px;background:#065f46;color:#fff;
+                     border:none;border-radius:8px;font-weight:700;font-size:.9rem;cursor:pointer">
+        Save Signature
+      </button>
+    </form>
+    {% else %}
+    <div style="margin-top:10px;font-size:.82rem;color:#065f46;font-weight:600">
+      ✓ Signed by: {{ cl.signatory_name or cl.officer.name if cl.officer else '—' }}
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- ── Attendees Signatures ── -->
+  <div style="margin-top:24px;background:#fff;border-radius:10px;
+              border:1px solid #e2e8f0;padding:18px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h3 style="margin:0;font-size:.95rem;font-weight:700;color:#1e293b">
+        Attendees Signatures
+      </h3>
+      <button type="button" onclick="addAttendeeRow()"
+              style="padding:6px 14px;background:#065f46;color:#fff;border:none;
+                     border-radius:6px;font-size:.82rem;font-weight:600;cursor:pointer">
+        + Add Attendee
+      </button>
+    </div>
+
+    <!-- Saved attendees (read-only) -->
+    {% set att_list = cl.attendees_sigs | from_json if cl.attendees_sigs else [] %}
+    {% if att_list %}
+    <table style="width:100%;border-collapse:collapse;font-size:.8rem;margin-bottom:14px">
+      <thead>
+        <tr style="background:#f1f5f9">
+          <th style="padding:5px 8px;border:1px solid #e2e8f0;text-align:left">Name</th>
+          <th style="padding:5px 8px;border:1px solid #e2e8f0;text-align:left">Company</th>
+          <th style="padding:5px 8px;border:1px solid #e2e8f0;text-align:center">Signature</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for att in att_list %}
+        <tr>
+          <td style="padding:5px 8px;border:1px solid #e2e8f0">{{ att.name }}</td>
+          <td style="padding:5px 8px;border:1px solid #e2e8f0">{{ att.company }}</td>
+          <td style="padding:5px 8px;border:1px solid #e2e8f0;text-align:center">
+            {% if att.sig %}
+              <img src="{{ att.sig }}" style="max-height:44px;max-width:140px;object-fit:contain">
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% endif %}
+
+    <!-- New attendee rows -->
+    <div id="attendee-rows"></div>
+
+    <form method="post" action="{{ url_for('env_checklist_save_attendees', clid=cl.id) }}"
+          id="att-form" style="margin-top:10px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="attendees_json" id="attendees-json-input">
+      <button type="submit" onclick="return submitAttendees()"
+              style="width:100%;padding:10px;background:#1e40af;color:#fff;
+                     border:none;border-radius:8px;font-weight:700;font-size:.9rem;
+                     cursor:pointer;display:none" id="att-save-btn">
+        Save Attendees Signatures
+      </button>
+    </form>
+  </div>
+
+</div>
+
+<script>
+const canvas = document.getElementById('sig-canvas');
+if (canvas) {
+  const ctx = canvas.getContext('2d');
+  let drawing = false;
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    const sx = canvas.width / r.width, sy = canvas.height / r.height;
+    const s = e.touches ? e.touches[0] : e;
+    return { x: (s.clientX - r.left) * sx, y: (s.clientY - r.top) * sy };
+  }
+  canvas.addEventListener('mousedown',  e => { drawing=true; const p=getPos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); });
+  canvas.addEventListener('mousemove',  e => { if(!drawing)return; const p=getPos(e); ctx.lineTo(p.x,p.y); ctx.strokeStyle='#1a1f3a'; ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.stroke(); });
+  canvas.addEventListener('mouseup',    () => drawing=false);
+  canvas.addEventListener('mouseleave', () => drawing=false);
+  canvas.addEventListener('touchstart', e => { e.preventDefault(); drawing=true; const p=getPos(e); ctx.beginPath(); ctx.moveTo(p.x,p.y); },{passive:false});
+  canvas.addEventListener('touchmove',  e => { e.preventDefault(); if(!drawing)return; const p=getPos(e); ctx.lineTo(p.x,p.y); ctx.strokeStyle='#1a1f3a'; ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.stroke(); },{passive:false});
+  canvas.addEventListener('touchend',   () => drawing=false);
+}
+function clearSig() { if(canvas) canvas.getContext('2d').clearRect(0,0,canvas.width,canvas.height); }
+function submitSig() {
+  if(canvas) document.getElementById('sig-input').value = canvas.toDataURL('image/png');
+  return true;
+}
+
+// ── Attendees signatures ──
+const STORE_KEY = 'att_sigs_{{ cl.id }}';
+let attendees = [];
+try { attendees = JSON.parse(localStorage.getItem(STORE_KEY) || '[]'); } catch(e){}
+
+function makeCanvas(id) {
+  const c = document.createElement('canvas');
+  c.id = 'att-cv-' + id; c.width = 500; c.height = 110;
+  c.style.cssText = 'border:1px solid #cbd5e1;border-radius:6px;background:#fff;cursor:crosshair;touch-action:none;width:100%;max-width:500px;height:100px;display:block;margin:0 auto';
+  let drawing = false;
+  function gp(e) {
+    const r = c.getBoundingClientRect(), sx = c.width/r.width, sy = c.height/r.height;
+    const s = e.touches ? e.touches[0] : e;
+    return {x:(s.clientX-r.left)*sx, y:(s.clientY-r.top)*sy};
+  }
+  const ctx = c.getContext('2d');
+  c.addEventListener('mousedown',  e=>{drawing=true;const p=gp(e);ctx.beginPath();ctx.moveTo(p.x,p.y);});
+  c.addEventListener('mousemove',  e=>{if(!drawing)return;const p=gp(e);ctx.lineTo(p.x,p.y);ctx.strokeStyle='#1a1f3a';ctx.lineWidth=2;ctx.lineCap='round';ctx.stroke();});
+  c.addEventListener('mouseup',    ()=>drawing=false);
+  c.addEventListener('mouseleave', ()=>drawing=false);
+  c.addEventListener('touchstart', e=>{e.preventDefault();drawing=true;const p=gp(e);ctx.beginPath();ctx.moveTo(p.x,p.y);},{passive:false});
+  c.addEventListener('touchmove',  e=>{e.preventDefault();if(!drawing)return;const p=gp(e);ctx.lineTo(p.x,p.y);ctx.strokeStyle='#1a1f3a';ctx.lineWidth=2;ctx.lineCap='round';ctx.stroke();},{passive:false});
+  c.addEventListener('touchend',   ()=>drawing=false);
+  return c;
+}
+
+function addAttendeeRow() {
+  const idx = document.querySelectorAll('.att-row').length;
+  const div = document.createElement('div');
+  div.className = 'att-row';
+  div.dataset.idx = idx;
+  div.style.cssText = 'border:1px solid #e2e8f0;border-radius:8px;padding:12px;margin-bottom:12px;background:#f8fafc';
+  div.innerHTML = `
+    <div style="display:flex;gap:10px;margin-bottom:8px">
+      <div style="flex:1">
+        <label style="font-size:.78rem;font-weight:600;display:block;margin-bottom:3px">Name</label>
+        <input class="att-name" placeholder="Full name"
+               style="width:100%;padding:6px 9px;border:1px solid #cbd5e1;border-radius:6px;font-size:.83rem;box-sizing:border-box">
+      </div>
+      <div style="flex:1">
+        <label style="font-size:.78rem;font-weight:600;display:block;margin-bottom:3px">Company</label>
+        <input class="att-company" placeholder="Company name"
+               style="width:100%;padding:6px 9px;border:1px solid #cbd5e1;border-radius:6px;font-size:.83rem;box-sizing:border-box">
+      </div>
+      <button type="button" onclick="this.closest('.att-row').remove();updateSaveBtn()"
+              style="align-self:flex-end;padding:6px 10px;background:#fee2e2;border:1px solid #fca5a5;
+                     border-radius:6px;cursor:pointer;font-size:.8rem;color:#dc2626">✕</button>
+    </div>
+    <p style="font-size:.75rem;color:#64748b;margin:0 0 4px;text-align:center">Sign below</p>`;
+  const cv = makeCanvas(idx);
+  div.appendChild(cv);
+  const clearBtn = document.createElement('button');
+  clearBtn.type = 'button';
+  clearBtn.textContent = 'Clear';
+  clearBtn.style.cssText = 'margin-top:6px;padding:4px 12px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:5px;cursor:pointer;font-size:.78rem;display:block;margin-left:auto;margin-right:auto';
+  clearBtn.onclick = () => cv.getContext('2d').clearRect(0,0,cv.width,cv.height);
+  div.appendChild(clearBtn);
+  document.getElementById('attendee-rows').appendChild(div);
+  updateSaveBtn();
+}
+
+function updateSaveBtn() {
+  const btn = document.getElementById('att-save-btn');
+  if(btn) btn.style.display = document.querySelectorAll('.att-row').length > 0 ? 'block' : 'none';
+}
+
+function submitAttendees() {
+  const rows = document.querySelectorAll('.att-row');
+  const data = [];
+  rows.forEach(row => {
+    const name    = row.querySelector('.att-name').value.trim();
+    const company = row.querySelector('.att-company').value.trim();
+    const cv      = row.querySelector('canvas');
+    const sig     = cv ? cv.toDataURL('image/png') : '';
+    data.push({name, company, sig});
+  });
+  // merge with existing saved attendees
+  const existing = {{ cl.attendees_sigs | tojson if cl.attendees_sigs else '[]' }};
+  const merged = existing.concat(data);
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(merged)); } catch(e){}
+  document.getElementById('attendees-json-input').value = JSON.stringify(merged);
+  return true;
+}
+</script>
+{% endblock %}

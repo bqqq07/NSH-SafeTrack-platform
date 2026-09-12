@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>طلب جديد</h1>
+
+<section class="card">
+  <form method="post" class="grid2" autocomplete="off" enctype="multipart/form-data" id="reqForm">
+    {% if csrf_token %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+
+    <label>الموظف
+      <select name="employee_id" required>
+        <option value="" disabled {{ '' if pre_emp_id else 'selected' }}>اختر موظفاً...</option>
+        {% for e in employees %}
+        <option value="{{ e.id }}" {{ 'selected' if pre_emp_id==e.id else '' }}>
+          {{ e.name }} ({{ e.emp_number }})
+        </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>نوع الطلب
+      <select name="type" id="reqType" required>
+        <option value="leave"      {{ 'selected' if pre_type=='leave' else '' }}>إجازة</option>
+        <option value="sick"       {{ 'selected' if pre_type=='sick'  else '' }}>سكليف</option>
+        <option value="secondment" {{ 'selected' if pre_type=='secondment' else '' }}>إعارة</option>
+        <option value="permission" {{ 'selected' if pre_type=='permission' else '' }}>استئذان</option>
+        <option value="warning"    {{ 'selected' if pre_type=='warning' else '' }}>إنذار</option>
+        <option value="late"       {{ 'selected' if pre_type=='late' else '' }}>تأخر</option>
+        <option value="other"      {{ 'selected' if pre_type=='other' else '' }}>أخرى</option>
+      </select>
+    </label>
+
+    <label class="toggle dates span2" style="display:none">
+      <span style="display:flex;gap:16px;flex-wrap:wrap">
+        <span style="flex:1">
+          من تاريخ
+          <input type="date" name="start_date" value="{{ pre_start or '' }}">
+        </span>
+        <span style="flex:1">
+          إلى تاريخ
+          <input type="date" name="end_date" value="{{ pre_end or '' }}">
+        </span>
+      </span>
+    </label>
+
+    <!-- رفع ملف السكليف -->
+    <label class="toggle sick span2" style="display:none">
+      ملف السكليف (PDF أو صورة)
+      <input type="file" name="pdf_file" accept=".pdf,image/*" id="sickFile">
+      <small style="color:#888;display:block;margin-top:4px">يمكن رفع PDF أو صورة (JPG, PNG) للتقرير الطبي</small>
+    </label>
+
+    <!-- حقول وقت للاستئذان فقط -->
+    <label class="toggle permission" style="display:none">من
+      <input type="time" name="from_time" value="{{ pre_from_time or '' }}">
+    </label>
+    <label class="toggle permission" style="display:none">إلى
+      <input type="time" name="to_time" value="{{ pre_to_time or '' }}">
+    </label>
+
+    <label class="span2">السبب / ملاحظات
+      <textarea name="reason" rows="3" placeholder="اكتب السبب أو تفاصيل الطلب…">{{ pre_reason or '' }}</textarea>
+    </label>
+
+    <div class="actions span2">
+      <button class="btn primary">إرسال</button>
+      <a class="btn" href="{{ url_for('requests_mine') }}">طلباتي</a>
+    </div>
+  </form>
+</section>
+
+<script>
+(function() {
+  const typeEl  = document.getElementById('reqType');
+  const show = (cls, on) => document.querySelectorAll('.toggle.'+cls)
+    .forEach(el => el.style.display = on ? '' : 'none');
+
+  function sync() {
+    const t = typeEl.value;
+    show('dates',      ['leave','sick','secondment'].includes(t));
+    show('sick',       t === 'sick');
+    show('permission', t === 'permission');
+  }
+  typeEl.addEventListener('change', sync);
+  sync();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,91 @@
+﻿{% extends "base.html" %}
+{% block title %}Safety Officers{% endblock %}
+{% block content %}
+<style>
+.wrap{max-width:900px;margin:0 auto;padding:0 4px}
+.page-title{font-size:20px;font-weight:700;margin-bottom:18px}
+.add-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px;margin-bottom:20px}
+.add-card h3{font-size:14px;font-weight:600;margin:0 0 12px}
+.add-form{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.add-form label{font-size:12px;font-weight:600;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+.add-form input{padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;min-width:160px}
+.list-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px}
+.list-card h3{font-size:14px;font-weight:600;margin:0 0 14px;display:flex;justify-content:space-between}
+.off-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.off-row:last-child{border-bottom:none}
+.off-name{font-weight:600;font-size:14px}
+.off-code{font-size:11px;color:var(--muted)}
+.off-loc{font-size:11px;color:var(--muted);margin-top:2px}
+.badge-in{background:#dcfce7;color:#16a34a;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700}
+.badge-out{background:#fee2e2;color:#dc2626;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700}
+.stats{display:flex;gap:6px;flex-wrap:wrap;margin-top:5px}
+.stat{background:#f1f5f9;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:600;color:#475569}
+.stat span{color:#1e40af}
+</style>
+
+<div class="wrap">
+  <div class="page-title">👷 My Officers</div>
+
+  <!-- Add Officer Form -->
+  <div class="add-card">
+    <h3>+ Add Officer</h3>
+    <form method="post" class="add-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Officer ID (Code)
+        <input name="code" required placeholder="e.g. 10045">
+      </label>
+      <label>Name
+        <input name="name" placeholder="Full name">
+      </label>
+      <label>Role
+        <select name="role" style="padding:7px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;min-width:160px">
+          <option value="safety_officer">Safety Officer</option>
+          <option value="safety_welfare">Welfare Officer</option>
+          <option value="environment_officer">Environment Officer</option>
+        </select>
+      </label>
+      <button class="btn primary" style="padding:7px 20px;font-size:13px">Add</button>
+    </form>
+  </div>
+
+  <!-- Officers List -->
+  <div class="list-card">
+    <h3>
+      All Officers ({{ officers|length }})
+      <span style="font-size:12px;font-weight:400;color:var(--muted)">
+        Week: {{ week_start.strftime('%d %b') }}
+      </span>
+    </h3>
+
+    {% if officers %}
+    {% for r in officers %}
+    <div class="off-row">
+      <div style="flex:1">
+        <div class="off-name">{{ r.name or r.code }}</div>
+        <div class="off-code">{{ r.code }}</div>
+        {% if r.location %}
+        <div class="off-loc">📍 {{ r.location }}</div>
+        {% endif %}
+        <div class="stats">
+          <span class="stat">Obs <span>{{ r.obs_w }}</span></span>
+          <span class="stat">TBT <span>{{ r.tbt_w }}</span></span>
+          <span class="stat">Total <span>{{ r.total_w }}</span></span>
+        </div>
+      </div>
+      <div>
+        {% if r.checked_in %}
+        <span class="badge-in">✓ In</span>
+        {% else %}
+        <span class="badge-out">✗ Out</span>
+        {% endif %}
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="muted" style="text-align:center;padding:30px 0">
+      No safety officers yet. Add one above.
+    </p>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

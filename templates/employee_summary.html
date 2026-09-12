@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}{{ emp.name }}{% endblock %}
+{% block content %}
+<h1>Employee Summary — {{ emp.name }} <span class="muted mono">({{ emp.emp_number }})</span></h1>
+
+<section class="card">
+  <div class="grid4">
+    <div>
+      <div class="muted">Attendance (this month)</div>
+      <div>Present: <b>{{ summary.present }}</b> / {{ summary.days_in_month }}</div>
+      <div>Absent (this month): <b>{{ summary.absent }}</b></div>
+      <div>Absent (all-time): <b>{{ summary.absent_all }}</b></div>
+    </div>
+    <div>
+      <div class="muted">Avg Weekly Score (8w)</div>
+      <div><b>{{ summary.avg_score_8w if summary.avg_score_8w is not none else '—' }}</b></div>
+      <div class="muted small">based on {{ summary.eval_count_8w }} weeks</div>
+    </div>
+    <div>
+      <div class="muted">Avg Weekly Score (all-time)</div>
+      <div>
+        <b>{{ summary.avg_score_all if summary.avg_score_all is not none else '—' }}</b>
+        {% if summary.trend == 'up' %}<span class="trend-up" style="color:#22c55e">▲ rising</span>
+        {% elif summary.trend == 'down' %}<span class="trend-down" style="color:#ef4444">▼ falling</span>
+        {% elif summary.trend == 'flat' %}<span class="muted">— stable</span>{% endif %}
+      </div>
+      <div class="muted small">based on {{ summary.eval_count_all }} weeks total</div>
+    </div>
+    <div>
+      <a class="btn" href="{{ url_for('admin_reports_all', q=emp.emp_number) }}" target="_blank">Open reports</a>
+    </div>
+  </div>
+</section>
+{% endblock %}

@@ -1,0 +1,56 @@
+{% extends "weekly_print_base.html" %} {# إن كان عندك base للطباعة #}
+{% block title %}Daily Evaluation — {{ employee.name }}{% endblock %}
+
+{% block content %}
+<div class="report-header">
+  <h1>Daily Evaluation Report</h1>
+  <div>
+    <strong>Employee:</strong> {{ employee.name }} ({{ employee.emp_number }})<br>
+    <strong>Week:</strong> {{ rec.week_start.strftime('%Y-%m-%d') }} → {{ rec.week_end.strftime('%Y-%m-%d') }}<br>
+    <strong>Total:</strong> {{ '%.1f' % rec.total_score }} / 100 — <strong>Band:</strong> {{ rec.band }}
+  </div>
+</div>
+
+<h2>1) Weekly Targets (40 pts)</h2>
+<table class="table compact">
+  <thead><tr><th>#</th><th>Target/Task</th><th>Achieved %</th><th>Remarks</th></tr></thead>
+  <tbody>
+    {% for i in range(1,5) %}
+    <tr>
+      <td>{{ i }}</td>
+      <td>{{ getattr(rec, 't%s_text' % i) }}</td>
+      <td>{{ getattr(rec, 't%s_percent' % i) }}</td>
+      <td>{{ getattr(rec, 't%s_remarks' % i) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+<h2>2) Performance Evaluation (60 pts)</h2>
+<table class="table compact">
+  <thead><tr><th>Criteria</th><th>Rating</th><th>Comments</th></tr></thead>
+  <tbody>
+    <tr><td>Punctuality & Attendance</td><td>{{ rec.p_punctuality }}</td><td>{{ rec.c_punctuality }}</td></tr>
+    <tr><td>Quality of Work</td><td>{{ rec.p_quality }}</td><td>{{ rec.c_quality }}</td></tr>
+    <tr><td>Productivity</td><td>{{ rec.p_productivity }}</td><td>{{ rec.c_productivity }}</td></tr>
+    <tr><td>Communication & Teamwork</td><td>{{ rec.p_communication }}</td><td>{{ rec.c_communication }}</td></tr>
+    <tr><td>Problem-Solving</td><td>{{ rec.p_problemsolving }}</td><td>{{ rec.c_problemsolving }}</td></tr>
+    <tr><td>Compliance with Safety/Rules</td><td>{{ rec.p_compliance }}</td><td>{{ rec.c_compliance }}</td></tr>
+  </tbody>
+</table>
+
+<h2>Manager Notes</h2>
+<table class="table compact">
+  <tbody>
+    <tr><th>Strengths observed</th><td>{{ rec.strengths }}</td></tr>
+    <tr><th>Areas for improvement</th><td>{{ rec.improvements }}</td></tr>
+    <tr><th>Training/Support required</th><td>{{ rec.training_needed }}</td></tr>
+  </tbody>
+</table>
+
+<div class="footer-row">
+  <div><strong>Targets:</strong> {{ '%.1f' % rec.targets_score }} / 40</div>
+  <div><strong>Performance:</strong> {{ '%.1f' % rec.performance_score }} / 60</div>
+  <div><strong>Total:</strong> {{ '%.1f' % rec.total_score }} / 100 ({{ rec.band }})</div>
+</div>
+{% endblock %}

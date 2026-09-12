@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}ID Card Expiry{% endblock %}
+{% block content %}
+<h1>متابعة انتهاء البطاقات</h1>
+
+<section class="card">
+  <form method="get" style="margin-bottom:16px">
+    <input type="text" name="q" value="{{ q }}" placeholder="ابحث بالاسم أو رقم الموظف..."
+           style="padding:8px;border:1px solid #ddd;border-radius:6px;min-width:260px">
+    <button class="btn">بحث</button>
+  </form>
+
+  <div style="display:flex;gap:16px;margin-bottom:20px;flex-wrap:wrap">
+    <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:12px 18px;">
+      <div style="font-size:13px;color:#991b1b">🔴 منتهية بالفعل</div>
+      <div style="font-size:24px;font-weight:700;color:#991b1b">{{ expired|length }}</div>
+    </div>
+    <div style="background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:12px 18px;">
+      <div style="font-size:13px;color:#92400e">🟡 تنتهي خلال 30 يوم</div>
+      <div style="font-size:24px;font-weight:700;color:#92400e">{{ expiring_soon|length }}</div>
+    </div>
+  </div>
+
+  {% if expired %}
+  <h3 style="color:#991b1b">🔴 بطاقات منتهية بالفعل</h3>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>الاسم</th>
+          <th>رقم الموظف</th>
+          <th>القسم</th>
+          <th>تاريخ الانتهاء</th>
+          <th>منذ كم يوم</th>
+          <th class="no-print">إجراء</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in expired %}
+        <tr style="background:#fef2f2">
+          <td>{{ e.name }}</td>
+          <td class="mono">{{ e.emp_number }}</td>
+          <td>{{ e.department or '—' }}</td>
+          <td class="mono">{{ e.id_expiry_date.isoformat() }}</td>
+          <td>{{ (today - e.id_expiry_date).days }} يوم</td>
+          <td class="no-print"><a class="btn" href="{{ url_for('employee_edit', emp_id=e.id) }}">تحديث</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if expiring_soon %}
+  <h3 style="color:#92400e;margin-top:24px">🟡 تنتهي خلال 30 يوم</h3>
+  <div class="table-wrap">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>الاسم</th>
+          <th>رقم الموظف</th>
+          <th>القسم</th>
+          <th>تاريخ الانتهاء</th>
+          <th>الأيام المتبقية</th>
+          <th class="no-print">إجراء</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for e in expiring_soon %}
+        <tr style="background:#fffbeb">
+          <td>{{ e.name }}</td>
+          <td class="mono">{{ e.emp_number }}</td>
+          <td>{{ e.department or '—' }}</td>
+          <td class="mono">{{ e.id_expiry_date.isoformat() }}</td>
+          <td>{{ (e.id_expiry_date - today).days }} يوم</td>
+          <td class="no-print"><a class="btn" href="{{ url_for('employee_edit', emp_id=e.id) }}">تحديث</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if not expired and not expiring_soon %}
+  <div class="muted center" style="padding:24px">لا توجد بطاقات منتهية أو قريبة من الانتهاء حالياً ✓</div>
+  {% endif %}
+</section>
+{% endblock %}

@@ -29,3 +29,48 @@
   table, tr, td, th { page-break-inside: avoid; } /* لا تقسيم داخل الجدول */
   section.report { page-break-after: auto; }
 }
+
+/* ===== Print: لا تمرير، ولا nowrap قسري ===== */
+@media print{
+  .table-wrap{ overflow: visible !important; }
+  .table{ table-layout: fixed; width: 100%; }
+  .table th, .table td{
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+  }
+}
+/* ===== Print overrides: keep pages clean and readable ===== */
+@media print {
+  /* أخفِ العناصر غير القابلة للطباعة (موجودة مسبقًا غالبًا) */
+  .no-print { display: none !important; }
+
+  /* اسمح بمحتوى كامل بدون شريط تمرير */
+  html, body { overflow: visible !important; }
+  .table-wrap { overflow: visible !important; }
+
+  /* رجّع الجداول للوضع الطبيعي في الطباعة */
+  .table { width: 100% !important; table-layout: auto !important; border-collapse: collapse; }
+  .table.compact { table-layout: auto !important; }
+
+  /* عطّل أي قيود عرض آتية من colgroup */
+  .table col { width: auto !important; }
+
+  /* لفّ النص بشكل طبيعي للطباعة */
+  .table th,
+  .table td {
+    white-space: normal !important;
+    word-break: normal !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  /* تجنّب تقطيع البطاقات/الأقسام بين الصفحات */
+  .card, .report, section, table, tr, td, th { break-inside: avoid; }
+
+  /* طباعة ألوان أنظف (إن لم تكن لديك بالفعل) */
+  body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+.no-print {
+  display: none !important;
+}

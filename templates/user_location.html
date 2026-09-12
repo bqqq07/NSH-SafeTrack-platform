@@ -1,0 +1,252 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.loc-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px}
+.loc-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600}
+.loc-badge.pkg2{background:#dbeafe;color:#1d4ed8}
+.loc-badge.pkg3{background:#fef9c3;color:#92400e}
+.person-tile{border-radius:10px;padding:12px;border:1px solid #e5e7eb;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff}
+.person-name{font-weight:600;font-size:14px}
+.person-loc{font-size:12px;color:var(--muted);margin-top:2px}
+.prox-label{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px;white-space:nowrap}
+.prox-same{background:#d1fae5;color:#065f46}
+.prox-pkg{background:#fef9c3;color:#78350f}
+.prox-diff{background:#f3f4f6;color:#374151}
+.role-badge{font-size:11px;font-weight:600;padding:2px 8px;border-radius:10px}
+.role-officer{background:#ede9fe;color:#5b21b6}
+.role-sup{background:#dbeafe;color:#1e40af}
+.role-site{background:#d1fae5;color:#065f46}
+.staff-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:10px}
+.staff-tile{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px}
+.staff-tile .s-name{font-weight:600;font-size:14px}
+.staff-tile .s-loc{font-size:12px;color:var(--muted);margin-top:4px}
+.staff-tile .s-role{font-size:11px;margin-top:4px}
+.form-row{display:flex;gap:10px;flex-wrap:wrap}
+.form-row>*{flex:1;min-width:100px}
+</style>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+  <h2 style="margin:0">📍 {% if g.role in ('admin','super_admin') %}Staff Locations{% else %}My Location{% endif %}</h2>
+  <span id="currentTime" style="font-size:13px;color:var(--muted)"></span>
+</div>
+
+{% if g.role in ('admin','super_admin') %}
+<!-- ════════════ ADMIN VIEW ════════════ -->
+<div class="loc-card">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <h3 style="margin:0;font-size:15px">All Registered Locations (last 24h)</h3>
+    <button class="btn" onclick="loadAll()">Refresh</button>
+  </div>
+  <div id="staffGrid" class="staff-grid">
+    {% for p in all_locations %}
+    <div class="staff-tile">
+      <div class="s-name">{{ p.name }}</div>
+      <div class="s-loc">
+        <span class="loc-badge pkg{{ p.pkg }}">PKG {{ p.pkg }}</span>
+        Unit {{ p.unit }}{% if p.area_text %} — {{ p.area_text }}{% endif %}
+      </div>
+      <div class="s-role">
+        <span class="role-badge {{ 'role-officer' if p.role=='safety_officer' else 'role-site' if p.role=='site_supervisor' else 'role-sup' }}">
+          {{ 'Safety Officer' if p.role=='safety_officer' else 'Site Supervisor' if p.role=='site_supervisor' else 'Supervisor' }}
+        </span>
+        <span style="color:var(--muted);font-size:11px;margin-right:4px">{{ p.supervisor_code }}</span>
+      </div>
+    </div>
+    {% else %}
+    <p class="muted" style="grid-column:1/-1">No one has registered their location in the last 24 hours.</p>
+    {% endfor %}
+  </div>
+</div>
+
+{% else %}
+<!-- ════════════ FIELD STAFF VIEW ════════════ -->
+<div class="loc-card">
+  <h3 style="margin:0 0 12px;font-size:15px">Register My Location</h3>
+  {% if my_location %}
+  <div style="margin-bottom:14px;padding:10px;background:var(--bg);border-radius:8px;display:flex;align-items:center;gap:10px">
+    <span class="loc-badge pkg{{ my_location.pkg }}">PKG {{ my_location.pkg }}</span>
+    <span style="font-weight:600">Unit {{ my_location.unit }}</span>
+    {% if my_location.area_text %}<span style="color:var(--muted)">— {{ my_location.area_text }}</span>{% endif %}
+    <span style="font-size:11px;color:var(--muted);margin-right:auto">
+      Updated: {{ my_location.updated_at.strftime('%H:%M') if my_location.updated_at else '—' }}
+    </span>
+  </div>
+  {% endif %}
+
+  <form id="locForm" onsubmit="saveLocation(event)">
+    <div class="form-row">
+      <label>Package
+        <select name="pkg" id="pkgSel" required>
+          <option value="">Select</option>
+          <option value="2" {% if my_location and my_location.pkg==2 %}selected{% endif %}>PKG 2</option>
+          <option value="3" {% if my_location and my_location.pkg==3 %}selected{% endif %}>PKG 3</option>
+        </select>
+      </label>
+      <label>Unit
+        <input type="text" name="unit" id="unitIn" placeholder="e.g. 320" required
+               value="{{ my_location.unit if my_location else '' }}">
+      </label>
+      <label>Area / Substation
+        <input type="text" name="area_text" id="areaIn" placeholder="e.g. str3000"
+               value="{{ my_location.area_text if my_location else '' }}">
+      </label>
+    </div>
+    <button type="submit" class="btn primary" style="margin-top:10px">💾 Save Location</button>
+    <small id="locMsg" style="margin-right:10px"></small>
+  </form>
+</div>
+
+{% if my_location %}
+<div class="loc-card">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <h3 style="margin:0;font-size:15px">
+      {% if g.role == 'safety_officer' %}🔍 Nearest Supervisor{% else %}🔍 Nearest Safety Officer{% endif %}
+    </h3>
+    <button class="btn" onclick="loadNearest()">Refresh</button>
+  </div>
+  <div id="nearestList">
+    {% for p in nearest %}
+    <div class="person-tile">
+      <div style="flex:1">
+        <div class="person-name">{{ p.name }}</div>
+        <div class="person-loc">
+          <span class="loc-badge pkg{{ p.pkg }}">PKG {{ p.pkg }}</span>
+          Unit {{ p.unit }}{% if p.area_text %} — {{ p.area_text }}{% endif %}
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">{{ p.supervisor_code }}</div>
+      </div>
+      <span class="prox-label {{ 'prox-same' if p.proximity==0 else 'prox-pkg' if p.proximity==1 else 'prox-diff' }}">
+        {{ 'Same Area' if p.proximity==0 else 'Same PKG' if p.proximity==1 else 'Diff. PKG' }}
+      </span>
+    </div>
+    {% else %}
+    <p class="muted">No one has registered their location yet.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% if g.role == 'site_supervisor' %}
+<div class="loc-card">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+    <h3 style="margin:0;font-size:15px">🗂️ My Supervisors' Locations</h3>
+    <button class="btn" onclick="loadSupervisors()">Refresh</button>
+  </div>
+  <div id="supGrid" class="staff-grid">
+    {% for s in supervisors %}
+    <div class="staff-tile">
+      <div class="s-name">{{ s.name }}</div>
+      <div class="s-loc">
+        <span class="loc-badge pkg{{ s.pkg }}">PKG {{ s.pkg }}</span>
+        Unit {{ s.unit }}{% if s.area_text %} — {{ s.area_text }}{% endif %}
+      </div>
+      <div class="s-role" style="color:var(--muted)">{{ s.supervisor_code }}</div>
+    </div>
+    {% else %}
+    <p class="muted" style="grid-column:1/-1">No supervisors have registered their location.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+{% endif %}
+
+<script>
+function tick() {
+  const now = new Date();
+  document.getElementById('currentTime').textContent =
+    now.toLocaleTimeString('en-GB', {hour:'2-digit',minute:'2-digit'});
+}
+tick(); setInterval(tick, 30000);
+
+async function saveLocation(e) {
+  e.preventDefault();
+  const msg = document.getElementById('locMsg');
+  const body = {
+    pkg: parseInt(document.getElementById('pkgSel').value),
+    unit: document.getElementById('unitIn').value.trim(),
+    area_text: document.getElementById('areaIn').value.trim()
+  };
+  msg.textContent = 'Saving...'; msg.style.color = 'var(--muted)';
+  if (!navigator.onLine) {
+    // Save to offline queue — will sync automatically when connected
+    if (window.nshOffline) window.nshOffline.enqueue('location', body);
+    msg.textContent = '✓ Saved offline — will sync when connected';
+    msg.style.color = 'var(--success)';
+    return;
+  }
+  try {
+    const res = await fetch('/api/location', {method:'POST',
+      headers:{'Content-Type':'application/json'}, body:JSON.stringify(body)});
+    if (res.ok) { msg.textContent = '✓ Saved'; msg.style.color = 'var(--success)';
+      setTimeout(() => location.reload(), 600);
+    } else { msg.textContent = '✗ Error'; msg.style.color = 'var(--danger)'; }
+  } catch {
+    // Network error while nominally online — queue it anyway
+    if (window.nshOffline) window.nshOffline.enqueue('location', body);
+    msg.textContent = '✓ Saved offline — will sync when connected';
+    msg.style.color = 'var(--success)';
+  }
+}
+
+async function loadNearest() {
+  const res = await fetch('/api/location/nearest');
+  if (!res.ok) return;
+  const data = await res.json();
+  const list = document.getElementById('nearestList');
+  if (!list) return;
+  const items = data.nearest || [];
+  if (!items.length) { list.innerHTML = '<p class="muted">No one has registered their location yet.</p>'; return; }
+  list.innerHTML = items.map(p => `
+    <div class="person-tile">
+      <div style="flex:1">
+        <div class="person-name">${p.name}</div>
+        <div class="person-loc">
+          <span class="loc-badge pkg${p.pkg}">PKG ${p.pkg}</span>
+          Unit ${p.unit}${p.area_text?' — '+p.area_text:''}
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:2px">${p.supervisor_code}</div>
+      </div>
+      <span class="prox-label ${p.proximity===0?'prox-same':p.proximity===1?'prox-pkg':'prox-diff'}">
+        ${p.proximity===0?'Same Area':p.proximity===1?'Same PKG':'Diff. PKG'}
+      </span>
+    </div>`).join('');
+}
+
+async function loadSupervisors() {
+  const res = await fetch('/api/location/my-supervisors');
+  if (!res.ok) return;
+  const data = await res.json();
+  const grid = document.getElementById('supGrid');
+  if (!grid) return;
+  const sups = data.supervisors || [];
+  if (!sups.length) { grid.innerHTML = '<p class="muted" style="grid-column:1/-1">No supervisors have registered their location.</p>'; return; }
+  grid.innerHTML = sups.map(s => `
+    <div class="staff-tile">
+      <div class="s-name">${s.name}</div>
+      <div class="s-loc"><span class="loc-badge pkg${s.pkg}">PKG ${s.pkg}</span> Unit ${s.unit}${s.area_text?' — '+s.area_text:''}</div>
+      <div class="s-role" style="color:var(--muted)">${s.supervisor_code}</div>
+    </div>`).join('');
+}
+
+async function loadAll() {
+  const res = await fetch('/api/location/all');
+  if (!res.ok) return;
+  const data = await res.json();
+  const grid = document.getElementById('staffGrid');
+  if (!grid) return;
+  if (!data.length) { grid.innerHTML = '<p class="muted" style="grid-column:1/-1">No locations registered in the last 24 hours.</p>'; return; }
+  const roleClass = r => r==='safety_officer'?'role-officer':r==='site_supervisor'?'role-site':'role-sup';
+  const roleLabel = r => r==='safety_officer'?'Safety Officer':r==='site_supervisor'?'Site Supervisor':'Supervisor';
+  grid.innerHTML = data.map(p => `
+    <div class="staff-tile">
+      <div class="s-name">${p.name}</div>
+      <div class="s-loc"><span class="loc-badge pkg${p.pkg}">PKG ${p.pkg}</span> Unit ${p.unit}${p.area_text?' — '+p.area_text:''}</div>
+      <div class="s-role">
+        <span class="role-badge ${roleClass(p.role)}">${roleLabel(p.role)}</span>
+        <span style="color:var(--muted);font-size:11px;margin-right:4px">${p.supervisor_code}</span>
+      </div>
+    </div>`).join('');
+}
+</script>
+{% endblock %}

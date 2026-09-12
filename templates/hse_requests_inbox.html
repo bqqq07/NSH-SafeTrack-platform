@@ -1,0 +1,114 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem">
+  <h1 style="margin:0">Requests Inbox</h1>
+  <span style="font-size:13px;color:var(--muted)">{{ reqs|length }} request(s)</span>
+</div>
+
+<!-- Filters -->
+<form method="get" style="display:flex;gap:.5rem;flex-wrap:wrap;margin-bottom:1rem;align-items:center">
+  <select name="status" style="min-width:130px">
+    <option value="" {% if not status_filter %}selected{% endif %}>All Statuses</option>
+    <option value="pending"     {% if status_filter=='pending' %}selected{% endif %}>Pending</option>
+    <option value="in_progress" {% if status_filter=='in_progress' %}selected{% endif %}>In Progress</option>
+    <option value="approved"    {% if status_filter=='approved' %}selected{% endif %}>Approved</option>
+    <option value="rejected"    {% if status_filter=='rejected' %}selected{% endif %}>Rejected</option>
+  </select>
+  <select name="type" style="min-width:130px">
+    <option value="" {% if not type_filter %}selected{% endif %}>All Types</option>
+    {% for val, label in types %}
+      <option value="{{ val }}" {% if type_filter==val %}selected{% endif %}>{{ label }}</option>
+    {% endfor %}
+  </select>
+  <button type="submit" class="btn">Filter</button>
+</form>
+
+{% with messages = get_flashed_messages(with_categories=true) %}
+  {% for cat, msg in messages %}<div class="alert alert-{{ cat }}">{{ msg }}</div>{% endfor %}
+{% endwith %}
+
+{% if reqs %}
+{% for r in reqs %}
+<section class="card" style="margin-bottom:.75rem">
+  <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem">
+    <div>
+      <strong style="font-size:15px">{{ r.title }}</strong>
+      <span class="badge" style="margin-left:.4rem;background:var(--surface2);color:var(--muted);font-size:11px;padding:2px 8px;border-radius:10px">{{ r.request_type }}</span>
+    </div>
+    <div>
+      {% if r.status == 'approved' %}<span style="color:var(--success);font-weight:700">✅ Approved</span>
+      {% elif r.status == 'rejected' %}<span style="color:var(--danger);font-weight:700">❌ Rejected</span>
+      {% elif r.status == 'in_progress' %}<span style="color:var(--warning);font-weight:700">🔄 In Progress</span>
+      {% else %}<span style="color:var(--muted);font-weight:700">⏳ Pending</span>
+      {% endif %}
+    </div>
+  </div>
+
+  <div style="font-size:12px;color:var(--muted);margin-bottom:.5rem">
+    From: <strong>{{ r.requester.name if r.requester else '—' }}</strong>
+    · Submitted: {{ r.created_at.strftime('%d %b %Y') if r.created_at else '—' }}
+  </div>
+
+  {% if r.details %}
+  <p style="margin:.25rem 0;font-size:13px">{{ r.details }}</p>
+  {% endif %}
+
+  {% if r.training_detail %}
+  <div style="background:#EEF6FF;border:1px solid #C3DCF5;border-radius:8px;padding:.75rem 1rem;margin:.5rem 0;font-size:13px">
+    <div style="font-weight:700;color:var(--primary);margin-bottom:.4rem">📚 Training Request</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:.3rem .75rem">
+      <div><span style="color:var(--muted)">Course:</span> <strong>{{ r.training_detail.course_name }}</strong></div>
+      {% set w_name = r.training_detail.employee.name if r.training_detail.employee else r.training_detail.employee_name_text %}
+      {% if w_name %}
+      <div><span style="color:var(--muted)">Worker:</span> <strong>{{ w_name }}</strong>
+        {% if r.training_detail.employee and r.training_detail.employee.badge_number %}
+          <span style="color:var(--muted)">({{ r.training_detail.employee.badge_number }})</span>
+        {% endif %}
+      </div>
+      {% endif %}
+      {% if r.training_detail.preferred_date %}
+      <div><span style="color:var(--muted)">Preferred:</span> {{ r.training_detail.preferred_date.strftime('%d %b %Y') }}</div>
+      {% endif %}
+      {% if r.training_detail.scheduled_date %}
+      <div style="color:var(--success);font-weight:700">📅 Scheduled: {{ r.training_detail.scheduled_date.strftime('%d %b %Y') }}</div>
+      {% endif %}
+    </div>
+    {% if r.training_detail.justification %}
+    <div style="margin-top:.4rem;color:var(--muted);font-size:12px">{{ r.training_detail.justification }}</div>
+    {% endif %}
+  </div>
+  {% endif %}
+
+  <!-- Decision form -->
+  <form method="post" action="{{ url_for('hse_request_decide', req_id=r.id) }}"
+        style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.75rem;align-items:flex-end;border-top:1px solid var(--border);padding-top:.6rem">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() if csrf_token is defined else '' }}">
+    <label style="margin:0">
+      <span style="font-size:11px;color:var(--muted);display:block;margin-bottom:2px">Status</span>
+      <select name="status">
+        <option value="pending"     {% if r.status=='pending' %}selected{% endif %}>Pending</option>
+        <option value="in_progress" {% if r.status=='in_progress' %}selected{% endif %}>In Progress</option>
+        <option value="approved"    {% if r.status=='approved' %}selected{% endif %}>Approved</option>
+        <option value="rejected"    {% if r.status=='rejected' %}selected{% endif %}>Rejected</option>
+      </select>
+    </label>
+    <label style="margin:0;flex:1;min-width:150px">
+      <span style="font-size:11px;color:var(--muted);display:block;margin-bottom:2px">Note / Reply</span>
+      <input type="text" name="admin_note" value="{{ r.admin_note or '' }}"
+             placeholder="Response note to officer...">
+    </label>
+    {% if r.request_type == 'training' %}
+    <label style="margin:0">
+      <span style="font-size:11px;color:var(--muted);display:block;margin-bottom:2px">Scheduled Date</span>
+      <input type="date" name="scheduled_date"
+             value="{{ r.training_detail.scheduled_date.isoformat() if r.training_detail and r.training_detail.scheduled_date else '' }}">
+    </label>
+    {% endif %}
+    <button type="submit" class="btn primary small" style="align-self:flex-end">Save</button>
+  </form>
+</section>
+{% endfor %}
+{% else %}
+  <div class="card" style="text-align:center;padding:2rem;color:var(--muted)">No requests found.</div>
+{% endif %}
+{% endblock %}

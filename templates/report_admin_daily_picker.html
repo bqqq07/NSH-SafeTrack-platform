@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Admin Reports — Daily</h1>
+<section class="card">
+  <form method="post" class="grid3">
+    <label>Evaluation Date
+      <input type="date" name="eval_date" value="{{ eval_date.isoformat() }}" required>
+    </label>
+    <label>Search (Supervisor ID or exact name)
+      <input type="text" name="q" placeholder="e.g. 2540 or John Doe">
+    </label>
+    <div class="align-end">
+      <button class="btn primary">Open Daily Report</button>
+    </div>
+  </form>
+</section>
+{% endblock %}

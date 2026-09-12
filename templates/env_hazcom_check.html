@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}HAZCOM Check{% endblock %}
+{% block content %}
+<div style="max-width:750px;margin:auto;">
+  <p style="opacity:.6;font-size:.85rem;margin-bottom:.25rem;">Environment → Phase 4</p>
+  <h2 style="margin-top:0;">HAZCOM — Chemical Storage Inspection</h2>
+  <p style="font-size:.85rem;opacity:.6;">{{ today }}</p>
+
+  <form method="POST" id="hazcomForm">
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">A — Shelter / Storage Area</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div>
+          <label><strong>Shelter name *</strong></label>
+          <input type="text" name="shelter_name" required placeholder="e.g. Chemical Shelter A"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+        </div>
+        <div>
+          <label><strong>Exact location *</strong></label>
+          <input type="text" name="shelter_location" required placeholder="Area / coordinates / description"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+        </div>
+      </div>
+      <div style="margin-top:.75rem;">
+        <label><strong>Shelter contents</strong></label>
+        <textarea name="shelter_contents" rows="2" placeholder="List materials stored inside..."
+                  style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+      </div>
+      <div style="display:flex;gap:2rem;margin-top:.75rem;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="shelter_locked"> Properly locked
+        </label>
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="shelter_segregated"> Materials segregated by compatibility
+        </label>
+      </div>
+    </div>
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">B — SDS & Labeling</h3>
+      <div style="display:flex;gap:2rem;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="sds_present"> SDS present for all materials
+        </label>
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="sds_accessible"> SDS accessible to workers
+        </label>
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="containers_labeled"> All containers labeled
+        </label>
+      </div>
+    </div>
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">C — Spill Kit</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:center;">
+        <div>
+          <label><strong>Kit location</strong></label>
+          <input type="text" name="spill_kit_location" placeholder="Where is the kit?"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+        </div>
+        <div style="padding-top:1.4rem;">
+          <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+            <input type="checkbox" name="spill_kit_complete"> Kit fully stocked
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">D — Active Chemical Work?</h3>
+      <label style="display:flex;align-items:center;gap:.75rem;cursor:pointer;font-size:1rem;">
+        <input type="checkbox" name="active_work" id="activeWorkChk" onchange="togglePermit(this)">
+        <strong>Yes — active chemical work is in progress</strong>
+      </label>
+
+      <div id="permitSection" style="display:none;margin-top:1rem;padding:1rem;background:#fefce8;border:1px solid #fbbf24;border-radius:.5rem;">
+        <p style="margin-top:0;font-weight:600;color:#92400e;">⚠️ Work Permit (PTW) Required</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div>
+            <label>PTW number</label>
+            <input type="text" name="ptw_number" placeholder="Permit number"
+                   style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+          </div>
+          <div style="padding-top:1.4rem;">
+            <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+              <input type="checkbox" name="ptw_valid"> Permit valid and signed
+            </label>
+          </div>
+        </div>
+        <div style="margin-top:.75rem;">
+          <label>Work description</label>
+          <textarea name="work_description" rows="2"
+                    style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">E — Area Condition & Actions</h3>
+      <div style="display:flex;gap:2rem;flex-wrap:wrap;margin-bottom:.75rem;">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="leaks_observed"> Leaks observed
+        </label>
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="noncompliance_noted"> Non-compliance noted
+        </label>
+      </div>
+      <label><strong>Corrective action</strong></label>
+      <textarea name="corrective_action" rows="2"
+                style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+
+    <div style="margin-bottom:1.5rem;">
+      <label><strong>General Notes</strong></label>
+      <textarea name="notes" rows="2"
+                style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary">Save Inspection</button>
+      <a href="{{ url_for('env_dashboard') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+
+  {% if history %}
+  <h3 style="margin-top:2rem;">Previous Records</h3>
+  <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+      <thead>
+        <tr style="border-bottom:2px solid #e5e7eb;">
+          <th style="padding:.5rem;text-align:left;">Date</th>
+          <th style="padding:.5rem;">Shelter</th>
+          <th style="padding:.5rem;">SDS</th>
+          <th style="padding:.5rem;">Spill Kit</th>
+          <th style="padding:.5rem;">Active Work</th>
+          <th style="padding:.5rem;">Leaks</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for h in history %}
+        <tr style="border-bottom:1px solid #f3f4f6;">
+          <td style="padding:.5rem;">{{ h.date }}</td>
+          <td style="padding:.5rem;">{{ h.shelter_name }}</td>
+          <td style="padding:.5rem;text-align:center;">{% if h.sds_present %}✓{% else %}✗{% endif %}</td>
+          <td style="padding:.5rem;text-align:center;">{% if h.spill_kit_complete %}✓{% else %}✗{% endif %}</td>
+          <td style="padding:.5rem;text-align:center;">{% if h.active_work %}<span style="color:#f59e0b;">Yes</span>{% else %}No{% endif %}</td>
+          <td style="padding:.5rem;text-align:center;">{% if h.leaks_observed %}<span style="color:#dc2626;">✗</span>{% else %}✓{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+</div>
+
+<script>
+function togglePermit(chk) {
+  document.getElementById('permitSection').style.display = chk.checked ? 'block' : 'none';
+}
+</script>
+{% endblock %}

@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Weekly Report{% endblock %}
+{% block content %}
+<style>
+  .wk-card{border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px;background:#fff}
+  .wk-stat{flex:1;min-width:90px;background:#f8fafc;border-radius:8px;padding:10px;text-align:center}
+  .wk-stat .v{font-size:1.5rem;font-weight:900;color:#0f172a}
+  .wk-stat .l{font-size:.75rem;color:#64748b;margin-top:2px}
+  .wk-find{padding:6px 10px;border-radius:7px;margin:4px 0;font-size:.88rem;border-left:4px solid}
+</style>
+
+<div style="max-width:680px;margin:0 auto">
+  <h2 style="margin-bottom:2px">📊 Weekly Report</h2>
+  <p style="color:#64748b;margin-top:0">Week of {{ week_start.strftime('%d %b %Y') }}</p>
+
+  <!-- This week auto-stats -->
+  <div class="wk-card">
+    <div style="font-weight:800;color:#0f172a;margin-bottom:12px">This week — auto summary</div>
+
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      <div class="wk-stat">
+        <div class="v">{{ stats.round_count }}</div>
+        <div class="l">Rounds</div>
+      </div>
+      <div class="wk-stat" style="background:{{ '#dcfce7' if stats.avg_score and stats.avg_score >= 70 else '#fee2e2' if stats.avg_score else '#f8fafc' }}">
+        <div class="v" style="color:{{ '#166534' if stats.avg_score and stats.avg_score >= 70 else '#991b1b' if stats.avg_score else '#0f172a' }}">
+          {{ stats.avg_score ~ '%' if stats.avg_score else '—' }}
+        </div>
+        <div class="l">Avg score</div>
+      </div>
+      <div class="wk-stat">
+        <div class="v">{{ stats.finds_new }}</div>
+        <div class="l">Findings logged</div>
+      </div>
+      <div class="wk-stat" style="background:{{ '#dcfce7' if stats.finds_closed > 0 else '#f8fafc' }}">
+        <div class="v" style="color:{{ '#166534' if stats.finds_closed > 0 else '#0f172a' }}">{{ stats.finds_closed }}</div>
+        <div class="l">Findings closed</div>
+      </div>
+      <div class="wk-stat" style="background:{{ '#fee2e2' if stats.overdue > 0 else '#f8fafc' }}">
+        <div class="v" style="color:{{ '#991b1b' if stats.overdue > 0 else '#0f172a' }}">{{ stats.overdue }}</div>
+        <div class="l">Overdue</div>
+      </div>
+      <div class="wk-stat">
+        <div class="v">{{ stats.complaints }}</div>
+        <div class="l">Complaints</div>
+      </div>
+    </div>
+
+    {% if stats.units_covered %}
+      <div style="margin-bottom:10px">
+        <span style="font-size:.82rem;color:#64748b;font-weight:700">Units covered: </span>
+        {% for u in stats.units_covered %}
+          <span style="display:inline-block;background:#f1f5f9;border-radius:6px;
+                       padding:2px 8px;margin:2px;font-size:.85rem;font-weight:600">{{ u }}</span>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if stats.finds_critical %}
+      <div style="margin-bottom:10px">
+        <div style="font-size:.82rem;font-weight:700;color:#991b1b;margin-bottom:4px">⚠️ Open Critical/High findings</div>
+        {% for f in stats.finds_critical %}
+          <div class="wk-find"
+               style="background:{{ '#fee2e2' if f.severity=='Critical' else '#fff7ed' }};
+                      border-color:{{ '#dc2626' if f.severity=='Critical' else '#f97316' }}">
+            <strong>{{ f.severity }}</strong> — {{ f.description }}
+            {% if f.due_date %}<span style="color:#64748b"> · due {{ f.due_date }}</span>{% endif %}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+
+    {% if stats.best and stats.best.score is not none %}
+      <div style="font-size:.85rem;color:#475569">
+        Best round: <strong>{{ stats.best.unit }} {{ stats.best.date }} — {{ stats.best.score }}%</strong>
+        {% if stats.worst and stats.worst.id != stats.best.id and stats.worst.score is not none %}
+        · Lowest: <strong>{{ stats.worst.unit }} {{ stats.worst.date }} — {{ stats.worst.score }}%</strong>
+        {% endif %}
+      </div>
+    {% endif %}
+  </div>
+
+  <!-- Share form -->
+  <div class="wk-card" style="background:#f8fafc">
+    {% if existing %}
+      <div style="color:#166534;font-weight:700;margin-bottom:10px">✅ Shared with supervisor</div>
+      {% if existing.sup_comment %}
+        <div style="padding:10px 14px;background:#eff6ff;border-radius:8px;margin-bottom:10px">
+          <div style="font-weight:700;color:#1e40af;margin-bottom:2px">💬 Supervisor note</div>
+          <div style="color:#1e3a8a">{{ existing.sup_comment }}</div>
+        </div>
+      {% endif %}
+    {% else %}
+      <div style="font-weight:700;color:#0f172a;margin-bottom:8px">Share this week's report with your supervisor</div>
+    {% endif %}
+    <form method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <textarea name="officer_note" rows="3" placeholder="Add a note (optional) — anything your supervisor should know about this week"
+                style="width:100%;padding:10px;border-radius:8px;border:1px solid #cbd5e1;
+                       font-size:.93rem;resize:vertical;box-sizing:border-box;margin-bottom:10px">{{ existing.officer_note if existing and existing.officer_note else '' }}</textarea>
+      <button type="submit"
+              style="width:100%;padding:13px;border:0;background:#0f172a;color:#fff;
+                     border-radius:10px;font-weight:800;font-size:1rem">
+        {{ '🔄 Update & re-share' if existing else '📤 Share with supervisor' }}
+      </button>
+    </form>
+  </div>
+
+  <!-- Past weeks -->
+  {% if past %}
+  <div style="margin-top:8px">
+    <div style="font-weight:700;color:#475569;margin-bottom:8px;font-size:.9rem">Previous weeks</div>
+    {% for pw in past %}
+      {% if pw.stats.round_count > 0 or pw.wr %}
+      <div style="border:1px solid #e2e8f0;border-radius:10px;padding:12px;
+                  margin-bottom:8px;background:#fff">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+          <span style="font-weight:700;color:#0f172a">{{ pw.week_start.strftime('%d %b') }}</span>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            <span style="padding:2px 8px;border-radius:10px;font-size:.8rem;
+                         background:{{ '#dcfce7' if pw.stats.avg_score and pw.stats.avg_score >= 70 else '#fee2e2' if pw.stats.avg_score else '#f1f5f9' }};
+                         color:{{ '#166534' if pw.stats.avg_score and pw.stats.avg_score >= 70 else '#991b1b' if pw.stats.avg_score else '#475569' }};
+                         font-weight:700">
+              {{ pw.stats.avg_score ~ '%' if pw.stats.avg_score else '—' }}
+            </span>
+            <span style="padding:2px 8px;border-radius:10px;font-size:.8rem;background:#f1f5f9;color:#475569">
+              {{ pw.stats.round_count }} rounds
+            </span>
+            {% if pw.wr %}
+              <span style="padding:2px 8px;border-radius:10px;font-size:.8rem;
+                           background:#dcfce7;color:#166534;font-weight:700">Shared ✓</span>
+            {% endif %}
+          </div>
+        </div>
+        {% if pw.stats.overdue > 0 %}
+          <div style="color:#991b1b;font-size:.83rem;margin-top:4px">⚠️ {{ pw.stats.overdue }} overdue finding(s)</div>
+        {% endif %}
+        {% if pw.wr and pw.wr.sup_comment %}
+          <div style="color:#1e40af;font-size:.83rem;margin-top:4px">💬 {{ pw.wr.sup_comment }}</div>
+        {% endif %}
+      </div>
+      {% endif %}
+    {% endfor %}
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

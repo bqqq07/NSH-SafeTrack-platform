@@ -1,0 +1,164 @@
+{% extends "base.html" %}
+{% block content %}
+
+<h1>Admin · Daily Reports</h1>
+<p class="muted">Date: {{ eval_date.strftime("%d/%m/%Y") }}</p>
+
+<!-- filters -->
+<div class="card" style="margin-bottom: 1.5rem;">
+  <form method="get" style="display:flex; gap:1rem; flex-wrap:wrap; align-items:flex-end;">
+    <div>
+      <label for="d">Date</label>
+      <input id="d" type="date" name="eval_date" value="{{ eval_date.isoformat() }}">
+    </div>
+    <div style="min-width: 220px;">
+      <label for="q">Filter (employee / supervisor / site / band)</label>
+      <input id="q" type="text" name="q" value="{{ q or '' }}">
+    </div>
+    <div style="display:flex; gap:.5rem;">
+      <button class="btn primary" type="submit">Open</button>
+      <button class="btn" type="button" onclick="window.print()">Print</button>
+    </div>
+  </form>
+</div>
+
+<!-- main table -->
+<div class="card">
+  <table class="table" style="width:100%; border-collapse:collapse;">
+    <thead>
+      <tr style="background:#f4f7fb;">
+        <th style="padding:.75rem; text-align:left;">Supervisor</th>
+        <th style="padding:.75rem; text-align:left;">Employee</th>
+        <th style="padding:.75rem; text-align:left;">Emp No</th>
+        <th style="padding:.75rem; text-align:left;">Dept</th>
+        <th style="padding:.75rem; text-align:left;">Site</th>
+        <th style="padding:.75rem; text-align:center; white-space:nowrap;">Total /100</th>
+        <th style="padding:.75rem; text-align:center;">Band</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for de, emp, u in rows %}
+      <tr style="border-top:1px solid #edf0f4;">
+        <td style="padding:.65rem .75rem;">
+          {{ u.name or '—' }}
+          {% if u.supervisor_code %} ({{ u.supervisor_code }}){% endif %}
+        </td>
+        <td style="padding:.65rem .75rem;">{{ emp.name }}</td>
+        <td style="padding:.65rem .75rem;">{{ emp.emp_number }}</td>
+        <td style="padding:.65rem .75rem;">{{ emp.department or '—' }}</td>
+        <td style="padding:.65rem .75rem;">{{ emp.site or '—' }}</td>
+        <td style="padding:.65rem .75rem; text-align:center;">
+          {{ '%.2f'|format(de.total_score or 0) }}
+        </td>
+        <td style="padding:.65rem .75rem; text-align:center;">
+          {% set b = de.overall_band or '—' %}
+          {% if b == 'Ex' %}
+            Excellent
+          {% elif b == 'Sa' %}
+            Satisfactory
+          {% elif b == 'Ne' %}
+            Needs Improvement
+          {% else %}
+            {{ b }}
+          {% endif %}
+        </td>
+      </tr>
+      {% else %}
+      <tr>
+        <td colspan="7" style="padding:1rem; text-align:center; color:#888;">
+          No daily evaluations for this date.
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% if all_sup_stats %}
+  <!-- supervisors summary (numbers only) -->
+  <div class="card" style="margin-top:1.5rem;">
+    <h2 style="margin-top:0; margin-bottom:.75rem;">Supervisors summary</h2>
+    <table style="width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="background:#f4f7fb;">
+          <th style="padding:.5rem .75rem; text-align:left;">Supervisor</th>
+          <th style="padding:.5rem .75rem; text-align:center;">Coverage %</th>
+          <th style="padding:.5rem .75rem; text-align:center;">Evaluated / Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for s in all_sup_stats %}
+        <tr style="border-top:1px solid #edf0f4;">
+          <td style="padding:.5rem .75rem;">
+            {{ s.sup.name }}{% if s.sup.supervisor_code %} ({{ s.sup.supervisor_code }}){% endif %}
+          </td>
+          <td style="padding:.5rem .75rem; text-align:center;">
+            {{ '%.1f'|format(s.coverage) }}%
+          </td>
+          <td style="padding:.5rem .75rem; text-align:center;">
+            {{ s.done_emp_count }}/{{ s.total_emp }}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% endif %}
+
+{% if all_sup_stats %}
+  <!-- supervisors detailed coverage -->
+  <div class="card" style="margin-top:1.5rem;">
+    <h2 style="margin-top:0;">Supervisors coverage ({{ eval_date.strftime("%d/%m/%Y") }})</h2>
+
+    {% for s in all_sup_stats %}
+      <div style="border-top:1px solid #edf0f4; padding-top:1rem; margin-top:1rem;">
+        <h3 style="margin:0 0 .5rem 0;">
+          {{ s.sup.name }}{% if s.sup.supervisor_code %} ({{ s.sup.supervisor_code }}){% endif %}
+        </h3>
+        <p style="margin:0 0 .5rem 0;">
+          Coverage:
+          {% if s.total_emp %}
+            {{ '%.1f'|format(s.coverage) }}% ({{ s.done_emp_count }}/{{ s.total_emp }})
+          {% else %}
+            0 employees
+          {% endif %}
+        </p>
+
+        {% if s.missing_emps %}
+          <p style="margin-bottom:.25rem;">Not evaluated:</p>
+          <ul style="margin-top:0;">
+            {% for e in s.missing_emps %}
+              <li>{{ e.name }} — {{ e.emp_number }}</li>
+            {% endfor %}
+          </ul>
+        {% else %}
+          <p class="muted">All employees evaluated ✅</p>
+        {% endif %}
+      </div>
+    {% endfor %}
+  </div>
+{% endif %}
+
+{% if focus_sup %}
+  <!-- KPI for selected supervisor from filter -->
+  <div class="card" style="margin-top:1.5rem;">
+    <h3 style="margin-top:0;">Supervisor coverage — {{ focus_sup.name }} ({{ focus_sup.supervisor_code }})</h3>
+    <p>
+      {% if sup_cov_pct is not none %}
+        Coverage: {{ '%.1f'|format(sup_cov_pct) }}% ({{ done_emp_count }}/{{ total_emp }})
+      {% else %}
+        No active employees found for this supervisor.
+      {% endif %}
+    </p>
+    {% if missing_emps %}
+      <p>Not evaluated:</p>
+      <ul>
+        {% for e in missing_emps %}
+          <li>{{ e.name }} — {{ e.emp_number }}</li>
+        {% endfor %}
+      </ul>
+    {% endif %}
+  </div>
+{% endif %}
+
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:800px;margin:2rem auto;">
+
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;flex-wrap:wrap;gap:1rem;">
+    <h2>Users — {{ co.name if co else '' }}</h2>
+    <a href="{{ url_for('settings_company') }}" class="btn">← Company Settings</a>
+  </div>
+
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table style="width:100%;border-collapse:collapse;">
+      <thead>
+        <tr style="background:#f8fafc;">
+          <th style="padding:0.7rem 1rem;text-align:left;font-size:0.8rem;color:#64748b;border-bottom:1px solid #e2e8f0;">Name</th>
+          <th style="padding:0.7rem 1rem;text-align:left;font-size:0.8rem;color:#64748b;border-bottom:1px solid #e2e8f0;">Role</th>
+          <th style="padding:0.7rem 1rem;text-align:left;font-size:0.8rem;color:#64748b;border-bottom:1px solid #e2e8f0;">ID / Email</th>
+          <th style="padding:0.7rem 1rem;text-align:left;font-size:0.8rem;color:#64748b;border-bottom:1px solid #e2e8f0;">Status</th>
+          <th style="padding:0.7rem 1rem;text-align:left;font-size:0.8rem;color:#64748b;border-bottom:1px solid #e2e8f0;"></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr style="border-bottom:1px solid #f1f5f9;">
+          <td style="padding:0.75rem 1rem;font-weight:600;">{{ u.name }}</td>
+          <td style="padding:0.75rem 1rem;">
+            <span style="background:#f1f5f9;color:#475569;padding:0.15rem 0.5rem;border-radius:4px;font-size:0.8rem;">{{ u.role }}</span>
+          </td>
+          <td style="padding:0.75rem 1rem;font-size:0.85rem;color:#64748b;">
+            {{ u.email or u.supervisor_code }}
+          </td>
+          <td style="padding:0.75rem 1rem;">
+            {% if u.is_active %}
+              <span style="color:#16a34a;font-size:0.85rem;">● Active</span>
+            {% else %}
+              <span style="color:#dc2626;font-size:0.85rem;">● Inactive</span>
+            {% endif %}
+          </td>
+          <td style="padding:0.75rem 1rem;text-align:right;">
+            {% if u.is_active %}
+              <form method="post" action="{{ url_for('settings_user_deactivate', uid=u.id) }}"
+                    onsubmit="return confirm('Deactivate {{ u.name }}?')" style="display:inline;">
+                <button type="submit" style="background:#fef2f2;color:#dc2626;border:1px solid #fecaca;padding:0.3rem 0.7rem;border-radius:6px;font-size:0.8rem;cursor:pointer;">Deactivate</button>
+              </form>
+            {% else %}
+              <form method="post" action="{{ url_for('settings_user_activate', uid=u.id) }}" style="display:inline;">
+                <button type="submit" style="background:#f0fdf4;color:#16a34a;border:1px solid #bbf7d0;padding:0.3rem 0.7rem;border-radius:6px;font-size:0.8rem;cursor:pointer;">Activate</button>
+              </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" style="padding:2rem;text-align:center;color:#94a3b8;">No users found.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+
+  <p style="margin-top:1rem;font-size:0.85rem;color:#64748b;">
+    To add new users, go to <a href="{{ url_for('admin_users') }}">Admin → Users</a>.
+  </p>
+
+</div>
+{% endblock %}

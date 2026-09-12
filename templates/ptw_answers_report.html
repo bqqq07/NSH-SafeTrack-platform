@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block title %}Answers — {{ officer.name }}{% endblock %}
+{% block content %}
+<style>
+@media print {
+  .no-print{display:none!important}
+  body{font-size:10px}
+}
+.rpt-header{margin-bottom:20px}
+.rpt-title{font-size:18px;font-weight:700}
+.rpt-sub{font-size:12px;color:var(--muted);margin-top:2px}
+.back-link{font-size:13px;color:#3b82f6;text-decoration:none;margin-bottom:14px;display:inline-block}
+.mod-section{margin-bottom:28px}
+.mod-label{font-size:13px;font-weight:700;color:#1e40af;background:#eff6ff;border-radius:8px;padding:8px 12px;margin-bottom:10px}
+.stage-card{background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;margin-bottom:10px;overflow:hidden}
+.stage-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid #f1f5f9;flex-wrap:wrap;gap:8px}
+.stage-title{font-size:13px;font-weight:700}
+.stage-ref{font-size:11px;color:#94a3b8;margin-top:2px}
+.badge{font-size:11px;padding:3px 8px;border-radius:6px;font-weight:600}
+.badge-approved{background:#dcfce7;color:#166534}
+.badge-pending{background:#fef3c7;color:#92400e}
+.badge-rejected{background:#fee2e2;color:#b91c1c}
+.qa-block{padding:10px 14px;border-bottom:1px solid #f8fafc}
+.qa-block:last-child{border-bottom:none}
+.q-text{font-size:12px;font-weight:600;color:#374151;margin-bottom:4px}
+.a-text{font-size:12px;color:#1e293b;background:#f8fafc;border-radius:6px;padding:8px 10px;white-space:pre-wrap;line-height:1.55}
+.a-empty{font-size:12px;color:#94a3b8;font-style:italic}
+.reviewer-note{font-size:12px;background:#fef3c7;border-radius:6px;padding:8px 10px;color:#78350f;margin:8px 14px}
+.photo-wrap{padding:10px 14px}
+.photo-wrap img{max-width:220px;border-radius:8px;border:1px solid #e2e8f0}
+.submitted-at{font-size:11px;color:#94a3b8}
+.empty-state{text-align:center;padding:40px;color:#94a3b8;font-size:13px}
+</style>
+
+<div class="no-print" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+  <button onclick="window.print()" class="btn primary">🖨️ Print / Save PDF</button>
+  <a href="{{ url_for('ptw_progress_report') }}" class="btn">← Progress report</a>
+</div>
+<div class="rpt-header" style="display:flex;align-items:center;justify-content:space-between;
+     margin-bottom:16px;padding-bottom:12px;border-bottom:3px solid #0f172a">
+  <div>
+    <div class="rpt-title">PTW Training — Answers Report</div>
+    <div class="rpt-sub">Trainee: <strong>{{ officer.name }}</strong> · Generated {{ now.strftime('%d %b %Y, %H:%M') }}</div>
+  </div>
+  <img src="{{ url_for('static', filename='img/logo.png') }}" style="height:40px" alt="">
+</div>
+
+{% if not sections %}
+<div class="empty-state">No submitted answers yet.</div>
+{% else %}
+{% for sec in sections %}
+<div class="mod-section">
+  <div class="mod-label">Module {{ sec.mod.seq }} — {{ sec.mod.title }}</div>
+  {% for item in sec.doors %}
+  {% set sub = item.sub %}
+  <div class="stage-card">
+    <div class="stage-header">
+      <div>
+        <div class="stage-title">Stage {{ item.door.seq }} — {{ item.door.title }}</div>
+        <div class="stage-ref">{{ item.door.ref }}</div>
+      </div>
+      <div>
+        <span class="badge badge-{{ sub.status }}">
+          {% if sub.status == 'approved' %}Approved
+          {% elif sub.status == 'pending' %}Pending
+          {% else %}Rejected{% endif %}
+        </span>
+        <div class="submitted-at">{{ sub.submitted_at.strftime('%d %b %Y, %H:%M') if sub.submitted_at else '' }}</div>
+      </div>
+    </div>
+    {% if sub.reviewer_note %}
+    <div class="reviewer-note">Supervisor note: {{ sub.reviewer_note }}</div>
+    {% endif %}
+    {% for q in item.door.questions %}
+    <div class="qa-block">
+      <div class="q-text">Q{{ loop.index }}: {{ q }}</div>
+      {% set ans = item.answers[loop.index0] if loop.index0 < item.answers|length else '' %}
+      {% if ans %}
+      <div class="a-text">{{ ans }}</div>
+      {% else %}
+      <div class="a-empty">No answer submitted.</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% if sub.photo_path %}
+    <div class="photo-wrap">
+      <div style="font-size:11px;color:#64748b;margin-bottom:6px">Field photo:</div>
+      <img src="{{ url_for('hse_photo', filename=sub.photo_path) }}">
+    </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

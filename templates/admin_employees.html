@@ -12,9 +12,28 @@
     <div class="report-head-right"></div>
   </header>
 
-  <!-- Search -->
+  <!-- Filters -->
   <section class="card no-print">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+      <a href="{{ url_for('admin_employees') }}"
+         class="btn {% if not flt %}primary{% endif %}">
+        All Active
+      </a>
+      <a href="{{ url_for('admin_employees', filter='unassigned') }}"
+         class="btn {% if flt == 'unassigned' %}primary{% endif %}"
+         style="{% if count_unassigned %}border-color:#f59e0b;{% endif %}">
+        No Supervisor
+        {% if count_unassigned %}<span style="background:#f59e0b;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.8rem;margin-left:4px;">{{ count_unassigned }}</span>{% endif %}
+      </a>
+      <a href="{{ url_for('admin_employees', filter='deactivated') }}"
+         class="btn {% if flt == 'deactivated' %}primary{% endif %}"
+         style="{% if count_deactivated %}border-color:#ef4444;{% endif %}">
+        Deactivated by Supervisor
+        {% if count_deactivated %}<span style="background:#ef4444;color:#fff;border-radius:10px;padding:1px 7px;font-size:0.8rem;margin-left:4px;">{{ count_deactivated }}</span>{% endif %}
+      </a>
+    </div>
     <form method="get" action="{{ url_for('admin_employees') }}" class="grid2" autocomplete="off">
+      {% if flt %}<input type="hidden" name="filter" value="{{ flt }}">{% endif %}
       <label>Search (Name, Emp No, Dept, Site, Supervisor ID)
         <input
           type="search" name="q" value="{{ q or '' }}"
@@ -23,7 +42,7 @@
       </label>
       <div class="align-end">
         <button class="btn primary" type="submit">Search</button>
-        <a class="btn" href="{{ url_for('admin_employees') }}">Clear</a>
+        <a class="btn" href="{{ url_for('admin_employees', filter=flt) }}">Clear</a>
       </div>
     </form>
   </section>
@@ -31,84 +50,81 @@
   <!-- Employees table -->
   <section class="card">
     <h2>Employees</h2>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Supervisor ID</th>
-          <th>Emp. No</th>
-          <th>Name</th>
-          <th>Department</th>
-          <th>Site</th>
-          <th class="no-print">Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for emp, sup in rows %}
-        <tr>
-          <td>{{ sup.supervisor_code }}</td>
-          <td class="nowrap">{{ emp.emp_number }}</td>
-          <td>{{ emp.name }}</td>
-          <td>{{ emp.department }}</td>
-          <td>{{ emp.site }}</td>
-          <td class="no-print">
-            <a class="btn" href="{{ url_for('admin_employee_history', emp_id=emp.id) }}">History</a>
-          </td>
-        </tr>
-        {% else %}
-        <tr><td colspan="6" class="center muted">No employees found.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table class="table compact">
+        <!-- توزيع أعمدة واضح + يسمح بالتمدد مع سحب أفقي -->
+        <colgroup>
+          <col style="width:140px">   {# Supervisor ID #}
+          <col style="width:120px">   {# Emp. No #}
+          <col style="width:120px">   {# Name (مرن) #}
+          <col style="width:180px">   {# Department #}
+          <col style="width:140px">   {# Site #}
+          <col style="width:130px">   {# Actions #}
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Supervisor ID</th>
+            <th>Emp. No</th>
+            <th>Name</th>
+            <th>Department</th>
+            <th>Site</th>
+            <th class="no-print">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for emp, sup in rows %}
+          <tr {% if not sup %}style="background:#fffbeb;"{% elif not emp.is_active %}style="background:#fef2f2;"{% endif %}>
+            <td class="nowrap mono">{{ sup.supervisor_code if sup else '—' }}</td>
+            <td class="nowrap mono">{{ emp.emp_number }}</td>
+            <td class="wrap">{{ emp.name }}</td>
+            <td class="wrap">{{ emp.department }}</td>
+            <td>{{ emp.site }}</td>
+            <td class="no-print">
+              <a class="btn" href="{{ url_for('admin_employee_history', emp_id=emp.id) }}">History</a>
+              <a class="btn" href="{{ url_for('employee_edit', emp_id=emp.id) }}">✏️ تعديل</a>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="center muted">No employees found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </section>
 
   <!-- Users table (supervisors / site supervisors) -->
   <section class="card">
     <h2>Users (Supervisors / Site Supervisors)</h2>
-    <table class="table">
-      <thead>
-        <tr>
-          <th>Supervisor ID</th>
-          <th>Name</th>
-          <th>Role</th>
-          <th>Status</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for u in users %}
-        <tr>
-          <td class="nowrap">{{ u.supervisor_code }}</td>
-          <td>{{ u.name }}</td>
-          <td>{{ u.role }}</td>
-          <td>{{ "Active" if u.is_active else "Inactive" }}</td>
-        </tr>
-        {% else %}
-        <tr><td colspan="4" class="center muted">No users found.</td></tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table class="table compact">
+        <colgroup>
+          <col style="width:140px">   {# Supervisor ID #}
+          <col>                       {# Name (مرن) #}
+          <col style="width:150px">   {# Role #}
+          <col style="width:130px">   {# Status #}
+        </colgroup>
+        <thead>
+          <tr>
+            <th>Supervisor ID</th>
+            <th>Name</th>
+            <th>Role</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr>
+            <td class="nowrap mono">{{ u.supervisor_code }}</td>
+            <td>{{ u.name }}</td>
+            <td class="nowrap">{{ u.role }}</td>
+            <td class="nowrap">{{ "Active" if u.is_active else "Inactive" }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="4" class="center muted">No users found.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
   </section>
 </section>
 {% endblock %}
-<!-- ضمن جدول المستخدمين (Users) -->
-<thead>
-  <tr>
-    <th>ID</th><th>Name</th><th>Role</th><th>Status</th><th class="no-print">History</th>
-  </tr>
-</thead>
-<tbody>
-  {% for u in users %}
-  <tr>
-    <td class="mono">{{ u.supervisor_code }}</td>
-    <td>{{ u.name or '—' }}</td>
-    <td>{{ u.role }}</td>
-    <td>{{ 'Active' if u.is_active else 'Inactive' }}</td>
-    <td class="no-print">
-      {% if u.role == 'supervisor' %}
-        <a class="btn" href="{{ url_for('admin_supervisor_history', sup_id=u.id) }}">View</a>
-      {% else %}
-        —
-      {% endif %}
-    </td>
-  </tr>
-  {% endfor %}
-</tbody>

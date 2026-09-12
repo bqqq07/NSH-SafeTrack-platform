@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}New Environment Observation{% endblock %}
+{% block content %}
+<div style="max-width:620px;margin:0 auto">
+  <h2 style="margin-bottom:16px">New Observation</h2>
+  <div class="card">
+    <form method="post" enctype="multipart/form-data" data-offline-type="observation">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <label>Observation Type *
+        <select name="obs_type" required>
+          <option value="">— Select —</option>
+          <option value="unsafe_act">Unsafe Act</option>
+          <option value="unsafe_condition">Unsafe Condition</option>
+          <option value="positive">Positive</option>
+        </select>
+      </label>
+
+      <label>Location
+        <input type="text" name="location" placeholder="Site area / location">
+      </label>
+
+      <label>Category
+        <select name="category">
+          <option value="">— Select —</option>
+          {% for cat in categories %}
+          <option value="{{ cat }}">{{ cat }}</option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label>Risk Level
+        <select name="risk_level">
+          <option value="">— N/A —</option>
+          <option value="L">L — Low</option>
+          <option value="M">M — Medium</option>
+          <option value="H">H — High</option>
+        </select>
+      </label>
+
+      <label>Description
+        <textarea name="description" rows="3" placeholder="Describe what you observed..."></textarea>
+      </label>
+
+      <label>Action Taken
+        <textarea name="action_taken" rows="2" placeholder="What was done immediately?"></textarea>
+      </label>
+
+      <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;margin:8px 0">
+        <legend style="padding:0 6px;font-weight:600">Photos (up to 3)</legend>
+        <label>Photo 1 <input type="file" name="photo_1" accept="image/*"></label>
+        <label>Photo 2 <input type="file" name="photo_2" accept="image/*"></label>
+        <label>Photo 3 <input type="file" name="photo_3" accept="image/*"></label>
+      </fieldset>
+
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button type="submit" class="btn primary">Save Observation</button>
+        <a href="{{ url_for('env_dashboard') }}" class="btn">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

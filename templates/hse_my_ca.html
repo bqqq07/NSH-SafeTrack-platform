@@ -1,0 +1,81 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.ca-card  { background:#fff; border:1px solid var(--border); border-radius:10px;
+            padding:14px 16px; margin-bottom:10px }
+.ca-card.overdue { border-left:4px solid var(--danger) }
+.ca-card.open    { border-left:4px solid #f59e0b }
+.ca-card.done    { border-left:4px solid var(--success); opacity:.8 }
+.ca-badge { display:inline-block; padding:2px 10px; border-radius:20px;
+            font-size:11px; font-weight:700 }
+.ca-badge.overdue { background:#fee2e2; color:var(--danger) }
+.ca-badge.open    { background:#fef3c7; color:#92400e }
+.ca-badge.done    { background:#dcfce7; color:#166534 }
+.ca-meta  { font-size:12px; color:var(--muted); margin-top:4px }
+.sec-hdr  { font-size:13px; font-weight:700; margin:18px 0 8px;
+            padding-bottom:4px; border-bottom:2px solid var(--border) }
+</style>
+
+<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+  <h2 style="margin:0;font-size:18px">📋 إجراءاتي التصحيحية</h2>
+  <a href="{{ url_for('hse_observations') }}" class="btn" style="font-size:12px">← الملاحظات</a>
+</div>
+
+{% if overdue_cas %}
+<div class="sec-hdr" style="color:var(--danger)">⚠ متأخرة ({{ overdue_cas|length }})</div>
+{% for ca in overdue_cas %}
+<div class="ca-card overdue">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span class="ca-badge overdue">متأخر</span>
+    <span style="font-weight:600;font-size:13px">{{ ca.action_required }}</span>
+  </div>
+  <div class="ca-meta">
+    ميعاد الإنجاز: <strong style="color:var(--danger)">{{ ca.due_date.strftime('%d %b %Y') }}</strong>
+    {% if ca.assigned_to %} · مسؤول: {{ ca.assigned_to }}{% endif %}
+    · <a href="{{ url_for('hse_observation_view', obs_id=ca.observation_id) }}" style="color:var(--primary)">ملاحظة #{{ ca.observation_id }}</a>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% set pending = open_cas | rejectattr('due_date', 'lt', today) | list %}
+{% if pending %}
+<div class="sec-hdr">مفتوحة ({{ pending|length }})</div>
+{% for ca in pending %}
+<div class="ca-card open">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span class="ca-badge open">مفتوح</span>
+    <span style="font-weight:600;font-size:13px">{{ ca.action_required }}</span>
+  </div>
+  <div class="ca-meta">
+    ميعاد الإنجاز: <strong>{{ ca.due_date.strftime('%d %b %Y') }}</strong>
+    {% if ca.assigned_to %} · مسؤول: {{ ca.assigned_to }}{% endif %}
+    · <a href="{{ url_for('hse_observation_view', obs_id=ca.observation_id) }}" style="color:var(--primary)">ملاحظة #{{ ca.observation_id }}</a>
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+
+{% if not open_cas %}
+<div class="card" style="text-align:center;padding:30px;color:var(--muted)">
+  <div style="font-size:32px">✅</div>
+  <div style="margin-top:8px">لا توجد إجراءات تصحيحية مفتوحة</div>
+</div>
+{% endif %}
+
+{% if closed_cas %}
+<div class="sec-hdr" style="color:var(--success)">مكتملة ({{ closed_cas|length }})</div>
+{% for ca in closed_cas %}
+<div class="ca-card done">
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <span class="ca-badge done">✓ مكتمل</span>
+    <span style="font-weight:600;font-size:13px">{{ ca.action_required }}</span>
+  </div>
+  <div class="ca-meta">
+    أُنجز: {{ ca.completed_at.strftime('%d %b %Y') if ca.completed_at else '—' }}
+    {% if ca.completion_notes %} · {{ ca.completion_notes }}{% endif %}
+  </div>
+</div>
+{% endfor %}
+{% endif %}
+{% endblock %}

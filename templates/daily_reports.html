@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Daily Reports</h1>
+
+<section class="card no-print">
+  <form method="get" class="grid3">
+    <label>Date
+      <input type="date" name="d" value="{{ d.isoformat() }}" required>
+    </label>
+    <div></div>
+    <div class="align-end">
+      <button class="btn">Open</button>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Employee</th>
+        <th>Emp No</th>
+        <th class="center">Targets /40</th>
+        <th class="center">Performance /60</th>
+        <th class="center">Total /100</th>
+        <th class="center">Band</th>
+        <th class="no-print">View</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for de, emp in rows %}
+      <tr>
+        <td>{{ emp.name }}</td>
+        <td class="mono">{{ emp.emp_number }}</td>
+        <td class="center">{{ '%.2f'|format(de.targets_score or 0) }}</td>
+        <td class="center">{{ '%.2f'|format(de.perf_score or 0) }}</td>
+        <td class="center"><strong>{{ '%.2f'|format(de.total_score or 0) }}</strong></td>
+        <td class="center">{{ de.overall_band or '—' }}</td>
+        <td class="no-print">
+          <a class="btn" href="{{ url_for('daily_report_employee', emp_id=emp.id, d=d.isoformat()) }}">Open</a>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="7" class="center muted">No daily evaluations for this date.</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block content %}
+
+<header class="report-header">
+  <div class="report-head-left">
+    <img class="report-logo" src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo">
+  </div>
+  <div class="report-head-center">
+    <h1>Daily Employee Evaluation</h1>
+    <p class="muted">
+      Employee: {{ employee.name }} ({{ employee.emp_number }}) ·
+      Dept: {{ employee.department or '—' }} ·
+      Date: {{ de.eval_date }}
+    </p>
+  </div>
+  <div class="report-head-right"></div>
+</header>
+
+<section class="card report-meta">
+  <div class="grid2">
+    <div><strong>Evaluator (Supervisor ID):</strong>
+      {{ evaluator_code or '—' }}{% if evaluator_name %} — {{ evaluator_name }}{% endif %}
+    </div>
+  </div>
+  <div>
+    <strong>Targets:</strong>
+    {{ '%.2f'|format(de.targets_score or 0) }} / 40
+  </div>
+  <div>
+    <strong>Performance:</strong>
+    {{ '%.2f'|format(de.perf_score or 0) }} / 60
+  </div>
+  <div>
+    <strong>Total:</strong>
+    {{ '%.2f'|format(de.total_score or 0) }} / 100 · {{ de.overall_band }}
+  </div>
+</section>
+
+
+<h2>1. Daily Targets</h2>
+<table class="table compact">
+  <thead>
+    <tr>
+      <th>Target / Task</th>
+      <th class="nowrap">Achieved %</th>
+      <th>Remarks</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for i in [1,2,3,4] %}
+      {% set tx = de['t%s_text' % i] if de else '' %}
+      {% set pc = de['t%s_percent' % i] if de else '' %}
+      {% set rm = de['t%s_remarks' % i] if de else '' %}
+      <tr>
+        <td>{{ tx }}</td>
+        <td class="nowrap">
+          {% if pc not in ('', None) %}
+            {{ '%.0f'|format(pc or 0) }}%
+          {% else %}
+            —
+          {% endif %}
+        </td>
+        <td class="clip2">{{ rm }}</td>
+      </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <th class="right">Subtotal</th>
+      <th class="nowrap">
+        {% if de %}{{ '%.2f'|format(de.targets_score or 0) }}{% else %}—{% endif %} / 40
+      </th>
+      <th></th>
+    </tr>
+  </tfoot>
+</table>
+
+<h2>2. Performance</h2>
+<table class="table compact">
+  <colgroup>
+    <col style="width:40%">
+    <col style="width:8%">
+    <col style="width:52%">
+  </colgroup>
+  <thead>
+    <tr>
+      <th>Criteria</th>
+      <th class="nowrap">Rating</th>
+      <th>Comments</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% set rows = [
+      ('p_punctuality','c_punctuality','Punctuality & Attendance'),
+      ('p_quality','c_quality','Quality of Work'),
+      ('p_productivity','c_productivity','Productivity'),
+      ('p_communication','c_communication','Communication & Teamwork'),
+      ('p_problemsolving','c_problemsolving','Problem-Solving'),
+      ('p_compliance','c_compliance','Compliance with Safety/Rules')
+    ] %}
+    {% for pk, ck, label in rows %}
+    <tr>
+      <td>{{ label }}</td>
+      <td class="nowrap">
+        {% if de %}{{ de[pk] or 0 }}{% else %}—{% endif %}
+      </td>
+      <td class="clip2">
+        {% if de %}{{ de[ck] or '' }}{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+  <tr>
+    <th class="right">Subtotal</th>
+    <th class="nowrap">
+      {% if de %}{{ '%.2f'|format(de.perf_score or 0) }}{% else %}—{% endif %} / 60
+    </th>
+    <th></th>
+  </tr>
+  <tr>
+    <th class="right">TOTAL</th>
+    <th class="nowrap">
+      {% if de %}{{ '%.2f'|format(de.total_score or 0) }}{% else %}—{% endif %} / 100
+    </th>
+    <th></th>
+  </tr>
+</tfoot>
+</table>
+
+<h2>3. Summary & Notes</h2>
+<table class="table kv">
+  <tbody>
+    <tr>
+      <th>Strengths observed</th>
+      <td>{{ de.strengths if de else '' }}</td>
+    </tr>
+    <tr>
+      <th>Areas for improvement</th>
+      <td>{{ de.improvements if de else '' }}</td>
+    </tr>
+    <tr>
+      <th>Training/Support required</th>
+      <td>{{ de.training_needed if de else '' }}</td>
+    </tr>
+  </tbody>
+</table>
+
+<h2>4. Signatures</h2>
+<div class="signatures">
+  <div class="sig-row"><span class="sig-label">Supervisor sign</span><span class="sig-dots"></span></div>
+  <div class="sig-row"><span class="sig-label">Employee sign</span><span class="sig-dots"></span></div>
+</div>
+
+{% endblock %}

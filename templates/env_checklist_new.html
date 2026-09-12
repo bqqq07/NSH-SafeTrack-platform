@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}New Checklist{% endblock %}
+{% block content %}
+<div style="max-width:580px;margin:0 auto">
+  <h2 style="margin-bottom:6px">Fill a Weekly Checklist</h2>
+  <p style="color:#64748b;margin-bottom:20px">Select the AMIRAL checklist type to fill</p>
+
+  <div style="display:flex;flex-direction:column;gap:14px">
+
+    <a href="{{ url_for('env_checklist_fill', ctype='P2-EC') }}"
+       style="display:flex;align-items:center;gap:16px;background:#f0fdf4;border:2px solid #86efac;
+              border-radius:14px;padding:18px 20px;text-decoration:none;color:inherit">
+      <span style="font-size:2rem">🌿</span>
+      <div>
+        <div style="font-weight:700;font-size:1rem">P2-EC — Environmental Checklist</div>
+        <div style="font-size:.85rem;color:#64748b;margin-top:2px">
+          Weekly site inspection · 28 items (Part 1 + Part 2)
+        </div>
+      </div>
+      <span style="margin-left:auto;color:#16a34a;font-size:1.2rem">›</span>
+    </a>
+
+    <a href="{{ url_for('env_checklist_fill', ctype='P2-WMC') }}"
+       style="display:flex;align-items:center;gap:16px;background:#fffbeb;border:2px solid #fcd34d;
+              border-radius:14px;padding:18px 20px;text-decoration:none;color:inherit">
+      <span style="font-size:2rem">♻️</span>
+      <div>
+        <div style="font-weight:700;font-size:1rem">P2-WMC — Waste Management Checklist</div>
+        <div style="font-size:.85rem;color:#64748b;margin-top:2px">
+          Collection, deposits & documents · 17 items
+        </div>
+      </div>
+      <span style="margin-left:auto;color:#ca8a04;font-size:1.2rem">›</span>
+    </a>
+
+    <a href="{{ url_for('env_checklist_fill', ctype='P2-SPC') }}"
+       style="display:flex;align-items:center;gap:16px;background:#fff1f2;border:2px solid #fca5a5;
+              border-radius:14px;padding:18px 20px;text-decoration:none;color:inherit">
+      <span style="font-size:2rem">🧪</span>
+      <div>
+        <div style="font-weight:700;font-size:1rem">P2-SPC — Substances &amp; Products Checklist</div>
+        <div style="font-size:.85rem;color:#64748b;margin-top:2px">
+          Chemical storage inspection · 18 items
+        </div>
+      </div>
+      <span style="margin-left:auto;color:#dc2626;font-size:1.2rem">›</span>
+    </a>
+
+  </div>
+
+  <div style="margin-top:20px">
+    <a href="{{ url_for('env_dashboard') }}" style="color:#64748b;font-size:.9rem">← Back to Dashboard</a>
+  </div>
+</div>
+{% endblock %}

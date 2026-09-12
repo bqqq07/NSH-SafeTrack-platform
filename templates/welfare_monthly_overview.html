@@ -1,0 +1,95 @@
+﻿{% extends "base.html" %}
+{% block title %}Monthly Overview{% endblock %}
+{% block content %}
+<div style="max-width:960px;margin:0 auto">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;
+              gap:10px;margin-bottom:16px" class="no-print">
+    <h2 style="margin:0">📅 Monthly Performance — {{ month_start.strftime('%B %Y') }}</h2>
+    <form method="get" style="display:flex;gap:6px">
+      <input type="month" name="month" value="{{ month_str }}"
+             style="padding:8px;border-radius:8px;border:1px solid #cbd5e1">
+      <button style="padding:8px 14px;border:0;background:#0f172a;color:#fff;
+                     border-radius:8px;font-weight:700">Go</button>
+    </form>
+  </div>
+
+  <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
+    {% for d in cards %}
+    <div style="border:1px solid #e2e8f0;border-radius:14px;padding:16px;background:#fff;
+                display:flex;flex-direction:column;gap:10px">
+      <!-- Header -->
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <a href="{{ url_for('safety_welfare_profile', uid=d.u.id) }}"
+             style="font-weight:800;font-size:1rem;color:#0f172a;text-decoration:none">
+            {{ d.u.name }} →</a>
+          <div style="font-size:.8rem;color:#64748b;margin-top:2px">
+            L{{ d.level_no }}/{{ d.level_total }}{% if d.level %} — {{ d.level.title }}{% endif %}
+          </div>
+        </div>
+        {% if d.avg_score is not none %}
+          <div style="background:{{ '#dcfce7' if d.avg_score >= 80 else ('#fef9c3' if d.avg_score >= 60 else '#fee2e2') }};
+                      color:{{ '#166534' if d.avg_score >= 80 else ('#854d0e' if d.avg_score >= 60 else '#991b1b') }};
+                      padding:8px 12px;border-radius:10px;font-weight:900;font-size:1.1rem">
+            {{ d.avg_score }}%
+          </div>
+        {% else %}
+          <div style="background:#f1f5f9;color:#94a3b8;padding:8px 12px;
+                      border-radius:10px;font-weight:700">—</div>
+        {% endif %}
+      </div>
+
+      <!-- Stats grid -->
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+        {% for label, val, color in [
+          ('Rounds', d.rounds, '#0f172a'),
+          ('Findings', d.finds_new, '#0f172a'),
+          ('Closed', d.finds_closed, '#166534' if d.finds_closed > 0 else '#94a3b8'),
+          ('Open', d.finds_open, '#991b1b' if d.finds_open > 0 else '#94a3b8'),
+          ('Complaints', d.complaints, '#0f172a'),
+        ] %}
+          <div style="background:#f8fafc;border-radius:7px;padding:7px;text-align:center">
+            <div style="font-weight:900;font-size:1.1rem;color:{{ color }}">{{ val }}</div>
+            <div style="font-size:.72rem;color:#64748b">{{ label }}</div>
+          </div>
+        {% endfor %}
+      </div>
+
+      <!-- On-time & weekly -->
+      <div style="display:flex;gap:6px">
+        {% if d.on_time_pct is not none %}
+          <div style="flex:1;background:{{ '#dcfce7' if d.on_time_pct >= 80 else '#fee2e2' }};
+                      border-radius:8px;padding:8px;text-align:center">
+            <div style="font-weight:800;color:{{ '#166534' if d.on_time_pct >= 80 else '#991b1b' }}">{{ d.on_time_pct }}%</div>
+            <div style="font-size:.72rem;color:#475569">On-time closure</div>
+          </div>
+        {% endif %}
+        <div style="flex:1;background:#f8fafc;border-radius:8px;padding:8px;text-align:center">
+          <div style="font-weight:800;color:#0f172a">{{ d.weekly_shared }}</div>
+          <div style="font-size:.72rem;color:#475569">Weekly reports</div>
+        </div>
+      </div>
+
+      <!-- Units -->
+      {% if d.units_covered %}
+        <div>
+          {% for unit, count in d.units_covered.items() %}
+            <span style="display:inline-block;background:#f1f5f9;border-radius:5px;
+                         padding:2px 7px;margin:2px;font-size:.78rem;font-weight:600">
+              {{ unit }} ×{{ count }}
+            </span>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <a href="{{ url_for('welfare_monthly_card', uid=d.u.id, month=month_str) }}"
+         style="display:block;text-align:center;padding:9px;background:#f8fafc;
+                border:1px solid #e2e8f0;border-radius:8px;color:#0f172a;
+                font-weight:700;text-decoration:none;font-size:.9rem">
+        🖨️ Full card
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

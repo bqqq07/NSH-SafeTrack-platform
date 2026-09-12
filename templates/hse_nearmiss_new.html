@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>New Near Miss Report</h2>
+<div class="card" style="max-width:620px">
+  <form method="post" enctype="multipart/form-data" data-offline-type="near_miss">
+    <label>Date
+      <input type="date" name="date" value="{{ today.isoformat() }}" required>
+    </label>
+
+    <label>Location *
+      <input type="text" name="location" id="locationInput"
+             value="{{ today_location }}" list="locationList"
+             placeholder="Where did it happen?" required>
+      <datalist id="locationList">
+        {% for loc in locations %}<option value="{{ loc }}">{% endfor %}
+      </datalist>
+    </label>
+
+    <label>Description *
+      <textarea name="description" rows="3" required
+                placeholder="Describe what happened..."></textarea>
+    </label>
+
+    <label>Immediate Cause *
+      <textarea name="immediate_cause" rows="2" required
+                placeholder="What was the immediate cause?"></textarea>
+    </label>
+
+    <label>Action Taken *
+      <textarea name="action_taken" rows="2" required
+                placeholder="What corrective actions were taken?"></textarea>
+    </label>
+
+    <label>Reported To *
+      <input type="text" name="reported_to" required
+             placeholder="Name / role of person reported to">
+    </label>
+
+    <label>Photo (optional)
+      <span id="nmPhotoOffline" style="display:none;font-size:12px;color:#92400e;
+            background:#fef9c3;border:1px solid #fbbf24;border-radius:4px;padding:2px 8px">
+        📴 Add after sync
+      </span>
+      <input type="file" name="photo" accept="image/*" id="nmPhotoInput">
+    </label>
+    <script>
+      (function(){
+        function updateNmPhoto(){
+          var note  = document.getElementById('nmPhotoOffline');
+          var input = document.getElementById('nmPhotoInput');
+          if(!navigator.onLine){ note.style.display='inline'; input.style.display='none'; }
+          else                  { note.style.display='none';  input.style.display=''; }
+        }
+        updateNmPhoto();
+        window.addEventListener('online',  updateNmPhoto);
+        window.addEventListener('offline', updateNmPhoto);
+      })();
+    </script>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button type="submit" class="btn primary">Submit Report</button>
+      <a href="{{ url_for('hse_nearmiss_list') }}" class="btn">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

@@ -1,0 +1,172 @@
+{% extends "base.html" %}
+{% block title %}HSE Monthly Report{% endblock %}
+{% block content %}
+<style>
+@media print {
+  .no-print { display:none!important }
+  body { font-size:10px }
+  .container { margin:0; padding:0; max-width:100% }
+  .card { border:none; box-shadow:none; padding:0 }
+}
+.rpt-header { display:flex; align-items:center; justify-content:space-between;
+              margin-bottom:16px; padding-bottom:12px; border-bottom:3px solid #0f172a }
+.rpt-title  { font-size:18px; font-weight:700; margin:0 }
+.rpt-sub    { font-size:12px; color:var(--muted); margin-top:3px }
+.sum-grid   { display:grid; grid-template-columns:repeat(auto-fit,minmax(110px,1fr));
+              gap:10px; margin-bottom:16px }
+.sum-box    { background:#fff; border:1px solid var(--border); border-radius:8px;
+              padding:10px; text-align:center }
+.sum-num    { font-size:22px; font-weight:700 }
+.sum-lbl    { font-size:11px; color:var(--muted); margin-top:2px }
+.hse-rpt-table { width:100%; border-collapse:collapse; font-size:12px }
+.hse-rpt-table th { background:#0f172a; color:#fff; padding:8px 6px;
+                    text-align:center; white-space:nowrap; font-size:11px }
+.hse-rpt-table th.left { text-align:left }
+.hse-rpt-table td { padding:7px 6px; border-bottom:1px solid #e5e7eb; text-align:center }
+.hse-rpt-table td.left { text-align:left; font-weight:600 }
+.hse-rpt-table tr:nth-child(even) td { background:#f9fafb }
+.hse-rpt-table tr.zero-row td { background:#fef2f2 }
+.hse-rpt-table tfoot td { background:#f0f4f8; font-weight:700; border-top:2px solid #cbd5e1 }
+.risk-h { color:#b91c1c; font-weight:700 }
+.nm-val { color:#b91c1c; font-weight:700 }
+</style>
+
+<!-- Toolbar -->
+<div class="no-print" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+  <button onclick="window.print()" class="btn primary">Print / Save PDF</button>
+  <a href="{{ url_for('hse_report_monthly_excel', year=year, month=month) }}" class="btn">Excel</a>
+  <a href="{{ url_for('hse_report_monthly_pdf',   year=year, month=month) }}" class="btn">PDF</a>
+  <a href="{{ url_for('hse_report_monthly_picker') }}" class="btn">← Change Month</a>
+</div>
+
+<!-- Report Header -->
+<div class="rpt-header">
+  <div>
+    <div class="rpt-title">HSE Monthly Report — {{ month_name }} {{ year }}</div>
+    <div class="rpt-sub">
+      <strong>{{ first_day.strftime('%d %b %Y') }}</strong> → <strong>{{ last_day.strftime('%d %b %Y') }}</strong>
+    </div>
+  </div>
+  <img src="{{ url_for('static', filename='img/logo.png') }}" style="height:40px" alt="">
+</div>
+
+<!-- Summary -->
+{% set total_officers  = rows|length %}
+{% set active_officers = rows|selectattr('total_activity','gt',0)|list|length %}
+{% set total_obs  = rows|sum(attribute='obs_total') %}
+{% set total_jso  = rows|sum(attribute='jso') %}
+{% set total_tbt  = rows|sum(attribute='tbt') %}
+{% set total_high = rows|sum(attribute='obs_high') %}
+{% set total_att  = rows|sum(attribute='tbt_attendees') %}
+{% set total_ptw  = rows|sum(attribute='ptw') %}
+{% set total_ca_open = rows|sum(attribute='ca_open') %}
+
+<div class="sum-grid">
+  <div class="sum-box">
+    <div class="sum-num">{{ active_officers }}<span style="font-size:.9rem;color:var(--muted)">/{{ total_officers }}</span></div>
+    <div class="sum-lbl">Officers Active</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num">{{ total_obs }}</div>
+    <div class="sum-lbl">Observations</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num {% if total_high > 0 %}risk-h{% endif %}">{{ total_high }}</div>
+    <div class="sum-lbl">High-Risk</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num">{{ total_jso }}</div>
+    <div class="sum-lbl">JSO Closures</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num">{{ total_tbt }}</div>
+    <div class="sum-lbl">TBTs ({{ total_att }} attend.)</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num">{{ total_ptw }}</div>
+    <div class="sum-lbl">PTW Permits</div>
+  </div>
+  <div class="sum-box">
+    <div class="sum-num {% if total_ca_open > 0 %}risk-h{% endif %}">{{ total_ca_open }}</div>
+    <div class="sum-lbl">Open CAs</div>
+  </div>
+</div>
+
+<!-- Table -->
+{% if rows %}
+<div style="overflow-x:auto">
+<table class="hse-rpt-table">
+  <thead>
+    <tr>
+      <th class="left" rowspan="2">Officer</th>
+      <th rowspan="2">Check-in<br>Days</th>
+      <th colspan="6" style="border-bottom:1px solid #334155">Observations</th>
+      <th rowspan="2">JSO</th>
+      <th rowspan="2">TBTs</th>
+      <th rowspan="2">TBT<br>Attend.</th>
+      <th rowspan="2">PTW</th>
+      <th rowspan="2">Open<br>CAs</th>
+      <th rowspan="2">Score</th>
+    </tr>
+    <tr>
+      <th>Total</th>
+      <th>Unsafe<br>Act</th>
+      <th>Unsafe<br>Cond.</th>
+      <th>Positive</th>
+      <th>High<br>Risk</th>
+      <th>Open</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for r in rows %}
+    <tr {% if r.total_activity == 0 %}class="zero-row"{% endif %}>
+      <td class="left">
+        <a href="{{ url_for('hse_officer_detail', officer_id=r.officer_id) }}" style="font-weight:600">{{ r.officer_name }}</a>
+        {% if r.is_trainee %}
+        <span style="background:#ede9fe;color:#5b21b6;font-size:10px;padding:1px 5px;border-radius:4px;margin-left:4px;font-weight:600">In Training</span>
+        {% elif r.total_activity == 0 %}<span style="color:var(--warning);font-size:10px;margin-left:4px">⚠</span>{% endif %}
+      </td>
+      <td>{{ r.checkin_days }}</td>
+      <td>{% if r.obs_total > 0 %}<strong>{{ r.obs_total }}</strong>{% else %}—{% endif %}</td>
+      <td>{{ r.obs_unsafe_act or '—' }}</td>
+      <td>{{ r.obs_unsafe_cond or '—' }}</td>
+      <td>{{ r.obs_positive or '—' }}</td>
+      <td>{% if r.obs_high > 0 %}<span class="risk-h">{{ r.obs_high }}</span>{% else %}—{% endif %}</td>
+      <td>{{ r.obs_open or '—' }}</td>
+      <td>{{ r.jso or '—' }}</td>
+      <td>{% if r.tbt > 0 %}<strong>{{ r.tbt }}</strong>{% else %}—{% endif %}</td>
+      <td>{{ r.tbt_attendees or '—' }}</td>
+      <td>{{ r.ptw or '—' }}</td>
+      <td>{% if r.ca_open > 0 %}<span class="risk-h">{{ r.ca_open }}</span>{% else %}—{% endif %}</td>
+      <td><strong style="color:#0369a1">{{ r.score }}</strong></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr>
+      <td class="left">Total</td>
+      <td>—</td>
+      <td>{{ total_obs }}</td>
+      <td>{{ rows|sum(attribute='obs_unsafe_act') }}</td>
+      <td>{{ rows|sum(attribute='obs_unsafe_cond') }}</td>
+      <td>{{ rows|sum(attribute='obs_positive') }}</td>
+      <td>{{ total_high }}</td>
+      <td>{{ rows|sum(attribute='obs_open') }}</td>
+      <td>{{ total_jso }}</td>
+      <td>{{ total_tbt }}</td>
+      <td>{{ total_att }}</td>
+      <td>{{ total_ptw }}</td>
+      <td>{{ total_ca_open }}</td>
+      <td>—</td>
+    </tr>
+  </tfoot>
+</table>
+</div>
+{% else %}
+<div class="card"><p class="muted">No safety officers found.</p></div>
+{% endif %}
+
+<p style="margin-top:14px;font-size:11px;color:var(--muted);text-align:right">
+  Generated: {{ now.strftime('%d %b %Y — %H:%M') }}
+</p>
+{% endblock %}

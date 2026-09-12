@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}HSE Office — Home{% endblock %}
+{% block content %}
+<h1 style="margin-bottom:1.5rem">HSE Office Dashboard</h1>
+
+{% if modules %}
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:1rem">
+  {% for key, label in modules %}
+    {% if key == 'incidents' %}
+      <a href="{{ url_for('incident_list') }}" class="module-card" style="border-color:#fca5a5">
+        <span class="mc-icon">📋</span><span class="mc-label">Incidents</span>
+      </a>
+    {% elif key == 'training' %}
+      <div class="module-card" style="border-color:#a5b4fc;opacity:.4;cursor:default"
+           title="Training module — external platform coming soon">
+        <span class="mc-icon">🎓</span><span class="mc-label">Training</span>
+      </div>
+    {% elif key == 'env' %}
+      <a href="{{ url_for('env_spills') }}" class="module-card" style="border-color:#6ee7b7">
+        <span class="mc-icon">🌿</span><span class="mc-label">Environment</span>
+      </a>
+    {% elif key == 'welfare' %}
+      <a href="{{ url_for('welfare_transport') }}" class="module-card" style="border-color:#fcd34d">
+        <span class="mc-icon">🚌</span><span class="mc-label">Welfare</span>
+      </a>
+    {% elif key == 'jso' %}
+      <a href="{{ url_for('hse_jso_list') }}" class="module-card" style="border-color:#fdba74">
+        <span class="mc-icon">🔍</span><span class="mc-label">JSO</span>
+      </a>
+    {% elif key == 'hse_requests' %}
+      <a href="{{ url_for('hse_requests_inbox') }}" class="module-card" style="border-color:#93c5fd">
+        <span class="mc-icon">📨</span><span class="mc-label">HSE Requests</span>
+      </a>
+    {% elif key == 'coverage' %}
+      <a href="{{ url_for('coverage_list') }}" class="module-card" style="border-color:#86efac">
+        <span class="mc-icon">📅</span><span class="mc-label">Coverage</span>
+      </a>
+    {% elif key == 'eval' %}
+      <a href="{{ url_for('monthly_eval_form') }}" class="module-card" style="border-color:#c4b5fd">
+        <span class="mc-icon">📊</span><span class="mc-label">Evaluations</span>
+      </a>
+    {% elif key == 'observations' %}
+      <a href="{{ url_for('hse_observations') }}" class="module-card" style="border-color:#e5e7eb">
+        <span class="mc-icon">👁</span><span class="mc-label">Observations</span>
+      </a>
+    {% endif %}
+  {% endfor %}
+</div>
+{% else %}
+<div class="card" style="text-align:center;padding:3rem">
+  <p style="color:var(--muted);font-size:1.1rem">No modules assigned to your account yet.</p>
+  <p class="hint">Contact the system administrator to enable your permissions.</p>
+</div>
+{% endif %}
+
+<style>
+.module-card{
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  padding:1.5rem 1rem; border-radius:10px; border:2px solid var(--border);
+  background:var(--card); text-decoration:none; color:var(--text);
+  transition:transform .15s, box-shadow .15s; gap:.5rem;
+}
+.module-card:hover{ transform:translateY(-3px); box-shadow:0 4px 16px rgba(0,0,0,.12); text-decoration:none }
+.mc-icon{ font-size:2rem }
+.mc-label{ font-size:.95rem; font-weight:600; text-align:center }
+</style>
+{% endblock %}

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Close Observation</h2>
+
+<div class="card" style="max-width:580px;border-left:4px solid var(--warning)">
+  <p><strong>{{ obs.date.strftime('%d %b %Y') }}</strong> —
+    {{ obs.obs_type.replace('_',' ').title() }}
+    {% if obs.risk_level %}
+    <span style="background:{{ '#C62828' if obs.risk_level=='H' else '#EDB458' if obs.risk_level=='M' else '#3A7CA5' }};
+                 color:#fff;padding:2px 8px;border-radius:12px;font-size:12px;margin-left:4px">
+      Risk: {{ obs.risk_level }}
+    </span>
+    {% endif %}
+  </p>
+  {% if obs.category %}<p style="margin:2px 0;font-size:13px"><strong>Category:</strong> {{ obs.category }}</p>{% endif %}
+  {% if obs.location %}<p style="margin:2px 0;font-size:13px;color:var(--muted)">📍 {{ obs.location }}</p>{% endif %}
+  {% if obs.description %}<p style="margin:8px 0 0">{{ obs.description }}</p>{% endif %}
+</div>
+
+<div class="card" style="max-width:580px">
+  <h3 style="margin-top:0">Closure Details</h3>
+  <form method="post" enctype="multipart/form-data">
+    <label>Closure Action *
+      <textarea name="closure_action" rows="3" required
+                placeholder="Describe corrective action taken to close this observation..."></textarea>
+    </label>
+
+    <label>Closure Photo (evidence)
+      <input type="file" name="closure_photo" accept="image/*">
+    </label>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button type="submit" class="btn primary">Close Observation</button>
+      <a href="{{ url_for('hse_observations') }}" class="btn">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

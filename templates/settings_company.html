@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="max-width:520px;margin:2rem auto;">
+
+  <h2 style="margin-bottom:1.5rem;">Company Settings</h2>
+
+  <div class="card">
+    <form method="post">
+      <label>Company Name
+        <input type="text" name="name" value="{{ co.name }}" required>
+      </label>
+      <div style="margin-top:0.5rem;color:#64748b;font-size:0.85rem;">
+        Plan: <strong style="text-transform:uppercase;">{{ co.plan }}</strong>
+        &nbsp;·&nbsp; Max users: <strong>{{ co.max_users }}</strong>
+        &nbsp;·&nbsp; Registered: <strong>{{ co.created_at.strftime('%Y-%m-%d') if co.created_at else '—' }}</strong>
+      </div>
+      <button type="submit" class="btn primary" style="margin-top:1rem;">Save Changes</button>
+    </form>
+  </div>
+
+  <div style="margin-top:1rem;">
+    <a href="{{ url_for('settings_users') }}" class="btn">Manage Users →</a>
+  </div>
+
+</div>
+{% endblock %}

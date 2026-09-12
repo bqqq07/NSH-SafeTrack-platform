@@ -1,0 +1,151 @@
+{% extends "base.html" %}
+{% block title %}{% if door.ref_only %}Ref{% else %}Stage {{ door.seq }}{% endif %} — {{ door.title }}{% endblock %}
+{% block content %}
+<style>
+.back-link{font-size:13px;color:#3b82f6;text-decoration:none;margin-bottom:14px;display:inline-block}
+.door-header{margin-bottom:16px}
+.door-title{font-size:17px;font-weight:700}
+.door-ref{font-size:11px;color:#64748b;margin-top:3px}
+.brief-box{background:#eff6ff;border-left:3px solid #3b82f6;border-radius:0 8px 8px 0;padding:12px 14px;margin-bottom:18px;font-size:13px;color:#1e3a5f;line-height:1.65}
+.ref-box{background:#f8fafc;border-left:3px solid #64748b;border-radius:0 8px 8px 0;padding:12px 14px;margin-bottom:18px;font-size:13px;color:#334155;line-height:1.65}
+.brief-box strong,.ref-box strong{font-weight:700}
+.status-bar{padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:13px;font-weight:600}
+.status-pending{background:#fef3c7;color:#92400e}
+.status-approved{background:#dcfce7;color:#166534}
+.status-rejected{background:#fee2e2;color:#b91c1c}
+.q-block{margin-bottom:16px}
+.q-label{font-size:13px;font-weight:600;margin-bottom:6px;display:flex;gap:8px;align-items:flex-start}
+.q-num{background:#eff6ff;color:#1d4ed8;border-radius:6px;padding:2px 8px;font-size:11px;font-weight:700;flex-shrink:0;margin-top:1px}
+textarea{width:100%;padding:10px 12px;border-radius:8px;border:1.5px solid #e2e8f0;font-size:13px;resize:vertical;min-height:80px;font-family:inherit}
+textarea:focus{outline:none;border-color:#3b82f6}
+textarea[readonly]{background:#f8fafc;color:#475569}
+.photo-zone{border:2px dashed #cbd5e1;border-radius:8px;padding:16px;text-align:center;cursor:pointer;margin-top:6px;position:relative}
+.photo-zone input[type=file]{opacity:0;position:absolute;inset:0;cursor:pointer}
+.photo-zone-text{font-size:12px;color:#94a3b8;pointer-events:none}
+.photo-preview{margin-top:10px}
+.photo-preview img{max-width:160px;border-radius:8px;border:1px solid #e2e8f0}
+.submit-btn{width:100%;padding:13px;border:none;background:#0f172a;color:#fff;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:16px}
+.submit-btn:disabled{background:#94a3b8;cursor:not-allowed}
+.ref-btn{width:100%;padding:13px;border:none;background:#475569;color:#fff;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer;margin-top:16px}
+.reviewer-note{background:#fef3c7;border-radius:8px;padding:10px 12px;font-size:13px;margin-bottom:12px;color:#78350f}
+</style>
+
+<a href="{{ url_for('ptw_training_module', mod_seq=mod.seq) }}" class="back-link">← Module {{ mod.seq }}</a>
+<div class="door-header">
+  <div class="door-title">
+    {% if door.ref_only %}📚{% else %}Stage {{ door.seq }} —{% endif %} {{ door.title }}
+  </div>
+  <div class="door-ref">Module {{ mod.seq }}: {{ mod.title }} · Ref: {{ door.ref }}</div>
+</div>
+
+{% if door.ref_only %}
+{# ── Reference door ── #}
+<div class="ref-box">{{ door.brief }}</div>
+{% if sub and sub.status == 'approved' %}
+  <div class="status-bar status-approved">✓ Reference reviewed</div>
+{% else %}
+  <form method="post" data-offline-type="ptw_ref_door">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="_mod_seq" value="{{ mod.seq }}">
+    <input type="hidden" name="_door_seq" value="{{ door.seq }}">
+    <button type="submit" class="ref-btn">📖 Mark as Reviewed</button>
+  </form>
+{% endif %}
+
+{% else %}
+{# ── Regular field door ── #}
+<div class="brief-box"><strong>Today's task:</strong> {{ door.brief }}</div>
+
+{% if sub %}
+  {% if sub.status == 'pending' %}
+  <div class="status-bar status-pending">⏳ Submitted — waiting for supervisor approval</div>
+  {% elif sub.status == 'approved' %}
+  <div class="status-bar status-approved">✓ Approved by supervisor</div>
+  {% elif sub.status == 'rejected' %}
+  <div class="status-bar status-rejected">✕ Rejected — read the note below and resubmit</div>
+  {% if sub.reviewer_note %}
+  <div class="reviewer-note">Supervisor note: {{ sub.reviewer_note }}</div>
+  {% endif %}
+  {% endif %}
+{% endif %}
+
+{% if not sub or sub.status == 'rejected' %}
+<form method="post" enctype="multipart/form-data" data-offline-type="ptw_door">
+  <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="_mod_seq" value="{{ mod.seq }}">
+  <input type="hidden" name="_door_seq" value="{{ door.seq }}">
+  {% for q in door.questions %}
+  <div class="q-block">
+    <div class="q-label"><span class="q-num">Q{{ loop.index }}</span>{{ q }}</div>
+    <textarea name="q{{ loop.index }}" placeholder="Write your field answer here…" required></textarea>
+  </div>
+  {% endfor %}
+  <div class="q-block">
+    <div class="q-label"><span class="q-num" style="background:#fef3c7;color:#92400e">Photo</span>Attach field evidence (permit, JSA, site condition)</div>
+    <div class="photo-zone" id="photoZone">
+      <input type="file" name="photo" accept="image/*" capture="environment"
+             onchange="previewPhoto(this)" id="ptwPhotoInput">
+      <div class="photo-zone-text" id="photoText">📷 Tap to attach photo from camera or gallery</div>
+    </div>
+    <div id="ptwOfflinePhotoNote" style="display:none;margin-top:8px;font-size:12px;
+         background:#fef9c3;border:1px solid #fbbf24;border-radius:6px;padding:7px 10px;color:#92400e">
+      📴 Offline — submit without photo now. Add photo from your training list after sync.
+    </div>
+    <div class="photo-preview" id="photoPreview"></div>
+  </div>
+  <button type="submit" class="submit-btn">Submit Stage {{ door.seq }}</button>
+</form>
+<script>
+  (function(){
+    function updatePtwPhoto(){
+      var zone = document.getElementById('photoZone');
+      var note = document.getElementById('ptwOfflinePhotoNote');
+      var inp  = document.getElementById('ptwPhotoInput');
+      if(!navigator.onLine){
+        zone.style.display = 'none';
+        note.style.display = '';
+        if(inp) inp.required = false;
+      } else {
+        zone.style.display = '';
+        note.style.display = 'none';
+        if(inp) inp.required = false; // photo always optional
+      }
+    }
+    updatePtwPhoto();
+    window.addEventListener('online',  updatePtwPhoto);
+    window.addEventListener('offline', updatePtwPhoto);
+  })();
+</script>
+{% else %}
+  {% for q in door.questions %}
+  <div class="q-block">
+    <div class="q-label"><span class="q-num">Q{{ loop.index }}</span>{{ q }}</div>
+    <textarea readonly>{{ answers[loop.index0] if loop.index0 < answers|length else '' }}</textarea>
+  </div>
+  {% endfor %}
+  {% if sub.photo_path %}
+  <div style="margin-top:10px">
+    <div style="font-size:12px;color:#64748b;margin-bottom:6px">Submitted photo:</div>
+    <img src="{{ url_for('hse_photo', filename=sub.photo_path) }}"
+         style="max-width:200px;border-radius:8px;border:1px solid #e2e8f0">
+  </div>
+  {% endif %}
+{% endif %}
+{% endif %}
+
+<script>
+function previewPhoto(input) {
+  const preview = document.getElementById('photoPreview');
+  const text    = document.getElementById('photoText');
+  preview.innerHTML = '';
+  if (input.files && input.files[0]) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      preview.innerHTML = '<img src="' + e.target.result + '" style="max-width:160px;border-radius:8px;border:1px solid #e2e8f0;margin-top:8px">';
+      text.textContent = '✓ ' + input.files[0].name;
+    };
+    reader.readAsDataURL(input.files[0]);
+  }
+}
+</script>
+{% endblock %}

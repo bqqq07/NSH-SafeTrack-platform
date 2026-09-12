@@ -1,12 +1,19 @@
-<!doctype html>
-<html lang="ar" dir="rtl">
+﻿<!doctype html>
+<html lang="en" dir="ltr">
 <head>
   <meta charset="utf-8">
-  <title>Weekly Employee Evaluation</title>
+  <title>{% block title %}NSH{% endblock %}{% if g.company %} — {{ g.company.name }}{% endif %}</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
   <link href="{{ url_for('static', filename='css/print.css') }}" rel="stylesheet" media="print">
+  <script src="{{ url_for('static', filename='js/offline.js') }}" defer></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js', { scope: '/' })
+        .catch(function(e){ console.warn('SW registration failed:', e); });
+    }
+  </script>
 
   <!-- hide elements with .no-print when printing -->
   <style>
@@ -37,51 +44,121 @@
 
       <nav class="navlinks" id="mainNav">
         {% if g.role == 'safety_officer' %}
-          <a href="{{ url_for('hse_checkin') }}">Check-in</a>
+          <a href="{{ url_for('user_location_page') }}" style="color:#f59e0b;font-weight:600">📍 My Location</a>
           <a href="{{ url_for('hse_observations') }}">Observations</a>
           <a href="{{ url_for('hse_jso_list') }}">JSO</a>
-          <a href="{{ url_for('hse_tbt_list') }}">TBT</a>
-          <a href="{{ url_for('hse_nearmiss_list') }}">Near Miss</a>
-          <a href="{{ url_for('hse_bbs') }}">BBS</a>
+          <a href="{{ url_for('hse_sgl_view') }}">SGL</a>
           <a href="{{ url_for('hse_ptw') }}">PTW</a>
-          <a href="{{ url_for('hse_manpower') }}">Man Power</a>
-          <a href="{{ url_for('hse_inspection') }}">Inspection</a>
+          <!-- Hidden for now (not deleted): Near Miss, BBS, Man Power, Inspection -->
           <a href="{{ url_for('hse_my_ca') }}" style="color:#f59e0b;font-weight:600">📋 CAs</a>
         {% elif g.role == 'admin' %}
-          <a href="{{ url_for('admin_employees') }}">All Employees</a>
-          <a href="{{ url_for('admin_report_picker') }}">Supervisors Reports</a>
-          <a href="{{ url_for('admin_reports_daily_all') }}">Daily Reports</a>
-          <a href="{{ url_for('admin_users') }}">Admin Users</a>
-          <a href="{{ url_for('admin_kpi') }}">Dashboard</a>
-          <a href="{{ url_for('attendance_admin') }}">Attendance</a>
-          <a href="{{ url_for('requests_inbox') }}">Requests Inbox</a>
+          <a href="{{ url_for('admin_kpi') }}" style="font-weight:600">Dashboard</a>
+          <a href="{{ url_for('admin_employees') }}">Employees</a>
+          <a href="{{ url_for('requests_inbox') }}">Requests</a>
+          <a href="{{ url_for('admin_users') }}">Users</a>
+          <a href="{{ url_for('user_location_page') }}" style="color:#f59e0b">📍 Locations</a>
           <a href="{{ url_for('settings_company') }}">Settings</a>
           {% if g_is_hse_supervisor %}
-          <a href="{{ url_for('hse_dashboard') }}" style="color:#86efac">HSE</a>
+          <div class="hse-dropdown" style="position:relative;display:inline-block">
+            <a href="{{ url_for('hse_dashboard') }}" class="hse-toggle"
+               style="color:#86efac;font-weight:700;cursor:pointer">HSE ▾</a>
+            <div class="hse-menu" style="display:none;position:absolute;top:100%;left:0;
+                 background:#0f172a;border:1px solid #1e3a5f;border-radius:10px;
+                 padding:6px 0;min-width:160px;z-index:999;box-shadow:0 8px 24px rgba(0,0,0,.4)">
+              <a href="{{ url_for('hse_dashboard') }}"
+                 style="display:block;padding:10px 18px;color:#86efac;text-decoration:none;font-weight:600">📊 HSE Dashboard</a>
+              <a href="{{ url_for('hse_sgl_view') }}"
+                 style="display:block;padding:10px 18px;color:#e2e8f0;text-decoration:none">SGL</a>
+              <div style="border-top:1px solid #1e3a5f;margin:4px 0"></div>
+              <a href="{{ url_for('hse_observations') }}"
+                 style="display:block;padding:10px 18px;color:#7dd3fc;text-decoration:none;font-weight:600">👁 All Observations</a>
+              <a href="{{ url_for('welfare_supervisor') }}"
+                 style="display:block;padding:10px 18px;color:#7dd3fc;text-decoration:none;font-weight:600">📋 Welfare &amp; Env Reports</a>
+              <div style="border-top:1px solid #1e3a5f;margin:4px 0"></div>
+              <a href="{{ url_for('admin_safety_teams') }}"
+                 style="display:block;padding:10px 18px;color:#7dd3fc;text-decoration:none;font-weight:600">👷 Teams</a>
+              <div style="border-top:1px solid #1e3a5f;margin:4px 0"></div>
+              <a href="{{ url_for('ptw_supervisor_review') }}"
+                 style="display:block;padding:10px 18px;color:#fbbf24;text-decoration:none;font-weight:600">📋 PTW Training</a>
+              <a href="{{ url_for('ptw_reports_picker') }}"
+                 style="display:block;padding:10px 18px;color:#fbbf24;text-decoration:none">📊 PTW Reports</a>
+            </div>
+          </div>
           {% endif %}
         {% elif g.role == 'site_supervisor' %}
           <a href="{{ url_for('site_supervisors') }}">My Supervisors</a>
+          <a href="{{ url_for('site_manage_employees') }}" style="color:#93c5fd;font-weight:600">Manage Employees</a>
+          <a href="{{ url_for('site_unassigned_employees') }}">Unassigned Employees</a>
+          <a href="{{ url_for('site_employee_requests') }}">Employee Requests</a>
           <a href="{{ url_for('site_report_select') }}">Site Reports</a>
-          <a href="{{ url_for('site_daily_reports_site') }}">Daily Reports</a>
+          <a href="{{ url_for('user_location_page') }}" style="color:#f59e0b">📍 Locations</a>
           {% if g_is_hse_supervisor %}
           <a href="{{ url_for('hse_dashboard') }}" style="color:#86efac">HSE</a>
           {% endif %}
+        {% elif g.role == 'safety_manager' %}
+          <a href="{{ url_for('safety_manager_dashboard') }}" style="font-weight:600">📊 KPI Dashboard</a>
+          <a href="{{ url_for('hse_dashboard') }}" style="color:#86efac">HSE Ops</a>
+          <a href="{{ url_for('hse_sgl_view') }}">SGL</a>
+          <a href="{{ url_for('hse_report_picker') }}">Reports</a>
+          <a href="{{ url_for('hse_report_monthly_picker') }}">Monthly</a>
+          <a href="{{ url_for('hse_observations') }}">Observations</a>
+          <a href="{{ url_for('hse_daily_observations_picker') }}">Daily Report</a>
+          <a href="{{ url_for('hse_observations') }}" style="color:#7dd3fc;font-weight:600">👁 All Obs</a>
+          <a href="{{ url_for('welfare_supervisor') }}" style="color:#7dd3fc;font-weight:600">📋 Welfare & Env</a>
+        {% elif g.role == 'safety_supervisor' %}
+          <a href="{{ url_for('safety_supervisor_home') }}" style="font-weight:600">🏠 Home</a>
+          <a href="{{ url_for('safety_supervisor_officers') }}" style="color:#86efac">👷 Officers</a>
+          <a href="{{ url_for('user_location_page') }}" style="color:#f59e0b">📍 Location</a>
+
+          <div class="hse-dropdown" style="position:relative;display:inline-block">
+            <span class="hse-toggle" style="color:#94a3b8;font-weight:600;cursor:pointer">HSE ▾</span>
+            <div class="hse-menu" style="display:none;position:absolute;top:100%;left:0;
+                 background:#0f172a;border:1px solid #1e3a5f;border-radius:10px;
+                 padding:6px 0;min-width:160px;z-index:999;box-shadow:0 8px 24px rgba(0,0,0,.4)">
+              <a href="{{ url_for('hse_sgl_view') }}"
+                 style="display:block;padding:10px 18px;color:#e2e8f0;text-decoration:none">SGL</a>
+              <a href="{{ url_for('hse_observations') }}"
+                 style="display:block;padding:10px 18px;color:#e2e8f0;text-decoration:none">Observations</a>
+              <a href="{{ url_for('hse_daily_observations_picker') }}"
+                 style="display:block;padding:10px 18px;color:#e2e8f0;text-decoration:none">Daily Report</a>
+              <div style="border-top:1px solid #1e3a5f;margin:4px 0"></div>
+              <a href="{{ url_for('ptw_supervisor_review') }}"
+                 style="display:block;padding:10px 18px;color:#fbbf24;text-decoration:none;font-weight:600">📋 PTW Training</a>
+              <a href="{{ url_for('ptw_reports_picker') }}"
+                 style="display:block;padding:10px 18px;color:#fbbf24;text-decoration:none">📊 PTW Reports</a>
+            </div>
+          </div>
+
+          <a href="{{ url_for('hse_observations') }}" style="color:#7dd3fc;font-weight:600">👁 All Obs</a>
+          <a href="{{ url_for('welfare_supervisor') }}" style="color:#7dd3fc;font-weight:600">📋 Welfare & Env</a>
+
+          <a href="{{ url_for('request_new') }}">Requests</a>
+        {% elif g.role == 'safety_welfare' %}
+          <a href="{{ url_for('welfare_home') }}" style="font-weight:600">🏠 Home</a>
+          <a href="{{ url_for('hse_observations') }}" style="color:#7dd3fc">📋 My Obs</a>
+          <a href="{{ url_for('welfare_observation_new') }}" style="color:#86efac">🔵 New Obs</a>
+          <a href="{{ url_for('welfare_report_upload') }}" style="color:#6ee7b7">📄 Upload Report</a>
+        {% elif g.role == 'environment_officer' %}
+          <a href="{{ url_for('env_dashboard') }}" style="font-weight:600">🌿 Home</a>
+          <a href="{{ url_for('hse_observations') }}" style="color:#7dd3fc">📋 My Obs</a>
+          <a href="{{ url_for('env_observation_new') }}" style="color:#86efac">🟢 New Obs</a>
+          <a href="{{ url_for('env_checklist_new') }}" style="color:#a7f3d0">✅ Checklist</a>
+          <a href="{{ url_for('env_report_upload') }}" style="color:#6ee7b7">📄 Upload PDF</a>
         {% elif g.role == 'hr' %}
           <a href="{{ url_for('hr_inbox') }}">HR Inbox</a>
         {% elif g.role == 'supervisor' %}
           <a href="{{ url_for('employees') }}">Employees</a>
           <a href="{{ url_for('supervisor_report_select') }}">Reports</a>
-          <a href="{{ url_for('daily_reports') }}">Daily Reports</a>
           <a href="{{ url_for('request_new') }}">New Request</a>
           <a href="{{ url_for('requests_mine') }}">My Requests</a>
           <a href="{{ url_for('attendance_mark') }}">Attendance</a>
+          <a href="{{ url_for('user_location_page') }}" style="color:#f59e0b">📍 My Location</a>
           {% if g_is_hse_supervisor %}
           <a href="{{ url_for('hse_dashboard') }}" style="color:#86efac">HSE</a>
           {% endif %}
         {% else %}
           <a href="{{ url_for('employees') }}">Employees</a>
           <a href="{{ url_for('supervisor_report_select') }}">Reports</a>
-          <a href="{{ url_for('daily_reports') }}">Daily Reports</a>
           <a href="{{ url_for('request_new') }}">New Request</a>
           <a href="{{ url_for('requests_mine') }}">My Requests</a>
           <a href="{{ url_for('attendance_mark') }}">Attendance</a>
@@ -92,11 +169,64 @@
     </div>
   </header>
 
+  <!-- Offline cache download banner — shown once per session after SW is ready -->
+  {% if g.user and g.role in ('safety_officer',) %}
+  <div id="nsh-cache-banner" hidden style="background:#1e40af;color:#fff;
+       display:flex;align-items:center;gap:12px;padding:9px 16px;font-size:13px;
+       flex-wrap:wrap" class="no-print">
+    <span style="flex:1">📥 Download site for offline use?</span>
+    <button onclick="nshCacheAll()" id="nsh-cache-btn"
+      style="background:rgba(255,255,255,.2);border:1px solid rgba(255,255,255,.4);
+             color:#fff;padding:5px 14px;border-radius:6px;font-size:13px;
+             font-weight:600;cursor:pointer;font-family:inherit">
+      Download now
+    </button>
+    <button onclick="document.getElementById('nsh-cache-banner').hidden=true;localStorage.setItem('nsh-cache-dismissed','1')"
+      style="background:none;border:none;color:rgba(255,255,255,.6);font-size:18px;
+             cursor:pointer;line-height:1;padding:0 4px">×</button>
+  </div>
+  <script>
+  (function(){
+    if (localStorage.getItem('nsh-cache-dismissed') === '1') return;
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.ready.then(function(reg){
+      // Show banner only if SW is newly installed (not yet controlling)
+      if (!navigator.serviceWorker.controller) {
+        document.getElementById('nsh-cache-banner').hidden = false;
+      }
+    });
+  })();
+
+  function nshCacheAll(){
+    var btn = document.getElementById('nsh-cache-btn');
+    btn.textContent = 'Downloading…';
+    btn.disabled = true;
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.ready.then(function(reg){
+      // Ask the SW to cache all warm pages by sending it a message
+      reg.active.postMessage({ type: 'CACHE_ALL' });
+      // Listen for completion
+      navigator.serviceWorker.addEventListener('message', function handler(e){
+        if (e.data && e.data.type === 'CACHE_ALL_DONE') {
+          navigator.serviceWorker.removeEventListener('message', handler);
+          btn.textContent = '✓ Done';
+          setTimeout(function(){
+            document.getElementById('nsh-cache-banner').hidden = true;
+            localStorage.setItem('nsh-cache-dismissed', '1');
+          }, 1500);
+        }
+      });
+    });
+  }
+  </script>
+  {% endif %}
+
+
   <!-- Impersonation banner -->
   {% if session.get('impersonating') %}
   <div style="background:#7c3aed;color:#fff;text-align:center;padding:0.5rem 1rem;font-size:0.88rem;" class="no-print">
-    ⚠️ أنت تتصفح كـ <strong>{{ g.user.name }}</strong> ({{ g.user.role }})
-    — <a href="{{ url_for('superadmin_stop_impersonate') }}" style="color:#ddd8fe;text-decoration:underline;">العودة لـ Super Admin</a>
+    ⚠️ You are browsing as <strong>{{ g.user.name }}</strong> ({{ g.user.role }})
+    — <a href="{{ url_for('superadmin_stop_impersonate') }}" style="color:#ddd8fe;text-decoration:underline;">Back to Super Admin</a>
   </div>
   {% endif %}
 
@@ -138,7 +268,26 @@
         });
       }
 
-      // CSRF — حقن التوكن تلقائياً في كل نموذج POST ويب
+      // Dropdowns (supports multiple .hse-dropdown on the same page)
+      document.querySelectorAll('.hse-dropdown').forEach(function(dropdown) {
+        const toggle = dropdown.querySelector('.hse-toggle');
+        const menu   = dropdown.querySelector('.hse-menu');
+        if (!toggle || !menu) return;
+        toggle.addEventListener('click', function(e) {
+          e.preventDefault();
+          const isOpen = menu.style.display === 'block';
+          // close all other menus first
+          document.querySelectorAll('.hse-menu').forEach(function(m) { m.style.display = 'none'; });
+          menu.style.display = isOpen ? 'none' : 'block';
+        });
+      });
+      document.addEventListener('click', function(e) {
+        if (!e.target.closest('.hse-dropdown')) {
+          document.querySelectorAll('.hse-menu').forEach(function(m) { m.style.display = 'none'; });
+        }
+      });
+
+      // CSRF — auto-inject the token into every web POST form
       const csrfMeta = document.querySelector('meta[name="csrf-token"]');
       if (csrfMeta) {
         const csrfToken = csrfMeta.content;

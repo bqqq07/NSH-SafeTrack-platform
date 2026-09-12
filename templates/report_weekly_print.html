@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+@media print {
+  .no-print { display:none!important }
+  body { font-size:10.5px }
+  .container { margin:0; padding:0; max-width:100% }
+  .card { border:none; box-shadow:none; padding:0 }
+}
+.rpt-header { display:flex; align-items:center; justify-content:space-between;
+              margin-bottom:16px; padding-bottom:12px; border-bottom:3px solid #0f172a }
+.rpt-title  { font-size:20px; font-weight:700; margin:0 }
+.rpt-sub    { font-size:12px; color:var(--muted); margin-top:3px }
+.sum-grid   { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+              gap:10px; margin-bottom:16px }
+.sum-box    { background:#fff; border:1px solid var(--border); border-radius:8px;
+              padding:12px; text-align:center }
+.sum-num    { font-size:26px; font-weight:700 }
+.sum-lbl    { font-size:11px; color:var(--muted); margin-top:2px }
+.rpt-table  { width:100%; border-collapse:collapse; font-size:12px }
+.rpt-table th { background:#0f172a; color:#fff; padding:8px 7px;
+                text-align:left; white-space:nowrap; font-size:11px }
+.rpt-table td { padding:7px; border-bottom:1px solid #e5e7eb }
+.rpt-table .sup-row td { background:#eff6ff; font-weight:700; color:#1e40af; font-size:12px }
+.rpt-table tr:nth-child(even):not(.sup-row) td { background:#f9fafb }
+.bp { padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600 }
+.bE { background:#c8e6c9; color:#1b5e20 }
+.bG { background:#bbdefb; color:#0d47a1 }
+.bS { background:#ffe0b2; color:#bf360c }
+.bN { background:#ffcdd2; color:#b71c1c }
+</style>
+
+<!-- Toolbar (no-print) -->
+<div class="no-print" style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+  <button onclick="window.print()" class="btn primary">🖨 Print / Save PDF</button>
+  <a href="{{ url_for('admin_report_weekly_excel', week_start=ws.isoformat(), week_end=we.isoformat()) }}"
+     class="btn">⬇ Excel</a>
+  <a href="{{ url_for('admin_report_weekly_pdf', week_start=ws.isoformat(), week_end=we.isoformat()) }}"
+     class="btn">⬇ PDF</a>
+  <a href="{{ url_for('admin_kpi', week_start=ws.isoformat(), week_end=we.isoformat()) }}"
+     class="btn">← Dashboard</a>
+</div>
+
+<!-- Report Header -->
+<div class="rpt-header">
+  <div>
+    <div class="rpt-title">Weekly Employee Evaluation Report</div>
+    <div class="rpt-sub">
+      Week: <strong>{{ ws.strftime('%A, %d %B %Y') }}</strong>
+      → <strong>{{ we.strftime('%A, %d %B %Y') }}</strong>
+    </div>
+  </div>
+  <img src="{{ url_for('static', filename='img/logo.png') }}" style="height:44px" alt="">
+</div>
+
+<!-- Summary -->
+{% set total = rows|length %}
+{% set exc = rows|selectattr('band','equalto','Excellent')|list|length %}
+{% set good = rows|selectattr('band','equalto','Good')|list|length %}
+{% set sat = rows|selectattr('band','equalto','Satisfactory')|list|length %}
+{% set ni = rows|selectattr('band','equalto','Needs Improvement')|list|length %}
+{% set avg = (rows|sum(attribute='total_score') / total) if total else 0 %}
+
+<div class="sum-grid">
+  <div class="sum-box"><div class="sum-num">{{ total }}</div><div class="sum-lbl">Evaluations</div></div>
+  <div class="sum-box"><div class="sum-num" style="color:#1b5e20">{{ exc }}</div><div class="sum-lbl">Excellent</div></div>
+  <div class="sum-box"><div class="sum-num" style="color:#0d47a1">{{ good }}</div><div class="sum-lbl">Good</div></div>
+  <div class="sum-box"><div class="sum-num" style="color:#bf360c">{{ sat }}</div><div class="sum-lbl">Satisfactory</div></div>
+  <div class="sum-box"><div class="sum-num" style="color:#b71c1c">{{ ni }}</div><div class="sum-lbl">Needs Improvement</div></div>
+  <div class="sum-box"><div class="sum-num">{{ '%.1f'|format(avg) }}</div><div class="sum-lbl">Avg Score</div></div>
+</div>
+
+<!-- Table -->
+{% if rows %}
+<div style="overflow-x:auto">
+<table class="rpt-table">
+  <thead>
+    <tr>
+      <th>#</th>
+      <th>Employee</th>
+      <th>Emp #</th>
+      <th>Department</th>
+      <th>Site</th>
+      <th>Band</th>
+      <th class="right">Score</th>
+      <th class="right">Targets</th>
+      <th class="right">Perf</th>
+      <th class="right">Present</th>
+      <th class="right">Absent</th>
+      <th class="right">Leave</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% set ns = namespace(cur='') %}
+  {% for r in rows %}
+  {% if r.sup_code != ns.cur %}
+    {% set ns.cur = r.sup_code %}
+    <tr class="sup-row">
+      <td colspan="12" style="padding:7px">
+        ▸ {{ r.sup_name }} &nbsp;<span style="font-weight:400;opacity:.7">({{ r.sup_code }})</span>
+      </td>
+    </tr>
+  {% endif %}
+  <tr>
+    <td class="muted" style="font-size:11px">{{ loop.index }}</td>
+    <td><strong>{{ r.emp_name }}</strong></td>
+    <td style="color:var(--muted);font-size:11px">{{ r.emp_number }}</td>
+    <td>{{ r.department }}</td>
+    <td>{{ r.site }}</td>
+    <td><span class="bp {{ 'bE' if r.band=='Excellent' else 'bG' if r.band=='Good' else 'bS' if r.band=='Satisfactory' else 'bN' }}">{{ r.band }}</span></td>
+    <td class="right"><strong>{{ '%.1f'|format(r.total_score) }}</strong></td>
+    <td class="right">{{ '%.1f'|format(r.targets) }}</td>
+    <td class="right">{{ '%.1f'|format(r.perf) }}</td>
+    <td class="right" style="color:{% if r.present>0 %}#2E7D32{% else %}var(--muted){% endif %}">{{ r.present }}</td>
+    <td class="right" style="color:{% if r.absent>0 %}#C62828{% else %}var(--muted){% endif %}">{{ r.absent }}</td>
+    <td class="right" style="color:{% if r.leave>0 %}#EDB458{% else %}var(--muted){% endif %}">{{ r.leave }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% else %}
+<div class="card"><p class="muted">No evaluations for this week.</p></div>
+{% endif %}
+
+<p style="margin-top:14px;font-size:11px;color:var(--muted);text-align:right">
+  Generated: {{ now.strftime('%d %b %Y — %H:%M') }}
+</p>
+{% endblock %}

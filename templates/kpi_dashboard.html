@@ -1,0 +1,96 @@
+{% extends "base.html" %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem">
+  <h1>لوحة المؤشرات — {{ today }}</h1>
+  <small style="color:var(--muted,#666)">{{ g.user.name }} &middot; {{ g.user.role }}</small>
+</div>
+
+{% macro kpi_card(title, value, color, icon, href) %}
+<a href="{{ href or '#' }}" style="text-decoration:none;color:inherit">
+  <div class="card" style="text-align:center;padding:1rem .75rem;border-top:4px solid {{ color }}">
+    <div style="font-size:1.75rem">{{ icon }}</div>
+    <div style="font-size:2rem;font-weight:700;color:{{ color }}">{{ value }}</div>
+    <div style="font-size:.85rem;color:var(--muted,#666);margin-top:.25rem">{{ title }}</div>
+  </div>
+</a>
+{% endmacro %}
+
+<!-- ── حوادث ───────────────────────────────────── -->
+<h2 style="margin:.75rem 0 .5rem">الحوادث</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.75rem">
+  {{ kpi_card("حوادث مفتوحة",          kpi.open_incidents,       "#e53935", "🚨", url_for('incident_list', status='open')) }}
+  {{ kpi_card("حوادث هذا الشهر",       kpi.incidents_this_month, "#f57c00", "📋", url_for('incident_list')) }}
+</div>
+
+<!-- ── ملاحظات ─────────────────────────────────── -->
+<h2 style="margin:.75rem 0 .5rem">الملاحظات</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.75rem">
+  {{ kpi_card("معدل الإغلاق %",         kpi.obs_closure_rate,     kpi.obs_closure_rate >= 80 and '#388e3c' or '#f57c00', "📊", '#') }}
+  {{ kpi_card("ملاحظات هذا الشهر",     kpi.obs_this_month,       "#0288d1", "👁", '#') }}
+  {% if kpi.my_obs_this_month is defined %}
+  {{ kpi_card("ملاحظاتي هذا الشهر",   kpi.my_obs_this_month,    "#7b1fa2", "✏️", '#') }}
+  {{ kpi_card("ملاحظاتي المفتوحة",     kpi.my_open_obs,          kpi.my_open_obs > 0 and '#e53935' or '#388e3c', "⏳", '#') }}
+  {% endif %}
+</div>
+
+<!-- ── SGL / جلسات ────────────────────────────── -->
+<h2 style="margin:.75rem 0 .5rem">جلسات SGL</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.75rem">
+  {{ kpi_card("جلسات هذا الشهر",       kpi.sgl_this_month,       "#00796b", "🎤", '#') }}
+  {% if kpi.my_sgl_sessions is defined %}
+  {{ kpi_card("جلساتي هذا الشهر",      kpi.my_sgl_sessions,      "#00796b", "🎤", '#') }}
+  {% endif %}
+</div>
+
+<!-- ── تدريب — مرتبط بمنصة خارجية (قريباً) ───── -->
+
+<!-- ── تغطية الغياب ────────────────────────────── -->
+<h2 style="margin:.75rem 0 .5rem">تغطية الغياب</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.75rem">
+  {{ kpi_card("مناطق غير مغطاة اليوم", kpi.coverage_gaps,        kpi.coverage_gaps > 0 and '#e53935' or '#388e3c', "🗺", url_for('coverage_list')) }}
+  {{ kpi_card("طلبات تغطية مفتوحة",    kpi.open_coverage_requests, kpi.open_coverage_requests > 0 and '#f57c00' or '#388e3c', "📋", url_for('coverage_list')) }}
+  {% if kpi.team_absent_today is defined %}
+  {{ kpi_card("غائبون اليوم",           kpi.team_absent_today,    kpi.team_absent_today > 0 and '#e53935' or '#388e3c', "👤", '#') }}
+  {{ kpi_card("مغطّى اليوم",            kpi.team_covered_today,   "#388e3c", "✅", '#') }}
+  {% endif %}
+</div>
+
+<!-- ── تقييم شهري ──────────────────────────────── -->
+<h2 style="margin:.75rem 0 .5rem">التقييم الشهري</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.75rem">
+  {{ kpi_card("تقييمات منتظرة",         kpi.eval_pending,         kpi.eval_pending > 0 and '#f57c00' or '#388e3c', "📝", url_for('monthly_eval_roster')) }}
+  {{ kpi_card("تقييمات مكتملة",         kpi.eval_done_this_month, "#388e3c", "✅", url_for('monthly_eval_history')) }}
+</div>
+
+<!-- ── بيئي ───────────────────────────────────── -->
+<h2 style="margin:.75rem 0 .5rem">البيئة</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.75rem">
+  {{ kpi_card("انسكابات مفتوحة",        kpi.open_spills,          kpi.open_spills > 0 and '#e53935' or '#388e3c', "🛢", url_for('env_spills')) }}
+  {{ kpi_card("تجاوزات هذا الشهر",     kpi.env_exceedances_month, kpi.env_exceedances_month > 0 and '#f57c00' or '#388e3c', "📡", url_for('env_monitoring')) }}
+</div>
+
+<!-- ── رفاهية ──────────────────────────────────── -->
+<h2 style="margin:.75rem 0 .5rem">الرفاهية</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.75rem">
+  {{ kpi_card("مركبات بمشاكل",          kpi.transport_issues,     kpi.transport_issues > 0 and '#f57c00' or '#388e3c', "🚌", url_for('welfare_transport')) }}
+  {{ kpi_card("متوسط نظافة السكن",      kpi.avg_accommodation or '—', kpi.avg_accommodation and kpi.avg_accommodation >= 3 and '#388e3c' or '#f57c00', "🏠", url_for('welfare_accommodation')) }}
+</div>
+
+<!-- ── طلبات HSE ────────────────────────────────── -->
+<h2 style="margin:.75rem 0 .5rem">طلبات HSE</h2>
+<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:.75rem">
+  {{ kpi_card("طلبات معلقة",            kpi.requests_pending,     kpi.requests_pending > 0 and '#f57c00' or '#388e3c', "📨", url_for('hse_requests_mine')) }}
+</div>
+
+<!-- روابط سريعة -->
+<section class="card" style="margin-top:1.5rem">
+  <h2>روابط سريعة</h2>
+  <div style="display:flex;flex-wrap:wrap;gap:.5rem">
+    <a href="{{ url_for('incident_report_new') }}" class="btn primary">+ تسجيل حادثة</a>
+    <a href="{{ url_for('env_spills') }}" class="btn">+ انسكاب</a>
+    <a href="{{ url_for('coverage_list') }}" class="btn">تغطية الغياب</a>
+    <a href="{{ url_for('monthly_eval_roster') }}" class="btn">التقييم الشهري</a>
+    <a href="{{ url_for('hse_requests_mine') }}" class="btn">طلباتي</a>
+  </div>
+</section>
+{% endblock %}

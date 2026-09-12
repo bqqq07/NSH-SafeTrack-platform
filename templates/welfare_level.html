@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}{{ lvl.code }}{% endblock %}
+{% block content %}
+<div style="max-width:640px;margin:0 auto">
+
+{% if not p.briefed_at %}
+  <div style="border:2px solid #0f172a;border-radius:14px;padding:18px">
+    <div style="color:#64748b;font-weight:700">LEVEL {{ lvl.code[1:] }}</div>
+    <h2 style="margin:4px 0 16px">{{ lvl.title }}</h2>
+
+    <div style="font-weight:800;color:#0369a1">WHAT</div>
+    <p style="margin-top:4px">{{ lvl.what }}</p>
+
+    <div style="font-weight:800;color:#0369a1">WHY</div>
+    <p style="margin-top:4px">{{ lvl.why }}</p>
+
+    <div style="font-weight:800;color:#0369a1">HOW</div>
+    <p style="margin-top:4px;white-space:pre-line">{{ lvl.how }}</p>
+
+    <div style="background:#dcfce7;color:#166534;padding:10px;border-radius:8px;margin:12px 0">
+      ✅ RIGHT: {{ lvl.right }}</div>
+    <div style="background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px">
+      ❌ WRONG: {{ lvl.wrong }}</div>
+
+    <form method="post" style="margin-top:16px">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="action" value="brief">
+      <button style="width:100%;padding:16px;border:0;background:#0f172a;color:#fff;
+                     border-radius:12px;font-weight:800">I understand — start {{ lvl.code }}</button>
+    </form>
+  </div>
+{% else %}
+  <h2>{{ lvl.code }} — {{ lvl.title }}</h2>
+  <p style="color:#475569">{{ lvl.what }}</p>
+
+  {% if is_current %}
+    <div style="border:1px solid #e2e8f0;border-radius:12px;padding:14px;margin:14px 0">
+      <div style="font-weight:800;margin-bottom:8px">Tasks</div>
+      {% for t in tasks %}
+        <div style="margin:8px 0">
+          <div style="display:flex;justify-content:space-between">
+            <span>{{ '✓' if t.done else '▶' }} {{ t.label }}</span>
+            <strong>{{ t.have }}/{{ t.target }}</strong>
+          </div>
+          <div style="height:8px;background:#e2e8f0;border-radius:5px;margin-top:4px;overflow:hidden">
+            <div style="height:8px;background:{{ '#22c55e' if t.done else '#38bdf8' }};
+                        width:{{ [100, (t.have*100//t.target if t.target else 100)]|min }}%"></div>
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+
+    {# Record work button — always available while level is active/pending #}
+    {% if p.status in ('active', 'pending') %}
+    <a href="{{ url_for('welfare_level_work_new', code=lvl.code) }}"
+       style="display:block;text-align:center;padding:14px;background:#0f172a;color:#22c55e;
+              border-radius:12px;font-weight:800;text-decoration:none;margin-bottom:12px">
+      + Record field work</a>
+    {% endif %}
+
+    {% if p.status == 'pending' %}
+      <div style="background:#fef9c3;color:#854d0e;padding:14px;border-radius:12px;font-weight:700">
+        ⏳ Waiting for supervisor approval</div>
+    {% elif blocked %}
+      <div style="background:#fee2e2;color:#991b1b;padding:14px;border-radius:12px;font-weight:700">
+        🔒 Gate blocked — {{ blocked }}</div>
+    {% elif all_done %}
+      <form method="post" enctype="multipart/form-data">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="request_gate">
+        <label style="display:block;font-weight:700;margin-bottom:6px;color:#0f172a">
+          Deliverable — attach your output (PDF or photo)
+        </label>
+        <input type="file" name="deliverable" accept=".pdf,.jpg,.jpeg,.png"
+               style="margin-bottom:12px;display:block">
+        {% if p.deliverable %}
+          <div style="color:#166534;font-size:.88rem;margin-bottom:8px">
+            Previously attached:
+            <a href="{{ url_for('hse_photo', filename=p.deliverable) }}" target="_blank">view</a>
+          </div>
+        {% endif %}
+        <button style="width:100%;padding:16px;border:0;background:#22c55e;color:#04220f;
+                       border-radius:12px;font-weight:800">Request gate approval</button>
+      </form>
+    {% else %}
+      <div style="color:#64748b">Keep going — finish the tasks above to open the gate.</div>
+    {% endif %}
+  {% else %}
+    <div style="color:#166534;font-weight:700">✓ Completed</div>
+  {% endif %}
+
+  <details style="margin-top:18px">
+    <summary style="cursor:pointer;font-weight:700">Show the briefing again</summary>
+    <p style="white-space:pre-line;margin-top:8px">{{ lvl.how }}</p>
+    <div style="background:#dcfce7;color:#166534;padding:10px;border-radius:8px;margin:8px 0">✅ {{ lvl.right }}</div>
+    <div style="background:#fee2e2;color:#991b1b;padding:10px;border-radius:8px">❌ {{ lvl.wrong }}</div>
+  </details>
+{% endif %}
+</div>
+{% endblock %}

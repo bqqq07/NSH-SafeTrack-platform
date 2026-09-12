@@ -12,6 +12,11 @@
     <div class="align-end">
       <button class="btn primary">Open All-Employees Report</button>
     </div>
+    <a class="btn"
+   href="{{ url_for('admin_print_bundle', week_start=ws.isoformat(), week_end=we.isoformat()) }}"
+   target="_blank" rel="noopener">
+  Print All Reports (Bundle)
+</a>
   </form>
   <p class="muted">You will get a consolidated table with print option, and links to each detailed employee report.</p>
 </section>

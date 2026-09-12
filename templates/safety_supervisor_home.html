@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}HSE Supervisor Home{% endblock %}
+{% block content %}
+<style>
+.ss-wrap{max-width:1100px;margin:0 auto;padding:0 4px}
+
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;margin-bottom:20px}
+.kc{background:#fff;border:1px solid var(--border);border-radius:12px;padding:14px 16px;position:relative;overflow:hidden}
+.kc::before{content:'';position:absolute;top:0;left:0;width:4px;height:100%;border-radius:4px 0 0 4px}
+.kc.green::before{background:#22c55e}.kc.blue::before{background:#3b82f6}
+.kc.orange::before{background:#f59e0b}.kc.red::before{background:#ef4444}
+.kc-label{font-size:11px;color:var(--muted);font-weight:500;margin-bottom:4px}
+.kc-val{font-size:26px;font-weight:700;line-height:1.1}
+.kc-sub{font-size:11px;color:var(--muted);margin-top:3px}
+
+.quick-links{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px}
+.ql{display:inline-flex;align-items:center;gap:5px;background:#fff;border:1px solid var(--border);
+    border-radius:8px;padding:6px 13px;font-size:12px;font-weight:500;text-decoration:none;color:var(--text)}
+.ql:hover{box-shadow:0 2px 8px rgba(0,0,0,.1);color:var(--text)}
+
+.officers-card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:16px}
+.officers-card h3{font-size:14px;font-weight:600;margin:0 0 12px;display:flex;justify-content:space-between;align-items:center}
+table{width:100%;border-collapse:collapse;font-size:12px}
+th{text-align:left;padding:6px 8px;background:#f8fafc;font-size:11px;font-weight:600;color:var(--muted);border-bottom:1px solid var(--border)}
+td{padding:7px 8px;border-bottom:1px solid var(--border)}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafafa}
+.badge-in{background:#dcfce7;color:#16a34a;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap}
+.badge-out{background:#fee2e2;color:#dc2626;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap}
+.badge-training{background:#ede9fe;color:#5b21b6;border-radius:5px;padding:2px 8px;font-size:11px;font-weight:700;white-space:nowrap}
+.score-top{color:#16a34a;font-weight:800}
+.score-mid{color:#1e40af;font-weight:700}
+.num{text-align:center}
+</style>
+
+<div class="ss-wrap">
+
+  <!-- KPIs -->
+  <div class="kpi-row">
+    <div class="kc {{ 'green' if checked_in == total else 'orange' }}">
+      <div class="kc-label">Checked In Today</div>
+      <div class="kc-val">{{ checked_in }}/{{ total }}</div>
+      <div class="kc-sub">officers</div>
+    </div>
+    <div class="kc blue">
+      <div class="kc-label">Observations (week)</div>
+      <div class="kc-val">{{ officers | sum(attribute='obs_w') }}</div>
+    </div>
+    <div class="kc blue">
+      <div class="kc-label">TBT (week)</div>
+      <div class="kc-val">{{ officers | sum(attribute='tbt_w') }}</div>
+    </div>
+    {% if pending_req %}
+    <div class="kc orange">
+      <div class="kc-label">Pending Requests</div>
+      <div class="kc-val">{{ pending_req }}</div>
+      <div class="kc-sub"><a href="{{ url_for('requests_mine') }}" style="color:inherit">view →</a></div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- Quick Links -->
+  <div class="quick-links">
+    <a class="ql" href="{{ url_for('user_location_page') }}">📍 My Location</a>
+    <a class="ql" href="{{ url_for('hse_observations') }}">👁️ Observations</a>
+    <a class="ql" href="{{ url_for('hse_tbt_list') }}">📋 TBT</a>
+    <a class="ql" href="{{ url_for('hse_jso_list') }}">🔍 JSO</a>
+    <a class="ql" href="{{ url_for('hse_ptw') }}">📝 PTW</a>
+    <a class="ql" href="{{ url_for('safety_supervisor_officers') }}">👷 Officers</a>
+    <a class="ql" href="{{ url_for('request_new') }}">📥 New Request</a>
+    <a class="ql" href="{{ url_for('ptw_supervisor_review') }}">🎓 PTW Review</a>
+  </div>
+
+  <!-- Officers Table -->
+  <div class="officers-card">
+    <h3>
+      Officers Performance
+      <span style="font-size:11px;font-weight:400;color:var(--muted)">
+        {{ today.strftime('%d %b') }} · Week from {{ week_start.strftime('%d %b') }}
+      </span>
+    </h3>
+    {% if officers %}
+    <div style="overflow-x:auto">
+    <table>
+      <thead>
+        <tr>
+          <th>Officer</th>
+          <th>Status</th>
+          <th class="num">Obs</th>
+          <th class="num">TBT</th>
+          <th class="num">JSO</th>
+          <th class="num">PTW</th>
+          <th class="num">Score</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in officers %}
+        <tr>
+          <td>
+            <div style="font-weight:600">
+              {{ r.name or r.code }}
+              {% if r.is_trainee %}<span class="badge-training">🎓 In Training</span>{% endif %}
+            </div>
+            <div style="font-size:10px;color:var(--muted)">{{ r.code }}</div>
+            {% if r.location %}
+            <div style="font-size:10px;color:var(--muted)">📍 {{ r.location }}</div>
+            {% endif %}
+          </td>
+          <td>
+            {% if r.is_trainee %}
+            <span class="badge-training">Training</span>
+            {% elif r.checked_in %}<span class="badge-in">✓ In</span>
+            {% else %}<span class="badge-out">✗ Out</span>{% endif %}
+          </td>
+          <td class="num">{{ r.obs_w }}</td>
+          <td class="num">{{ r.tbt_w }}</td>
+          <td class="num">{{ r.jso_w }}</td>
+          <td class="num">{{ r.ptw_w }}</td>
+          <td class="num {{ 'score-top' if loop.first else 'score-mid' }}">{{ r.score }}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <p style="text-align:center;padding:28px 0;color:var(--muted)">
+      No officers yet. <a href="{{ url_for('safety_supervisor_officers') }}">Add officers →</a>
+    </p>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

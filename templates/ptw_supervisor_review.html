@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}PTW Training Review{% endblock %}
+{% block content %}
+<style>
+.page-title{font-size:18px;font-weight:700;margin-bottom:4px}
+.page-sub{font-size:12px;color:var(--muted);margin-bottom:20px}
+.sec-title{font-size:14px;font-weight:700;margin:18px 0 10px;color:#0f172a;padding:6px 10px;background:#f8fafc;border-radius:6px}
+.trainee-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:20px}
+.trainee-card{background:#fff;border:1.5px solid #e2e8f0;border-radius:10px;padding:12px}
+.trainee-name{font-size:13px;font-weight:700}
+.trainee-prog{font-size:11px;color:#64748b;margin-top:3px}
+.prog-bar{height:4px;background:#e5e7eb;border-radius:2px;margin-top:6px;overflow:hidden}
+.prog-fill{height:100%;background:#3b82f6;border-radius:2px}
+.pending-badge{background:#fef3c7;color:#92400e;font-size:11px;padding:2px 7px;border-radius:6px;font-weight:600}
+.review-card{background:#fff;border:1.5px solid #e2e8f0;border-radius:12px;padding:14px;margin-bottom:12px}
+.rc-header{display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px;gap:10px}
+.rc-who{font-size:13px;font-weight:700}
+.rc-door{font-size:12px;color:#64748b;margin-top:2px}
+.rc-date{font-size:11px;color:#94a3b8}
+.q-row{margin-bottom:8px}
+.q-lbl{font-size:11px;font-weight:700;color:#64748b;margin-bottom:2px}
+.q-ans{font-size:13px;color:#1e293b;background:#f8fafc;border-radius:6px;padding:8px 10px;line-height:1.5;white-space:pre-wrap}
+.photo-thumb{max-width:120px;border-radius:6px;border:1px solid #e2e8f0;margin-top:6px}
+.action-row{display:flex;gap:8px;align-items:flex-start;margin-top:10px;flex-wrap:wrap}
+.action-row textarea{flex:1;min-width:200px;padding:8px 10px;border-radius:8px;border:1.5px solid #e2e8f0;font-size:12px;resize:none;height:52px;font-family:inherit}
+.btn-approve{padding:10px 18px;border:none;background:#22c55e;color:#052e16;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
+.btn-reject{padding:10px 18px;border:none;background:#ef4444;color:#fff;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer}
+.empty-note{color:#94a3b8;font-size:13px;text-align:center;padding:24px}
+</style>
+
+<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:4px">
+  <div class="page-title">PTW Training Review</div>
+  <a href="{{ url_for('ptw_progress_report') }}"
+     style="font-size:12px;color:#3b82f6;text-decoration:none;padding:6px 12px;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff">
+    📊 Progress report
+  </a>
+</div>
+<div class="page-sub">Review and approve safety officer stage submissions</div>
+
+{% if trainees %}
+<div class="sec-title">Trainees progress</div>
+<div class="trainee-grid">
+{% for t in trainees %}
+<div class="trainee-card">
+  <div class="trainee-name">{{ t.officer.name }}</div>
+  <div class="trainee-prog">
+    {{ t.done }} / {{ t.total }} approved
+    {% if t.pending %} · <span class="pending-badge">{{ t.pending }} pending</span>{% endif %}
+  </div>
+  <div class="prog-bar"><div class="prog-fill" style="width:{{ (t.done/t.total*100)|int }}%"></div></div>
+</div>
+{% endfor %}
+</div>
+{% endif %}
+
+<div class="sec-title">Pending submissions</div>
+
+{% if rows %}
+{% for r in rows %}
+<div class="review-card">
+  <div class="rc-header">
+    <div>
+      <div class="rc-who">{{ r.officer.name if r.officer else '—' }}</div>
+      <div class="rc-door">
+        Module {{ r.sub.module_seq }}: {{ r.mod.title }} —
+        Door {{ r.sub.door_seq }}: {{ r.door.title }}
+      </div>
+    </div>
+    <div class="rc-date">{{ r.sub.submitted_at.strftime('%d %b %Y %H:%M') if r.sub.submitted_at else '' }}</div>
+  </div>
+
+  {% for q in r.door.get('questions', []) %}
+  <div class="q-row">
+    <div class="q-lbl">Q{{ loop.index }}: {{ q }}</div>
+    <div class="q-ans">{{ r.answers[loop.index0] if loop.index0 < r.answers|length else '—' }}</div>
+  </div>
+  {% endfor %}
+
+  {% if r.sub.photo_path %}
+  <div style="margin-top:6px">
+    <div style="font-size:11px;color:#64748b;margin-bottom:3px">Photo evidence:</div>
+    <a href="{{ url_for('hse_photo', filename=r.sub.photo_path) }}" target="_blank">
+      <img src="{{ url_for('hse_photo', filename=r.sub.photo_path) }}" class="photo-thumb">
+    </a>
+  </div>
+  {% endif %}
+
+  <form method="post" action="{{ url_for('ptw_supervisor_do_review', sub_id=r.sub.id) }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="action-row">
+      <textarea name="note" placeholder="Optional note to officer…"></textarea>
+      <button type="submit" name="action" value="approve" class="btn-approve">✓ Approve</button>
+      <button type="submit" name="action" value="reject" class="btn-reject">✕ Reject</button>
+    </div>
+  </form>
+</div>
+{% endfor %}
+{% else %}
+<div class="empty-note">No pending submissions.</div>
+{% endif %}
+{% endblock %}

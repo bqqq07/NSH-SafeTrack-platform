@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Close Observation #{{ obs.id }}{% endblock %}
+{% block content %}
+<div style="max-width:580px;margin:0 auto">
+
+  <h2 style="margin-bottom:4px">Close Observation #{{ obs.id }}</h2>
+  <p style="color:#64748b;margin-bottom:16px">
+    {{ obs.date.strftime('%d %b %Y') }} ·
+    {% if obs.obs_type == 'unsafe_act' %}Unsafe Act
+    {% elif obs.obs_type == 'unsafe_condition' %}Unsafe Condition
+    {% else %}Positive{% endif %}
+    {% if obs.location %} · {{ obs.location }}{% endif %}
+  </p>
+
+  {% if obs.description %}
+  <div style="background:#f8fafc;border-radius:10px;padding:12px 14px;margin-bottom:18px;
+              font-size:.9rem;color:#374151;border-left:4px solid #e2e8f0">
+    {{ obs.description }}
+  </div>
+  {% endif %}
+
+  <div class="card">
+    <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <label>
+        Closure Note *
+        <textarea name="closure_action" rows="4" required
+                  placeholder="Describe what action was taken to close this observation…"></textarea>
+      </label>
+
+      <label style="margin-top:12px">
+        After-fix Photo (optional)
+        <input type="file" name="closure_photo" accept="image/*">
+        <small style="color:#64748b">JPEG / PNG · max 5 MB</small>
+      </label>
+
+      <div style="display:flex;gap:10px;margin-top:18px">
+        <button type="submit" class="btn primary" style="background:#065f46">✔ Close Observation</button>
+        <a href="{{ url_for('welfare_observation_list') }}" class="btn">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Edit TBT Session</h2>
+<div class="card" style="max-width:650px">
+  <form method="post" enctype="multipart/form-data" id="tbtForm">
+    <label>Date
+      <input type="date" name="date" value="{{ tbt.date.isoformat() }}" required>
+    </label>
+
+    <label>Topic
+      <input type="text" name="topic" value="{{ tbt.topic or '' }}" placeholder="TBT topic / safety subject">
+    </label>
+
+    <label>Location
+      <input type="text" name="location" id="locationInput"
+             value="{{ tbt.location or '' }}" list="locationList" placeholder="Site area / location">
+      <datalist id="locationList">
+        {% for loc in locations %}<option value="{{ loc }}">{% endfor %}
+      </datalist>
+    </label>
+
+    <label>Area Supervisor Code (optional)
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="text" name="supervisor_code" id="supCode"
+               value="{{ sup_code_val }}" placeholder="e.g. SUP001" style="flex:1">
+        <button type="button" class="btn" onclick="lookupSup()">Lookup</button>
+      </div>
+      <small id="supName" style="color:var(--success)"></small>
+    </label>
+
+    <fieldset style="border:1px solid var(--border);border-radius:8px;padding:12px;margin:12px 0">
+      <legend style="padding:0 6px;font-weight:600">Attendance</legend>
+
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input type="text" id="empNumInput" placeholder="Employee badge number" style="flex:1">
+        <button type="button" class="btn" onclick="lookupEmployee()">Add</button>
+      </div>
+      <small id="empError" style="color:var(--danger)"></small>
+
+      <table style="width:100%;border-collapse:collapse" id="attendanceTable">
+        <thead>
+          <tr style="background:var(--bg)">
+            <th style="padding:6px;text-align:left;font-size:13px">Badge #</th>
+            <th style="padding:6px;text-align:left;font-size:13px">Name</th>
+            <th style="padding:6px;width:40px"></th>
+          </tr>
+        </thead>
+        <tbody id="attendanceBody"></tbody>
+      </table>
+      <p style="margin:8px 0 0;font-size:13px;color:var(--muted)">
+        Total: <strong id="totalCount">0</strong>
+      </p>
+      <div id="hiddenInputs"></div>
+    </fieldset>
+
+    {% if tbt.sign_photo_path %}
+    <div style="margin:8px 0">
+      <p style="margin:0 0 4px;font-size:13px;color:var(--muted)">Current sign-in sheet:</p>
+      <a href="{{ url_for('hse_photo', filename=tbt.sign_photo_path) }}" target="_blank">
+        <img src="{{ url_for('hse_photo', filename=tbt.sign_photo_path) }}"
+             style="width:120px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+      </a>
+    </div>
+    {% endif %}
+
+    <label>Replace Sign-in Sheet Photo (optional)
+      <input type="file" name="sign_photo" accept="image/*">
+    </label>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button type="submit" class="btn primary">Save Changes</button>
+      <a href="{{ url_for('hse_tbt_list') }}" class="btn">Cancel</a>
+    </div>
+  </form>
+</div>
+
+<script>
+const existingAttendees = [
+  {% for a in attendees %}
+  { num: {{ a.emp_number|tojson }}, name: {{ a.emp_name|tojson }} },
+  {% endfor %}
+];
+
+document.addEventListener('DOMContentLoaded', function() {
+  existingAttendees.forEach(a => addRow(a.num, a.name));
+});
+
+async function lookupSup() {
+  const code = document.getElementById('supCode').value.trim();
+  if (!code) return;
+  const res = await fetch(`/hse/api/supervisor_lookup?code=${encodeURIComponent(code)}`);
+  const data = await res.json();
+  const el = document.getElementById('supName');
+  el.textContent = data.found ? ('✓ ' + data.name) : '✗ Not found';
+  el.style.color = data.found ? 'var(--success)' : 'var(--danger)';
+}
+
+async function lookupEmployee() {
+  const numInput = document.getElementById('empNumInput');
+  const errEl = document.getElementById('empError');
+  const num = numInput.value.trim();
+  errEl.textContent = '';
+  if (!num) return;
+  const res = await fetch(`/hse/api/employee_lookup?emp_number=${encodeURIComponent(num)}`);
+  const data = await res.json();
+  if (!data.found) { errEl.textContent = '✗ Employee not found or not active'; return; }
+  addRow(num, data.name);
+  numInput.value = '';
+}
+
+document.getElementById('empNumInput').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.preventDefault(); lookupEmployee(); }
+});
+
+function addRow(num, name) {
+  const body = document.getElementById('attendanceBody');
+  const hidden = document.getElementById('hiddenInputs');
+  const uid = `r_${num}_${Date.now()}`;
+  const tr = document.createElement('tr');
+  tr.style.borderTop = '1px solid var(--border)';
+  tr.id = uid;
+  tr.innerHTML = `
+    <td style="padding:6px;font-size:13px">${escHtml(num)}</td>
+    <td style="padding:6px;font-size:13px">${escHtml(name)}</td>
+    <td style="padding:6px;text-align:center">
+      <button type="button" onclick="removeRow('${uid}')"
+              style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px">✕</button>
+    </td>`;
+  body.appendChild(tr);
+  const inp1 = document.createElement('input');
+  inp1.type='hidden'; inp1.name='emp_number[]'; inp1.value=num; inp1.dataset.uid=uid;
+  const inp2 = document.createElement('input');
+  inp2.type='hidden'; inp2.name='emp_name[]'; inp2.value=name; inp2.dataset.uid=uid;
+  hidden.appendChild(inp1); hidden.appendChild(inp2);
+  updateCount();
+}
+
+function removeRow(uid) {
+  const tr = document.getElementById(uid);
+  if (tr) tr.remove();
+  document.querySelectorAll(`[data-uid="${uid}"]`).forEach(e => e.remove());
+  updateCount();
+}
+
+function updateCount() {
+  document.getElementById('totalCount').textContent =
+    document.getElementById('attendanceBody').children.length;
+}
+
+function escHtml(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+{% endblock %}

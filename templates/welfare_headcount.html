@@ -1,0 +1,70 @@
+{% extends "base.html" %}
+{% block title %}Daily Headcount{% endblock %}
+{% block content %}
+<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1.25rem;flex-wrap:wrap;gap:.75rem">
+  <div>
+    <a href="{{ url_for('welfare_home') }}" style="color:#94a3b8;font-size:.9rem">← Home</a>
+    <h2 style="margin-top:.25rem">Daily Headcount — {{ today.strftime('%d %b %Y') }}</h2>
+  </div>
+</div>
+
+<form method="post">
+<div style="overflow-x:auto">
+<table class="table" style="min-width:520px">
+  <thead>
+    <tr>
+      <th>Location</th>
+      <th style="text-align:center">Workers</th>
+      <th style="text-align:center">Coolers Required</th>
+      <th style="text-align:center">Shelter Capacity Required</th>
+    </tr>
+  </thead>
+  <tbody>
+  {% for unit in units %}
+  {% set cur = today_map.get(unit, '') %}
+  {% set cur_n = today_map.get(unit, 0)|int %}
+  <tr>
+    <td style="font-weight:600">{{ unit }}</td>
+    <td style="text-align:center">
+      <input type="number" name="count_{{ unit }}" value="{{ cur }}"
+             min="0" style="width:90px;text-align:center" class="form-control"
+             placeholder="0">
+    </td>
+    <td style="text-align:center;color:#94a3b8">
+      {% if cur_n > 0 %}
+        {{ (-((-cur_n) // base.coolers_per_worker)) }}
+      {% else %}—{% endif %}
+    </td>
+    <td style="text-align:center;color:#94a3b8">
+      {% if cur_n > 0 %}{{ cur_n }}{% else %}—{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+<div style="margin-top:1rem">
+  <button type="submit" class="btn">Save Headcount</button>
+</div>
+</form>
+
+{% if history %}
+<h3 style="margin-top:2rem;margin-bottom:.75rem;color:#94a3b8;font-size:.95rem">Last 7 Days</h3>
+<div style="overflow-x:auto">
+<table class="table" style="min-width:400px;font-size:.88rem">
+  <thead>
+    <tr><th>Date</th><th>Location</th><th style="text-align:center">Count</th></tr>
+  </thead>
+  <tbody>
+  {% for h in history %}
+  <tr>
+    <td>{{ h.date.strftime('%d %b') }}</td>
+    <td>{{ h.unit }}</td>
+    <td style="text-align:center;font-weight:600">{{ h.count }}</td>
+  </tr>
+  {% endfor %}
+  </tbody>
+</table>
+</div>
+{% endif %}
+{% endblock %}

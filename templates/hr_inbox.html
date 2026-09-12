@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+  .hr-grid  { display:flex; flex-direction:column; gap:16px; max-width:820px; margin:0 auto; }
+  .hr-card  { background:#fff; border-radius:14px; box-shadow:0 2px 10px rgba(0,0,0,.07); padding:18px 20px; }
+  .hr-head  { display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; direction:rtl; }
+  .hr-type  { font-weight:700; font-size:15px; color:#1a1f3a; }
+  .hr-emp   { font-size:13px; color:#666; direction:rtl; margin-bottom:4px; }
+  .hr-dates { font-size:12px; color:#888; font-family:monospace; }
+  .hr-reason{ font-size:13px; color:#555; direction:rtl; margin-top:6px; border-top:1px solid #f0f0f0; padding-top:8px; }
+
+  /* ألوان الأنواع */
+  .type-leave      { color:#2563eb; background:#e8f0ff; }
+  .type-sick       { color:#e74c3c; background:#fdecea; }
+  .type-permission { color:#e67e22; background:#fff3e0; }
+  .type-warning    { color:#c0392b; background:#fdf0ee; }
+  .type-other      { color:#555;    background:#f0f0f0; }
+
+  .type-badge { padding:3px 10px; border-radius:20px; font-size:12px; font-weight:700; }
+
+  /* صندوق السبب الرسمي */
+  .reason-form  { background:#fdf0ee; border-radius:10px; padding:14px; margin-top:12px; direction:rtl; }
+  .reason-form label { font-weight:700; color:#c0392b; font-size:13px; display:block; margin-bottom:8px; }
+  .reason-select { width:100%; padding:9px 12px; border:1px solid #f5b7b1; border-radius:8px; font-size:14px; background:#fff; margin-bottom:10px; }
+  .reason-custom { width:100%; padding:9px 12px; border:1px solid #f5b7b1; border-radius:8px; font-size:14px; font-family:inherit; resize:vertical; min-height:70px; display:none; }
+
+  /* تبويب اختيار الشركة (NSH / GA) لخطاب الإنذار */
+  .company-tabs   { display:flex; gap:8px; margin-bottom:12px; }
+  .company-tabs input[type="radio"] { display:none; }
+  .company-tabs label.company-tab {
+    flex:1; text-align:center; padding:9px 10px; border:1px solid #f5b7b1; border-radius:8px;
+    background:#fff; color:#c0392b; font-size:13px; font-weight:700; cursor:pointer; user-select:none;
+  }
+  .company-tabs input[type="radio"]:checked + label.company-tab {
+    background:#c0392b; color:#fff; border-color:#c0392b;
+  }
+
+  /* صندوق إجراء HR */
+  .hr-actions { display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; align-items:center; }
+  .info-box   { border-radius:8px; padding:9px 14px; font-size:13px; direction:rtl; display:flex; align-items:center; gap:8px; flex:1; }
+  .info-green { background:#d5f5e3; color:#1a7a3a; }
+  .info-blue  { background:#e8f0ff; color:#2563eb; }
+  .info-yellow{ background:#fff3cd; color:#856404; }
+  .info-red   { background:#fdecea; color:#e74c3c; }
+
+  .btn-sm     { padding:8px 14px; font-size:13px; border-radius:8px; border:none; cursor:pointer; font-weight:600; white-space:nowrap; }
+  .btn-apply  { background:#2ecc71; color:#fff; }
+  .btn-apply:hover { background:#27ae60; }
+  .divider    { border:none; border-top:1px solid #f0f0f0; margin:12px 0; }
+</style>
+
+<div style="direction:rtl">
+  <h1 style="margin-bottom:20px">صندوق الموارد البشرية</h1>
+</div>
+
+{% set type_map   = {'leave':'إجازة','sick':'سكليف','secondment':'إعارة','permission':'استئذان','warning':'إنذار','late':'تأخر','other':'أخرى'} %}
+{% set type_cls   = {'leave':'type-leave','sick':'type-sick','permission':'type-permission','warning':'type-warning'} %}
+
+<!-- أسباب الإنذار الجاهزة -->
+{% set warning_reasons = [
+  'التغيب عن العمل بدون إذن',
+  'التأخر المتكرر عن مواعيد العمل',
+  'الإهمال في أداء المهام الوظيفية',
+  'عدم الالتزام بتعليمات السلامة',
+  'سوء التصرف مع الزملاء أو المسؤولين',
+  'مخالفة سياسات الشركة',
+  'أخرى'
+] %}
+
+<div class="hr-grid">
+{% for t in rows %}
+{% set r = t.request %}
+{% set type_class = type_cls.get(t.type, 'type-other') %}
+
+<div class="hr-card">
+  <!-- رأس البطاقة -->
+  <div class="hr-head">
+    <span class="hr-type">
+      <span class="type-badge {{ type_class }}">{{ type_map.get(t.type, t.type) }}</span>
+      &nbsp;{{ t.employee.name if t.employee else '—' }}
+      {% if t.employee %}<span style="font-weight:400;color:#888;font-size:13px"> ({{ t.employee.emp_number }})</span>{% endif %}
+    </span>
+    <span class="badge {{ 'success' if t.status=='applied' else 'warning' }}" style="font-size:12px">
+      {{ 'مُطبَّق' if t.status=='applied' else 'معلق' }}
+    </span>
+  </div>
+
+  {% if r %}
+    {% if r.start_date or r.end_date %}
+    <div class="hr-dates">{{ r.start_date or '—' }} → {{ r.end_date or '—' }}</div>
+    {% endif %}
+    {% if r.reason %}
+    <div class="hr-reason">
+      {{ 'وصف المخالفة: ' if t.type == 'warning' else 'السبب: ' }}{{ r.reason }}
+    </div>
+    {% endif %}
+  {% endif %}
+
+  <hr class="divider">
+
+  <!-- ─── إجراء حسب النوع ─── -->
+
+  {# إجازة #}
+  {% if t.type == 'leave' %}
+    <div class="hr-actions">
+      {% if r and r.leave_form %}
+        {% if r.leave_form.signed %}
+          <div class="info-box info-green">✓ وقّع الموظف — النموذج جاهز</div>
+          <a href="{{ url_for('web_leave_pdf', req_id=r.id) }}"
+             class="btn-sm" style="background:#2563eb;color:#fff;text-decoration:none" target="_blank">⬇ PDF الإجازة</a>
+        {% else %}
+          <div class="info-box info-yellow">⏳ في انتظار توقيع الموظف على نموذج الإجازة</div>
+        {% endif %}
+      {% else %}
+        <div class="info-box info-yellow">⏳ جاري إعداد نموذج الإجازة...</div>
+      {% endif %}
+      {% if t.status == 'pending' %}
+      <form method="post" action="{{ url_for('hr_task_apply', task_id=t.id) }}" style="margin:0">
+        <button class="btn-sm btn-apply" onclick="return confirm('تأكيد تطبيق الإجازة؟')">تطبيق ✓</button>
+      </form>
+      {% endif %}
+    </div>
+
+  {# سكليف #}
+  {% elif t.type == 'sick' %}
+    <div class="hr-actions">
+      <div class="info-box info-red">🏥 سكليف — تم تسجيل الغياب تلقائياً</div>
+      {% if r and r.attachments %}
+        {% for att in r.attachments %}
+        <a href="{{ url_for('request_attachment_download', att_id=att.id) }}"
+           class="btn-sm" style="background:#6c757d;color:#fff;text-decoration:none" target="_blank">
+           📎 {{ att.original_name or 'الملف الطبي' }}
+        </a>
+        {% endfor %}
+      {% endif %}
+      {% if t.status == 'pending' %}
+      <form method="post" action="{{ url_for('hr_task_apply', task_id=t.id) }}" style="margin:0">
+        <button class="btn-sm btn-apply" onclick="return confirm('تأكيد التطبيق؟')">تطبيق ✓</button>
+      </form>
+      {% endif %}
+    </div>
+
+  {# استئذان #}
+  {% elif t.type == 'permission' %}
+    <div class="hr-actions">
+      {% if r %}
+        {% if r.permission_sig %}
+          <div class="info-box info-green">✓ وقّع الموظف على نموذج الاستئذان</div>
+        {% else %}
+          <div class="info-box info-yellow">⏳ في انتظار توقيع الموظف</div>
+          <a href="{{ url_for('web_permission_sign', req_id=r.id) }}"
+             class="btn-sm" style="background:#e67e22;color:#fff;text-decoration:none">📄 النموذج</a>
+        {% endif %}
+      {% endif %}
+      {% if t.status == 'pending' %}
+      <form method="post" action="{{ url_for('hr_task_apply', task_id=t.id) }}" style="margin:0">
+        <button class="btn-sm btn-apply" onclick="return confirm('تأكيد التطبيق؟')">تطبيق ✓</button>
+      </form>
+      {% endif %}
+    </div>
+
+  {# إنذار #}
+  {% elif t.type == 'warning' %}
+    {% if t.official_reason %}
+      <!-- السبب محدد — عرض حالة التوقيع -->
+      <div style="background:#fff8f8;border-right:4px solid #e74c3c;border-radius:6px;padding:10px 14px;margin-bottom:12px;direction:rtl;font-size:13px">
+        <strong style="color:#c0392b">السبب الرسمي:</strong> {{ t.official_reason }}
+      </div>
+      <div class="hr-actions">
+        {% if r and r.warning_sig %}
+          <div class="info-box info-green">✓ وقّع الموظف على نموذج الإنذار</div>
+          {% if t.warning_pdf %}
+          <a href="{{ url_for('web_warning_pdf', req_id=r.id) }}"
+             class="btn-sm" style="background:#c0392b;color:#fff;text-decoration:none" target="_blank">⬇ PDF الإنذار</a>
+          {% endif %}
+        {% else %}
+          <div class="info-box info-yellow">⏳ في انتظار توقيع الموظف</div>
+          {% if r %}
+          <a href="{{ url_for('web_warning_sign', req_id=r.id) }}"
+             class="btn-sm" style="background:#e74c3c;color:#fff;text-decoration:none">📄 النموذج</a>
+          {% endif %}
+        {% endif %}
+        {% if t.status == 'pending' %}
+        <form method="post" action="{{ url_for('hr_task_apply', task_id=t.id) }}" style="margin:0">
+          <button class="btn-sm btn-apply" onclick="return confirm('تأكيد التطبيق؟')">تطبيق ✓</button>
+        </form>
+        {% endif %}
+      </div>
+    {% else %}
+      <!-- السبب لم يُحدد بعد — فورم تحديد السبب -->
+      <div class="reason-form">
+        <form method="post" id="reason-form-{{ t.id }}" action="{{ url_for('hr_task_set_reason', task_id=t.id) }}">
+          <label>اسم الشركة على خطاب الإنذار:</label>
+          <div class="company-tabs">
+            <input type="radio" id="co-nsh-{{ t.id }}" name="warning_company" value="NSH" checked>
+            <label class="company-tab" for="co-nsh-{{ t.id }}">1 - NSH</label>
+            <input type="radio" id="co-ga-{{ t.id }}" name="warning_company" value="GA">
+            <label class="company-tab" for="co-ga-{{ t.id }}">2 - GA</label>
+          </div>
+          <label>حدد السبب الرسمي للإنذار:</label>
+          <select class="reason-select" id="reason-select-{{ t.id }}"
+                  onchange="toggleCustom({{ t.id }}, this.value)" name="official_reason" required>
+            <option value="" disabled selected>— اختر السبب —</option>
+            {% for rs in warning_reasons %}
+              {% if rs == 'أخرى' %}
+              <option value="__custom__">أخرى (اكتب)</option>
+              {% else %}
+              <option value="{{ rs }}">{{ rs }}</option>
+              {% endif %}
+            {% endfor %}
+          </select>
+          <textarea class="reason-custom" id="reason-custom-{{ t.id }}"
+                    placeholder="اكتب السبب الرسمي..." name="official_reason_custom"></textarea>
+          <button type="submit" class="btn-sm" style="background:#c0392b;color:#fff;width:100%;padding:10px"
+                  onclick="return prepareReason({{ t.id }})">
+            تحديد السبب وإرسال الإشعار للمشرف
+          </button>
+        </form>
+      </div>
+    {% endif %}
+
+  {# إعارة / تأخر / أخرى #}
+  {% else %}
+    <div class="hr-actions">
+      <div class="info-box info-blue">📋 {{ type_map.get(t.type, t.type) }} — طلب عادي</div>
+      {% if t.status == 'pending' %}
+      <form method="post" action="{{ url_for('hr_task_apply', task_id=t.id) }}" style="margin:0">
+        <button class="btn-sm btn-apply" onclick="return confirm('تأكيد التطبيق؟')">تطبيق ✓</button>
+      </form>
+      {% endif %}
+    </div>
+  {% endif %}
+
+</div>
+{% else %}
+<div style="text-align:center; color:#aaa; padding:40px">لا توجد مهام بعد.</div>
+{% endfor %}
+</div>
+
+<script>
+function toggleCustom(id, val) {
+  const ta = document.getElementById('reason-custom-' + id);
+  if (val === '__custom__') {
+    ta.style.display = 'block'; ta.required = true;
+  } else {
+    ta.style.display = 'none'; ta.required = false;
+  }
+}
+
+function prepareReason(id) {
+  const sel = document.getElementById('reason-select-' + id);
+  const ta  = document.getElementById('reason-custom-' + id);
+  if (sel.value === '__custom__') {
+    if (!ta.value.trim()) { alert('الرجاء كتابة السبب'); return false; }
+    // استبدل قيمة الـ select بالنص المخصص ليُرسل الاسم الصحيح
+    sel.name = '';
+    ta.name  = 'official_reason';
+  }
+  return true;
+}
+</script>
+{% endblock %}

@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+{% block title %}Edit Daily Work Report{% endblock %}
+{% block content %}
+<section class="card">
+  <h2>Edit Daily Work Report</h2>
+
+  <form method="POST" enctype="multipart/form-data" id="reportForm" autocomplete="off">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="employee_ids" id="employeeIds"
+           value="{{ report.report_employees | map(attribute='employee_id') | join(',') }}">
+
+    <!-- Date + Notes -->
+    <div class="grid2">
+      <label>Report Date
+        <input type="date" name="report_date" value="{{ report.report_date.isoformat() }}" required>
+      </label>
+      <label>General Notes (optional)
+        <input type="text" name="notes" value="{{ report.notes or '' }}"
+               placeholder="e.g. weather, general observations…">
+      </label>
+    </div>
+
+    <!-- ── Employees ── -->
+    <div style="background:#f0f8ff;border:1px solid #bde0f8;border-radius:8px;padding:14px;margin-top:10px">
+      <div style="font-weight:700;font-size:15px;color:#1e3a5f;margin-bottom:10px">👷 Employees on this Report</div>
+
+      <div id="selectedChips" style="display:flex;flex-wrap:wrap;gap:6px;min-height:32px;margin-bottom:10px"></div>
+
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <label style="margin:0;flex:1;min-width:160px">Search by Employee ID
+          <div style="display:flex;gap:6px">
+            <input type="text" id="empSearch" placeholder="Enter employee number…" autocomplete="off"
+                   style="flex:1" onkeydown="if(event.key==='Enter'){event.preventDefault();lookupEmployee()}">
+            <button type="button" class="btn primary" onclick="lookupEmployee()">Search</button>
+          </div>
+        </label>
+        {% if my_employees %}
+        <label style="margin:0;flex:1;min-width:200px">Or pick from employees
+          <div style="display:flex;gap:6px">
+            <select id="empPicker" style="flex:1">
+              <option value="">— Select employee —</option>
+              {% for e in my_employees %}
+              <option value="{{ e.id }}" data-name="{{ e.name }}" data-num="{{ e.emp_number }}" data-dept="{{ e.department or '' }}">
+                {{ e.name }} ({{ e.emp_number }})
+              </option>
+              {% endfor %}
+            </select>
+            <button type="button" class="btn primary" onclick="addFromPicker()">Add</button>
+          </div>
+        </label>
+        {% endif %}
+      </div>
+      <div id="empMsg" style="margin-top:6px;font-size:13px;min-height:18px"></div>
+    </div>
+
+    <hr style="margin:18px 0;border:0;border-top:1px solid var(--border)">
+
+    <!-- ── Work Items ── -->
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+      <h3 style="margin:0">Work Items</h3>
+      <button type="button" class="btn primary" onclick="addItem()">+ Add Work Item</button>
+    </div>
+
+    <div id="itemsContainer">
+      {% for item in report.items %}
+      <div class="work-item card" style="margin-bottom:14px;border-left:4px solid var(--primary)" data-item-id="{{ item.id }}">
+        <input type="hidden" name="item_id[]" value="{{ item.id }}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+          <strong>Work Item #<span class="item-num">{{ loop.index }}</span></strong>
+          <button type="button" class="btn" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="removeItem(this)">Remove</button>
+        </div>
+        <div class="grid2">
+          <label>Area / Zone <span style="color:var(--danger)">*</span>
+            <input type="text" name="area[]" value="{{ item.area }}" required>
+          </label>
+          <div class="grid2" style="gap:8px">
+            <label>Start Time<input type="time" name="start_time[]" value="{{ item.start_time or '' }}"></label>
+            <label>End Time<input type="time" name="end_time[]" value="{{ item.end_time or '' }}"></label>
+          </div>
+        </div>
+        <label style="margin-top:8px">Work Description <span style="color:var(--danger)">*</span>
+          <textarea name="description[]" rows="3" required style="width:100%">{{ item.description }}</textarea>
+        </label>
+
+        <!-- Existing photos -->
+        {% if item.photos %}
+        <div style="margin-top:10px">
+          <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px">Existing Photos — check to delete:</div>
+          <div style="display:flex;flex-wrap:wrap;gap:10px">
+            {% for photo in item.photos %}
+            <div style="text-align:center">
+              <a href="{{ url_for('supervisor_daily_work_photo', report_id=report.id, filename=photo.filename) }}" target="_blank">
+                <img src="{{ url_for('supervisor_daily_work_photo', report_id=report.id, filename=photo.filename) }}"
+                     style="width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+              </a>
+              <label style="margin-top:4px;flex-direction:row;gap:4px;justify-content:center;font-size:12px;color:var(--danger)">
+                <input type="checkbox" name="delete_photo[]" value="{{ photo.id }}"> Delete
+              </label>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- New photos -->
+        <div style="margin-top:10px">
+          <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px">
+            Add Photos
+            <button type="button" class="add-photo-btn btn" style="padding:3px 10px;font-size:12px;margin-left:8px" onclick="addPhotoSlot(this)">+ Add Photo</button>
+          </div>
+          <div class="photo-slots" style="display:flex;flex-direction:column;gap:6px"></div>
+          <div class="photo-previews" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+
+    <div class="actions" style="margin-top:20px">
+      <button class="btn primary" type="submit">Save Changes</button>
+      <a class="btn" href="{{ url_for('supervisor_daily_work_view', report_id=report.id) }}">Cancel</a>
+    </div>
+  </form>
+</section>
+
+<!-- Template for new items (no pre-fill) -->
+<template id="itemTemplate">
+  <div class="work-item card" style="margin-bottom:14px;border-left:4px solid var(--primary)">
+    <input type="hidden" name="item_id[]" value="">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <strong>Work Item #<span class="item-num"></span></strong>
+      <button type="button" class="btn" style="padding:4px 10px;font-size:12px;color:var(--danger)" onclick="removeItem(this)">Remove</button>
+    </div>
+    <div class="grid2">
+      <label>Area / Zone <span style="color:var(--danger)">*</span>
+        <input type="text" name="area[]" placeholder="e.g. Zone A…" required>
+      </label>
+      <div class="grid2" style="gap:8px">
+        <label>Start Time<input type="time" name="start_time[]"></label>
+        <label>End Time<input type="time" name="end_time[]"></label>
+      </div>
+    </div>
+    <label style="margin-top:8px">Work Description <span style="color:var(--danger)">*</span>
+      <textarea name="description[]" rows="3" required style="width:100%"></textarea>
+    </label>
+    <div style="margin-top:10px">
+      <div style="font-size:13px;font-weight:600;color:var(--muted);margin-bottom:6px">
+        Add Photos
+        <button type="button" class="add-photo-btn btn" style="padding:3px 10px;font-size:12px;margin-left:8px" onclick="addPhotoSlot(this)">+ Add Photo</button>
+      </div>
+      <div class="photo-slots" style="display:flex;flex-direction:column;gap:6px"></div>
+      <div class="photo-previews" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px"></div>
+    </div>
+  </div>
+</template>
+
+<style>
+.emp-chip{display:inline-flex;align-items:center;gap:6px;background:#1e3a5f;color:#fff;border-radius:20px;padding:4px 12px;font-size:13px}
+.emp-chip button{background:none;border:none;color:#aad4f5;cursor:pointer;font-size:15px;line-height:1;padding:0 0 0 2px}
+.emp-chip button:hover{color:#fff}
+</style>
+
+<script>
+// ── Employees ─────────────────────────────────────
+const selected = {};
+
+// Pre-load existing employees from server data
+{% for re in report.report_employees %}
+selected["{{ re.employee_id }}"] = {
+  name: "{{ re.employee.name }}",
+  emp_number: "{{ re.employee.emp_number }}",
+  dept: "{{ re.employee.department or '' }}"
+};
+{% endfor %}
+
+function renderChips() {
+  const box = document.getElementById('selectedChips');
+  box.innerHTML = '';
+  Object.entries(selected).forEach(([id, emp]) => {
+    const chip = document.createElement('span');
+    chip.className = 'emp-chip';
+    chip.innerHTML = `👷 <strong>${emp.name}</strong> <small style="opacity:.75">${emp.emp_number}</small>
+      <button type="button" onclick="removeEmployee('${id}')" title="Remove">✕</button>`;
+    box.appendChild(chip);
+  });
+  document.getElementById('employeeIds').value = Object.keys(selected).join(',');
+}
+
+function addEmployee(id, name, emp_number, dept) {
+  id = String(id);
+  if (selected[id]) { showEmpMsg(`${name} is already added.`, 'warning'); return; }
+  selected[id] = {name, emp_number, dept};
+  renderChips();
+  showEmpMsg(`Added: ${name}`, 'success');
+}
+
+function removeEmployee(id) {
+  delete selected[id];
+  renderChips();
+  document.getElementById('empMsg').innerHTML = '';
+}
+
+function showEmpMsg(msg, type) {
+  const colors = {success:'#2e7d32', warning:'#b45309', danger:'#c62828'};
+  const el = document.getElementById('empMsg');
+  el.innerHTML = `<span style="color:${colors[type]||'#555'}">${msg}</span>`;
+  setTimeout(() => { el.innerHTML = ''; }, 3000);
+}
+
+async function lookupEmployee() {
+  const val = document.getElementById('empSearch').value.trim();
+  if (!val) { showEmpMsg('Please enter an employee ID.', 'danger'); return; }
+  showEmpMsg('Searching…', '');
+  try {
+    const res = await fetch(`/api/employee/lookup?emp_number=${encodeURIComponent(val)}`);
+    const data = await res.json();
+    if (res.ok) {
+      addEmployee(data.id, data.name, data.emp_number, data.department || '');
+      document.getElementById('empSearch').value = '';
+    } else {
+      showEmpMsg('Employee not found.', 'danger');
+    }
+  } catch(e) { showEmpMsg('Network error.', 'danger'); }
+}
+
+function addFromPicker() {
+  const sel = document.getElementById('empPicker');
+  const opt = sel.options[sel.selectedIndex];
+  if (!opt || !opt.value) { showEmpMsg('Please select an employee.', 'warning'); return; }
+  addEmployee(opt.value, opt.dataset.name, opt.dataset.num, opt.dataset.dept || '');
+  sel.selectedIndex = 0;
+}
+
+document.getElementById('empSearch').addEventListener('keydown', e => {
+  if (e.key === 'Enter') { e.preventDefault(); lookupEmployee(); }
+});
+
+// ── Work items ────────────────────────────────────
+function addItem() {
+  const clone = document.getElementById('itemTemplate').content.cloneNode(true);
+  document.getElementById('itemsContainer').appendChild(clone);
+  renumberItems();
+  const items = document.querySelectorAll('.work-item');
+  addPhotoSlot(items[items.length - 1].querySelector('.add-photo-btn'));
+}
+
+function removeItem(btn) {
+  btn.closest('.work-item').remove();
+  renumberItems();
+}
+
+function renumberItems() {
+  document.querySelectorAll('.work-item').forEach((item, i) => {
+    item.querySelector('.item-num').textContent = i + 1;
+    item.querySelectorAll('.photo-slot-input').forEach(fi => { fi.name = `photos_${i}[]`; });
+  });
+}
+
+function addPhotoSlot(btn) {
+  const item = btn.closest('.work-item');
+  const i = Array.from(document.querySelectorAll('.work-item')).indexOf(item);
+  const slots = item.querySelector('.photo-slots');
+  const previews = item.querySelector('.photo-previews');
+
+  const row = document.createElement('div');
+  row.style.cssText = 'display:flex;align-items:center;gap:6px';
+
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.name = `photos_${i}[]`;
+  inp.accept = 'image/jpeg,image/png,image/webp';
+  inp.className = 'photo-slot-input';
+  inp.style.cssText = 'flex:1;padding:5px;border:1px solid var(--border);border-radius:8px';
+
+  const del = document.createElement('button');
+  del.type = 'button'; del.textContent = '✕';
+  del.style.cssText = 'background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:0 4px';
+  del.onclick = () => row.remove();
+
+  inp.addEventListener('change', function() {
+    const file = this.files[0];
+    if (!file || !file.type.startsWith('image/')) return;
+    const r = new FileReader();
+    r.onload = e => {
+      const wrap = document.createElement('div');
+      const img = document.createElement('img');
+      img.src = e.target.result;
+      img.style.cssText = 'width:80px;height:80px;object-fit:cover;border-radius:6px;border:1px solid var(--border)';
+      wrap.appendChild(img);
+      previews.appendChild(wrap);
+    };
+    r.readAsDataURL(file);
+  });
+
+  row.appendChild(inp); row.appendChild(del);
+  slots.appendChild(row);
+}
+
+// Initialize: render pre-loaded employees + fix photo slot names for existing items
+renderChips();
+renumberItems();
+</script>
+{% endblock %}

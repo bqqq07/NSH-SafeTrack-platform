@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Edit JSO Closure</h2>
+<div class="card" style="max-width:560px">
+  <form method="post" enctype="multipart/form-data">
+    <label>JSO Number *
+      <input type="text" name="jso_number" value="{{ jso.jso_number }}" required>
+    </label>
+
+    <label>Date
+      <input type="date" name="date" value="{{ jso.date.isoformat() }}" required>
+    </label>
+
+    <label>Location
+      <input type="text" name="location" value="{{ jso.location or '' }}"
+             list="locationList" placeholder="Site area / location">
+      <datalist id="locationList">
+        {% for loc in locations %}<option value="{{ loc }}">{% endfor %}
+      </datalist>
+    </label>
+
+    <label>Action Taken
+      <textarea name="action_taken" rows="3">{{ jso.action_taken or '' }}</textarea>
+    </label>
+
+    {% if jso.photo_path %}
+    <div style="margin:8px 0">
+      <p style="margin:0 0 4px;font-size:13px;color:var(--muted)">Current photo:</p>
+      <a href="{{ url_for('hse_photo', filename=jso.photo_path) }}" target="_blank">
+        <img src="{{ url_for('hse_photo', filename=jso.photo_path) }}"
+             style="width:120px;height:90px;object-fit:cover;border-radius:6px;border:1px solid var(--border)">
+      </a>
+    </div>
+    {% endif %}
+
+    <label>Replace Photo (optional)
+      <input type="file" name="photo" accept="image/*">
+    </label>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button type="submit" class="btn primary">Save Changes</button>
+      <a href="{{ url_for('hse_jso_list') }}" class="btn">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

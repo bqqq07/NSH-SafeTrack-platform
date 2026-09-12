@@ -1,0 +1,200 @@
+﻿{% extends "base.html" %}
+{% block title %}Welfare Daily Report{% endblock %}
+{% block content %}
+<style>
+  .dr-card{border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:14px 0;background:#fff}
+  .dr-badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:.82rem;font-weight:700}
+  .dr-ok{background:#dcfce7;color:#166534}
+  .dr-no{background:#fee2e2;color:#991b1b}
+  .dr-na{background:#f1f5f9;color:#475569}
+  .dr-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:12px 0}
+  .dr-stat{background:#f8fafc;border-radius:10px;padding:10px;text-align:center}
+  .dr-stat .val{font-size:1.5rem;font-weight:900;color:#0f172a}
+  .dr-stat .lbl{font-size:.8rem;color:#64748b;margin-top:2px}
+  .dr-photos{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .dr-photos img{width:110px;height:110px;object-fit:cover;border-radius:10px;border:2px solid #e2e8f0}
+  .dr-section{border-left:4px solid #e2e8f0;padding-left:12px;margin:8px 0}
+  .dr-section.ok{border-color:#22c55e}
+  .dr-section.not_ok{border-color:#ef4444}
+  .dr-section.na{border-color:#94a3b8}
+  .dr-finding{padding:8px 10px;border-radius:8px;margin:4px 0;font-size:.9rem}
+  .dr-finding.Critical{background:#fee2e2;color:#991b1b;border-left:4px solid #dc2626}
+  .dr-finding.High{background:#fff7ed;color:#c2410c;border-left:4px solid #f97316}
+  .dr-finding.Medium{background:#fffbeb;color:#b45309;border-left:4px solid #f59e0b}
+  .dr-finding.Low{background:#f0fdf4;color:#166534;border-left:4px solid #22c55e}
+</style>
+
+<div style="max-width:900px;margin:0 auto">
+  <div class="no-print" style="margin-bottom:16px">
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:12px">
+      <h2 style="margin:0">📋 Welfare Daily — {{ d }}</h2>
+      <button type="button" onclick="window.print()"
+              style="padding:9px 14px;border:1px solid #cbd5e1;background:#fff;border-radius:8px;font-weight:700">🖨️ Print</button>
+    </div>
+    <form method="get" style="border:1px solid #e2e8f0;border-radius:12px;padding:14px">
+      <div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:{% if all_officers %}12px{% else %}0{% endif %}">
+        <label style="display:flex;flex-direction:column;gap:4px;font-weight:700;font-size:.85rem">
+          Date
+          <input type="date" name="date" value="{{ d }}"
+                 style="padding:9px;border-radius:8px;border:1px solid #cbd5e1">
+        </label>
+        <button style="padding:9px 20px;border:0;background:#0f172a;color:#fff;border-radius:8px;font-weight:700">Go</button>
+      </div>
+      {% if all_officers %}
+      <div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+          <span style="font-weight:700;font-size:.85rem">Officers to include</span>
+          <span style="display:flex;gap:6px">
+            <button type="button" onclick="setAll(true)"
+                    style="font-size:.75rem;padding:2px 8px;border:1px solid #cbd5e1;border-radius:5px;background:#f8fafc;cursor:pointer">All</button>
+            <button type="button" onclick="setAll(false)"
+                    style="font-size:.75rem;padding:2px 8px;border:1px solid #cbd5e1;border-radius:5px;background:#f8fafc;cursor:pointer">None</button>
+          </span>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px">
+          {% for o in all_officers %}
+          <label style="display:flex;align-items:center;gap:6px;padding:5px 10px;border:1px solid #e2e8f0;border-radius:20px;cursor:pointer;font-size:.85rem;background:#f8fafc">
+            <input type="checkbox" name="officer_ids" value="{{ o.id }}"
+                   {% if not selected_ids or o.id in selected_ids %}checked{% endif %}
+                   style="accent-color:#0f172a">
+            {{ o.name or o.supervisor_code }}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+    </form>
+  </div>
+
+  {% if not blocks %}
+    <p style="color:#64748b;text-align:center;padding:40px">No welfare rounds recorded for this date.</p>
+  {% endif %}
+
+  {% for b in blocks %}
+  <div class="dr-card">
+    <!-- Officer header -->
+    <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px">
+      <div>
+        <a href="{{ url_for('safety_welfare_profile', uid=b.u.id) }}"
+           style="font-size:1.1rem;font-weight:800;color:#0f172a;text-decoration:none">
+          {{ b.u.name }} →</a>
+        <div style="color:#64748b;font-size:.88rem">{{ b.u.role.replace('_',' ').title() }}</div>
+      </div>
+      {% if b.entries %}
+        {% set total_score = namespace(sum=0, n=0) %}
+        {% for x in b.entries %}{% if x.r.score is not none %}{% set total_score.sum = total_score.sum + x.r.score %}{% set total_score.n = total_score.n + 1 %}{% endif %}{% endfor %}
+        {% if total_score.n %}
+          <div style="background:{{ '#dcfce7' if (total_score.sum/total_score.n) >= 70 else '#fee2e2' }};
+                      color:{{ '#166534' if (total_score.sum/total_score.n) >= 70 else '#991b1b' }};
+                      padding:10px 18px;border-radius:12px;font-weight:900;font-size:1.2rem">
+            {{ (total_score.sum/total_score.n)|round|int }}%
+          </div>
+        {% endif %}
+      {% endif %}
+    </div>
+
+    {% if not b.entries %}
+      <div style="color:#64748b;margin-top:10px">No round on this date.</div>
+    {% endif %}
+
+    {% for x in b.entries %}
+    <div style="margin-top:14px;border-top:2px solid #f1f5f9;padding-top:14px">
+
+      <!-- Round header -->
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px">
+        <div style="font-size:1rem;font-weight:700">
+          📍 {{ x.r.unit }}{% if x.r.area_text %} · {{ x.r.area_text }}{% endif %}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          {% if x.r.score is not none %}
+            <span class="dr-badge {{ 'dr-ok' if x.r.score >= 70 else 'dr-no' }}">{{ x.r.score }}%</span>
+          {% endif %}
+          {% if x.r.duration_min %}
+            <span class="dr-badge dr-na">⏱ {{ x.r.duration_min }} min</span>
+          {% endif %}
+          {% if x.r.headcount %}
+            <span class="dr-badge dr-na">👷 {{ x.r.headcount }}</span>
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Section verdicts -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0">
+        {% for rr in x.ratios %}
+          <div style="flex:1;min-width:120px;background:{{ '#dcfce7' if rr.ok else '#fee2e2' }};
+                      color:{{ '#166534' if rr.ok else '#991b1b' }};
+                      border-radius:10px;padding:8px 10px">
+            <div style="font-weight:700;font-size:.85rem">{{ rr.label }}</div>
+            <div style="font-size:.82rem;margin-top:2px">{{ rr.text }}</div>
+          </div>
+        {% endfor %}
+        {% if x.board_age is not none %}
+          <div style="flex:1;min-width:120px;background:{{ '#fee2e2' if x.board_age > 60 else '#fffbeb' }};
+                      color:{{ '#991b1b' if x.board_age > 60 else '#b45309' }};
+                      border-radius:10px;padding:8px 10px">
+            <div style="font-weight:700;font-size:.85rem">🌡️ Flag board</div>
+            <div style="font-size:.82rem;margin-top:2px">{{ x.board_age }} min old at read{{ ' ⚠️' if x.board_age > 60 else ' ✓' }}</div>
+          </div>
+        {% endif %}
+      </div>
+
+      <!-- Findings -->
+      {% if x.findings %}
+        <div style="margin:8px 0">
+          <div style="font-weight:700;font-size:.9rem;color:#475569;margin-bottom:4px">⚠️ Findings</div>
+          {% for f in x.findings %}
+            <div class="dr-finding {{ f.severity }}">
+              <strong>{{ f.severity }}</strong> — {{ f.description }}
+              {% if f.ref_no %} ({{ f.ref_no }}){% endif %}
+              {% if f.due_date %} · due {{ f.due_date }}{% endif %}
+              · <em>{{ f.status }}</em>
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      <!-- Photos -->
+      {% if x.photos %}
+        <div class="dr-photos">
+          {% for p in x.photos %}
+            <a href="{{ url_for('hse_photo', filename=p.photo_path) }}" target="_blank">
+              <img src="{{ url_for('hse_photo', filename=p.photo_path) }}"
+                   title="{{ p.item_key }}{% if p.ref_no %} — {{ p.ref_no }}{% endif %}">
+            </a>
+          {% endfor %}
+        </div>
+        <div style="color:#94a3b8;font-size:.78rem;margin-top:4px">
+          {{ x.photos|length }} photo{{ 's' if x.photos|length != 1 else '' }} · tap to enlarge
+        </div>
+      {% endif %}
+
+      {% if x.r.notes %}
+        <div style="margin-top:8px;white-space:pre-line;color:#475569;
+                    background:#f8fafc;padding:10px;border-radius:8px;font-size:.9rem">{{ x.r.notes }}</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+
+    <!-- Complaints -->
+    {% if b.complaints %}
+      <div style="margin-top:14px;border-top:2px solid #f1f5f9;padding-top:10px">
+        <div style="font-weight:700;font-size:.9rem;color:#475569;margin-bottom:6px">💬 Complaints</div>
+        {% for c in b.complaints %}
+          <div style="padding:8px 10px;border-radius:8px;margin:4px 0;font-size:.9rem;
+                      background:{{ '#fff7ed' if c.kind == 'escalate' else '#f8fafc' }};
+                      border-left:4px solid {{ '#f97316' if c.kind == 'escalate' else '#94a3b8' }}">
+            <strong>{{ c.kind.replace('_',' ').title() }}</strong> — {{ c.description }}
+          </div>
+        {% endfor %}
+      </div>
+    {% endif %}
+  </div>
+  {% endfor %}
+</div>
+
+<script>
+function setAll(val) {
+  document.querySelectorAll('input[name=officer_ids]').forEach(function(cb){ cb.checked = val; });
+}
+</script>
+{% endblock %}

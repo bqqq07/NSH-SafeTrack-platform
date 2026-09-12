@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block content %}
+<style>
+.wrap{max-width:800px;margin:0 auto}
+.page-title{font-size:20px;font-weight:700;margin-bottom:18px}
+.card{background:#fff;border:1px solid var(--border);border-radius:12px;padding:18px}
+.off-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)}
+.off-row:last-child{border-bottom:none}
+.off-name{font-weight:600;font-size:14px}
+.off-code{font-size:11px;color:var(--muted)}
+.off-loc{font-size:12px;color:var(--muted);margin-top:2px}
+.badge-in{background:#dcfce7;color:#16a34a;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700}
+.badge-out{background:#fee2e2;color:#dc2626;border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700}
+.summary{display:flex;gap:16px;margin-bottom:18px;flex-wrap:wrap}
+.sum-box{background:#fff;border:1px solid var(--border);border-radius:10px;padding:12px 20px;text-align:center;min-width:90px}
+.sum-val{font-size:26px;font-weight:700}
+.sum-lbl{font-size:11px;color:var(--muted)}
+</style>
+
+<div class="wrap">
+  <div class="page-title">📍 Officers Locations — {{ today.strftime('%d %b %Y') }}</div>
+
+  {% set present = rows | selectattr('present') | list | length %}
+  <div class="summary">
+    <div class="sum-box">
+      <div class="sum-val" style="color:#16a34a">{{ present }}</div>
+      <div class="sum-lbl">Present</div>
+    </div>
+    <div class="sum-box">
+      <div class="sum-val" style="color:#dc2626">{{ rows|length - present }}</div>
+      <div class="sum-lbl">No Location</div>
+    </div>
+    <div class="sum-box">
+      <div class="sum-val">{{ rows|length }}</div>
+      <div class="sum-lbl">Total</div>
+    </div>
+  </div>
+
+  <div class="card">
+    {% for r in rows %}
+    <div class="off-row">
+      <div style="flex:1">
+        <div class="off-name">{{ r.officer.name or r.officer.supervisor_code }}</div>
+        <div class="off-code">{{ r.officer.supervisor_code }}</div>
+        {% if r.location %}
+        <div class="off-loc">📍 {{ r.location }}</div>
+        {% endif %}
+      </div>
+      {% if r.present %}
+      <span class="badge-in">✓ Present</span>
+      {% else %}
+      <span class="badge-out">✗ No Location</span>
+      {% endif %}
+    </div>
+    {% else %}
+    <p class="muted" style="text-align:center;padding:24px">No officers found.</p>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}

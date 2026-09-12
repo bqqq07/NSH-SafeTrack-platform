@@ -1,0 +1,122 @@
+﻿{% extends "base.html" %}
+{% block title %}Weekly Reports{% endblock %}
+{% block content %}
+<style>
+  .wr-stat{flex:1;min-width:80px;border-radius:8px;padding:8px;text-align:center}
+  .wr-stat .v{font-size:1.2rem;font-weight:900}
+  .wr-stat .l{font-size:.72rem;color:#64748b;margin-top:1px}
+</style>
+
+<div style="max-width:960px;margin:0 auto">
+  <h2 style="margin-bottom:4px">📊 Weekly Reports — All Officers</h2>
+  <p style="color:#64748b;margin-top:0">Auto-generated from round, finding, and complaint data.</p>
+
+  {% for row in rows %}
+  <div style="border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin-bottom:16px;background:#fff">
+    <div style="font-weight:800;font-size:1.05rem;margin-bottom:12px">
+      <a href="{{ url_for('safety_welfare_profile', uid=row.u.id) }}"
+         style="color:#0f172a;text-decoration:none">{{ row.u.name }} →</a>
+    </div>
+
+    {% for w in row.weeks %}
+    {% set s = w.stats %}
+    <div style="border:1px solid #f1f5f9;border-radius:10px;padding:12px;margin-bottom:10px;
+                background:{{ '#fffbeb' if not w.wr else '#f0fdf4' if w.wr.sup_seen else '#f8fafc' }}">
+
+      <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;margin-bottom:10px">
+        <div>
+          <span style="font-weight:700;color:#0f172a">{{ w.week_start.strftime('%d %b %Y') }}</span>
+          {% if not w.wr %}
+            <span style="margin-left:8px;padding:2px 8px;border-radius:10px;font-size:.78rem;
+                         background:#fef9c3;color:#854d0e;font-weight:700">Not shared</span>
+          {% elif not w.wr.sup_seen %}
+            <span style="margin-left:8px;padding:2px 8px;border-radius:10px;font-size:.78rem;
+                         background:#fef3c7;color:#92400e;font-weight:700">🔔 New</span>
+          {% else %}
+            <span style="margin-left:8px;padding:2px 8px;border-radius:10px;font-size:.78rem;
+                         background:#dcfce7;color:#166534;font-weight:700">Reviewed ✓</span>
+          {% endif %}
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          {% if s.units_covered %}
+            {% for u in s.units_covered %}
+              <span style="padding:2px 6px;border-radius:6px;font-size:.78rem;
+                           background:#f1f5f9;color:#475569;font-weight:600">{{ u }}</span>
+            {% endfor %}
+          {% endif %}
+        </div>
+      </div>
+
+      <!-- Stats row -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px">
+        <div class="wr-stat" style="background:#f8fafc">
+          <div class="v">{{ s.round_count }}</div>
+          <div class="l">Rounds</div>
+        </div>
+        <div class="wr-stat"
+             style="background:{{ '#dcfce7' if s.avg_score and s.avg_score >= 70 else '#fee2e2' if s.avg_score else '#f8fafc' }}">
+          <div class="v" style="color:{{ '#166534' if s.avg_score and s.avg_score >= 70 else '#991b1b' if s.avg_score else '#475569' }}">
+            {{ s.avg_score ~ '%' if s.avg_score else '—' }}
+          </div>
+          <div class="l">Avg score</div>
+        </div>
+        <div class="wr-stat" style="background:#f8fafc">
+          <div class="v">{{ s.finds_new }}</div>
+          <div class="l">Findings</div>
+        </div>
+        <div class="wr-stat" style="background:{{ '#dcfce7' if s.finds_closed > 0 else '#f8fafc' }}">
+          <div class="v" style="color:{{ '#166534' if s.finds_closed > 0 else '#0f172a' }}">{{ s.finds_closed }}</div>
+          <div class="l">Closed</div>
+        </div>
+        <div class="wr-stat" style="background:{{ '#fee2e2' if s.overdue > 0 else '#f8fafc' }}">
+          <div class="v" style="color:{{ '#991b1b' if s.overdue > 0 else '#0f172a' }}">{{ s.overdue }}</div>
+          <div class="l">Overdue</div>
+        </div>
+        <div class="wr-stat" style="background:#f8fafc">
+          <div class="v">{{ s.complaints }}</div>
+          <div class="l">Complaints</div>
+        </div>
+      </div>
+
+      {% if s.finds_critical %}
+        <div style="margin-bottom:8px">
+          {% for f in s.finds_critical %}
+            <div style="padding:5px 10px;border-radius:7px;margin:3px 0;font-size:.85rem;
+                        background:{{ '#fee2e2' if f.severity=='Critical' else '#fff7ed' }};
+                        border-left:4px solid {{ '#dc2626' if f.severity=='Critical' else '#f97316' }}">
+              <strong>{{ f.severity }}</strong> — {{ f.description }}
+              {% if f.due_date %}<span style="color:#64748b"> · due {{ f.due_date }}</span>{% endif %}
+            </div>
+          {% endfor %}
+        </div>
+      {% endif %}
+
+      {% if w.wr and w.wr.officer_note %}
+        <div style="padding:8px 12px;background:#f0f9ff;border-radius:8px;
+                    margin-bottom:8px;font-size:.88rem;color:#0369a1">
+          <strong>Officer note:</strong> {{ w.wr.officer_note }}
+        </div>
+      {% endif %}
+
+      {% if w.wr %}
+      <form method="post"
+            action="{{ url_for('welfare_weekly_comment', wrid=w.wr.id) }}"
+            style="display:flex;gap:8px">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <input name="comment" value="{{ w.wr.sup_comment or '' }}"
+               placeholder="Add / update comment…"
+               style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #cbd5e1;font-size:.9rem">
+        <button style="padding:8px 14px;border:0;background:#0f172a;color:#fff;
+                       border-radius:8px;font-weight:700;white-space:nowrap">
+          {{ 'Update' if w.wr.sup_comment else 'Comment' }}
+        </button>
+      </form>
+      {% else %}
+        <div style="color:#94a3b8;font-size:.83rem;font-style:italic">Officer hasn't shared this week yet.</div>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

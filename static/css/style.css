@@ -32,7 +32,7 @@ h1,h2{ margin:14px 0 }
 .topbar .brand{
   display:flex; align-items:center; gap:10px; color:#fff;
 }
-.topbar .brand .logo{ height:14px; width:auto; display:block }
+.topbar .brand .logo{ height:36px; width:auto; display:block; filter:brightness(0) invert(1) }
 .topbar .brand .title{ font-weight:600; letter-spacing:.2px }
 .topbar .navlinks a{ color:#fff; margin-left:16px; opacity:.9 }
 .topbar .navlinks a:hover{ opacity:1; text-decoration:underline }
@@ -55,6 +55,8 @@ input,select,textarea{
 }
 input[type="radio"]{ transform:scale(1.1) }
 .center{ text-align:center }
+.right{ text-align:right }
+.nowrap{ white-space:nowrap }
 .align-end{ display:flex; align-items:end }
 .self-end{ align-self:end }
 
@@ -222,4 +224,172 @@ input[type="radio"]{ transform:scale(1.1) }
   .print-page { page-break-after: always; }
   .print-page:last-child { page-break-after: auto; }
   body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* === Mobile Enhancements + Allow Horizontal Scroll === */
+
+/* زر الهمبرجر */
+.hamburger{display:none;background:transparent;border:0;padding:8px;margin-left:auto}
+.hamburger span{display:block;width:22px;height:2px;margin:5px 0;background:currentColor}
+
+/* غلاف للجداول يمنع تمدد الصفحة لكن يسمح سحب أفقي داخل الجدول */
+.table-wrap{width:100%; overflow-x:auto; -webkit-overflow-scrolling:touch}
+
+/* بطاقات KPI والشبكات تتقلص تدريجياً */
+@media (max-width:1024px){
+  .kpi-cards{grid-template-columns: repeat(2, minmax(0,1fr))}
+}
+
+/* قواعد الجوال */
+@media (max-width:768px){
+  .wrap{padding-left:12px; padding-right:12px}
+  .grid2{grid-template-columns:1fr}
+  .grid3,.grid4,.grid4auto{grid-template-columns:1fr}
+  .container{padding:0 10px}
+
+  /* أظهر زر القائمة */
+  .hamburger{display:block; color:#fff}
+
+  /* القائمة العلوية كدرج قابل للتمدد */
+  .topbar{position:relative}
+  .navlinks{
+    position:fixed; top:56px; left:0; right:0;
+    background:#0f172a; color:#fff;
+    max-height:0; overflow:hidden;
+    transition:max-height .25s ease;
+    z-index:1000;
+  }
+  .navlinks.open{max-height:80vh; overflow:auto}
+  .navlinks a{display:block; padding:12px 16px; border-top:1px solid rgba(255,255,255,.07)}
+
+  /* ✅ اسمح بتمرير أفقي للصفحة عند الحاجة */
+  html, body{ overflow-x:auto; -webkit-overflow-scrolling:touch }
+
+  /* الجداول على الجوال: لا تلف الأعمدة، واسمح بالسحب داخل الغلاف */
+  .table th, .table td{ white-space:nowrap }
+  table{ max-width:100% }
+}
+
+/* كسر الكلمات الطويلة بشكل عام إذا لزم */
+@media (max-width:768px){
+  /* لف النص افتراضيًا لمنع التزاحم */
+  .table th, .table td{ white-space: normal; word-break: break-word; overflow-wrap:anywhere }
+
+  /* استخدم هذه الكلاس فقط للأعمدة القصيرة التي تريد إبقاءها في سطر واحد */
+  .table .nowrap{ white-space: nowrap }
+}
+
+/* خيار إضافي: تقليم النص الطويل داخل خلايا محددة عند استخدام table-layout:fixed */
+.table td.ellipsis, .table th.ellipsis{
+  overflow: hidden; text-overflow: ellipsis;
+}
+
+
+/* ألوان النص/الأزرار داخل الشريط الداكن */
+.topbar, .navlinks{color:#fff}
+
+/* الجداول: افتراضيًا لا تلفّ النص (نسمح بالتمرير الأفقي) */
+@media (max-width:768px){
+  .table th,
+  .table td{
+    white-space: nowrap !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+  }
+
+  /* لفّ النص في أعمدة نحدّدها يدويًا فقط */
+  .table .wrap{
+    white-space: normal !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+  }
+
+  /* لو حبيت تقليم نص عمود معيّن */
+  .table .ellipsis{
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}
+
+/* الغلاف الذي يسمح بالسحب يمين/يسار */
+.table-wrap{
+  width:100%;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+}
+
+/* ===== Desktop defaults (لا تغيّر الكمبيوتر) ===== */
+@media (min-width: 769px){
+  /* أعد سلوك الأعمدة على الكمبيوتر */
+  .table.compact{ table-layout: auto; }
+  .table.compact col{ width: auto !important; }
+
+  /* اسمح بلفّ النص إذا لزم (كما كان قبل) */
+  .table th, .table td{ white-space: normal; word-break: normal; overflow-wrap: normal; }
+}
+
+/* ===== Mobile only (≤768px): سحب أفقي + منع لفّ النص افتراضيًا ===== */
+@media screen and (max-width: 768px){
+  .table-wrap{
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* على الجوال نخلي الجدول ثابت الأعمدة والخلايا ما تلف */
+  .table.compact{ table-layout: fixed; }
+  .table th, .table td{
+    white-space: nowrap;
+    word-break: normal;
+    overflow-wrap: normal;
+  }
+  /* إن احتجت لفّ عمود مُحدد (نادراً)، استخدم .wrap على الخلية */
+  .table .wrap{
+    white-space: normal !important;
+    word-break: break-word !important;
+    overflow-wrap: anywhere !important;
+  }
+}
+
+.btn {
+  font-size: 14px;
+  line-height: 1.2;
+}
+
+.btn.danger {
+  color: #fff !important;
+  background-color: #d9534f !important;
+}
+
+/* Made by z */
+.made-by-z{
+  position: fixed;
+  bottom: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+
+  font-size: 14px;
+  color: rgba(255,255,255,.75);
+
+  padding: 8px 14px;
+  border-radius: 999px;
+
+  background: rgba(0,0,0,.55);
+border: 1px solid rgba(255,255,255,.12);
+
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+
+  z-index: 9999;
+  user-select: none;
+}
+
+.made-by-z a{
+  color: #00d4ff;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.made-by-z a:hover{
+  text-decoration: underline;
 }

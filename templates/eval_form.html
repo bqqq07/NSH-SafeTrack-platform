@@ -1,16 +1,31 @@
 {% extends "base.html" %}
 {% block content %}
-<h1>New Evaluation · {{ employee.name }} ({{ employee.emp_number }})</h1>
+
+<h1>
+  {% if ev %}
+    Edit Evaluation · {{ employee.name }} ({{ employee.emp_number }})
+  {% else %}
+    New Evaluation · {{ employee.name }} ({{ employee.emp_number }})
+  {% endif %}
+</h1>
 
 <section class="card">
   <form method="post" id="evalForm">
-    <div class="grid3">
+
+    <!-- رأس النموذج -->
+    <div class="grid1">
       <label>Week Start (Sunday)
-        <input type="date" name="week_start" value="{{ ws.isoformat() }}" required>
+        <input type="date" name="week_start"
+               value="{{ (ev.week_start if ev else ws).isoformat() }}"
+               required>
       </label>
+
       <label>Week End (Thursday)
-        <input type="date" name="week_end" value="{{ we.isoformat() }}" required>
+        <input type="date" name="week_end"
+               value="{{ (ev.week_end if ev else we).isoformat() }}"
+               required>
       </label>
+
       <div class="summary">
         <div><strong>Summary</strong></div>
         <div>Targets: <span id="sumTargets">0</span> / 40</div>
@@ -21,55 +36,142 @@
     </div>
 
     <h2>1) Weekly Targets (40 pts)</h2>
-    <table class="table">
-      <thead><tr><th>Target/Task</th><th>Achieved (%)</th><th>Remarks</th></tr></thead>
-      <tbody>
-        {% for i in range(1,5) %}
-        <tr>
-          <td><input name="t{{i}}_text" placeholder="Target #{{i}}"></td>
-          <td><input name="t{{i}}_percent" type="number" min="0" max="100" step="1" value="0" class="ach"></td>
-          <td><input name="t{{i}}_remarks" placeholder="Remarks"></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+    <div class="table-wrap">
+      <table class="table compact">
+        <colgroup>
+          <col style="width:200px">
+          <col style="width:100px">
+          <col style="width:200px">
+        </colgroup>
+
+        <thead>
+          <tr>
+            <th class="nowrap">Target/Task</th>
+            <th class="nowrap">Achieved (%)</th>
+            <th class="nowrap">Remarks</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% for i in range(1,5) %}
+          {% set t_text    = ev|attr('t%s_text' % i) if ev else '' %}
+          {% set t_percent = ev|attr('t%s_percent' % i) if ev else 0 %}
+          {% set t_remarks = ev|attr('t%s_remarks' % i) if ev else '' %}
+          <tr>
+            <td class="nowrap">
+              <input name="t{{i}}_text"
+                     placeholder="Target #{{i}}"
+                     value="{{ t_text }}">
+            </td>
+
+            <td class="center nowrap">
+              <input name="t{{i}}_percent"
+                     type="number"
+                     min="0"
+                     max="100"
+                     step="1"
+                     class="ach"
+                     value="{{ t_percent }}">
+            </td>
+
+            <td class="nowrap">
+              <input name="t{{i}}_remarks"
+                     placeholder="Remarks"
+                     value="{{ t_remarks }}">
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+
+      </table>
+    </div>
 
     <h2>2) Performance Evaluation (60 pts)</h2>
-    <table class="table">
-      <thead><tr><th>Criteria</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>Comments</th></tr></thead>
-      <tbody>
-        {% set items = [
-          ('punctuality','Punctuality & Attendance'),
-          ('quality','Quality of Work'),
-          ('productivity','Productivity'),
-          ('communication','Communication & Teamwork'),
-          ('problemsolving','Problem-Solving'),
-          ('compliance','Compliance with Safety/Rules'),
-        ] %}
-        {% for key, label in items %}
-        <tr>
-          <td>{{ label }}</td>
-          {% for r in range(1,6) %}
-          <td class="center"><input type="radio" name="p_{{key}}" value="{{r}}" class="rate"></td>
+    <div class="table-wrap">
+      <table class="table compact">
+        <colgroup>
+          <col style="width:250px">
+          <col style="width:40px">
+          <col style="width:40px">
+          <col style="width:40px">
+          <col style="width:40px">
+          <col style="width:40px">
+          <col style="width:200px">
+        </colgroup>
+
+        <thead>
+          <tr>
+            <th class="nowrap">Criteria</th>
+            <th class="center nowrap">1</th>
+            <th class="center nowrap">2</th>
+            <th class="center nowrap">3</th>
+            <th class="center nowrap">4</th>
+            <th class="center nowrap">5</th>
+            <th class="nowrap">Comments</th>
+          </tr>
+        </thead>
+
+        <tbody>
+          {% set items = [
+            ('punctuality','Punctuality & Attendance'),
+            ('quality','Quality of Work'),
+            ('productivity','Productivity'),
+            ('communication','Communication & Teamwork'),
+            ('problemsolving','Problem-Solving'),
+            ('compliance','Compliance with Safety/Rules'),
+          ] %}
+
+          {% for key, label in items %}
+          {% set p_val = ev|attr('p_' ~ key) if ev else None %}
+          {% set c_val = ev|attr('c_' ~ key) if ev else '' %}
+          <tr>
+            <td class="nowrap">{{ label }}</td>
+
+            {% for r in range(1,6) %}
+              <td class="center nowrap">
+                <input type="radio"
+                       name="p_{{key}}"
+                       value="{{r}}"
+                       class="rate"
+                       {% if ev and p_val == r %}checked{% endif %}>
+              </td>
+            {% endfor %}
+
+            <td class="nowrap">
+              <input name="c_{{key}}"
+                     placeholder="Comments"
+                     value="{{ c_val }}">
+            </td>
+
+          </tr>
           {% endfor %}
-          <td><input name="c_{{key}}" placeholder="Comments"></td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
+        </tbody>
+
+      </table>
+    </div>
 
     <div class="grid1">
-      <label>Strengths observed<textarea name="strengths" rows="3"></textarea></label>
-      <label>Areas for improvement<textarea name="improvements" rows="3"></textarea></label>
-      <label>Training/Support required<textarea name="training_needed" rows="3"></textarea></label>
+      <label>Strengths observed
+        <textarea name="strengths" rows="3">{% if ev %}{{ ev.strengths or '' }}{% endif %}</textarea>
+      </label>
+
+      <label>Areas for improvement
+        <textarea name="improvements" rows="3">{% if ev %}{{ ev.improvements or '' }}{% endif %}</textarea>
+      </label>
+
+      <label>Training/Support required
+        <textarea name="training_needed" rows="3">{% if ev %}{{ ev.training_needed or '' }}{% endif %}</textarea>
+      </label>
     </div>
 
     <div class="actions">
       <button class="btn primary">Save</button>
       <a class="btn" href="{{ url_for('employees') }}">Cancel</a>
     </div>
+
   </form>
 </section>
 
 <script src="{{ url_for('static', filename='js/calc.js') }}"></script>
+
 {% endblock %}

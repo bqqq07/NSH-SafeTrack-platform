@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>z NSH – Support</title>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --border: #21262d;
+      --accent: #00c8ff;
+      --accent2: #0077ff;
+      --text: #e6edf3;
+      --muted: #7d8590;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'DM Sans', sans-serif;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 2rem;
+    }
+
+    /* background grid */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image:
+        linear-gradient(var(--border) 1px, transparent 1px),
+        linear-gradient(90deg, var(--border) 1px, transparent 1px);
+      background-size: 40px 40px;
+      opacity: 0.4;
+      z-index: 0;
+    }
+
+    .card {
+      position: relative;
+      z-index: 1;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 3rem 2.5rem;
+      max-width: 480px;
+      width: 100%;
+      animation: fadeUp 0.6s ease both;
+    }
+
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(0,200,255,0.08);
+      border: 1px solid rgba(0,200,255,0.2);
+      color: var(--accent);
+      font-family: 'DM Mono', monospace;
+      font-size: 0.7rem;
+      letter-spacing: 0.12em;
+      padding: 4px 12px;
+      border-radius: 999px;
+      margin-bottom: 1.5rem;
+    }
+
+    .badge::before {
+      content: '';
+      width: 6px; height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+
+    h1 {
+      font-size: 1.8rem;
+      font-weight: 500;
+      margin-bottom: 0.4rem;
+      letter-spacing: -0.02em;
+    }
+
+    h1 span { color: var(--accent); }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 0.9rem;
+      margin-bottom: 2.5rem;
+      line-height: 1.6;
+    }
+
+    .divider {
+      height: 1px;
+      background: var(--border);
+      margin-bottom: 2rem;
+    }
+
+    .label {
+      font-family: 'DM Mono', monospace;
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      color: var(--muted);
+      text-transform: uppercase;
+      margin-bottom: 1rem;
+    }
+
+    .contact-list {
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+      margin-bottom: 2.5rem;
+    }
+
+    .contact-item {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 0.9rem 1.1rem;
+      text-decoration: none;
+      color: var(--text);
+      transition: border-color 0.2s, background 0.2s;
+    }
+
+    .contact-item:hover {
+      border-color: var(--accent);
+      background: rgba(0,200,255,0.04);
+    }
+
+    .contact-icon {
+      width: 36px; height: 36px;
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem;
+      flex-shrink: 0;
+    }
+
+    .icon-email { background: rgba(0,119,255,0.15); }
+    .icon-whatsapp { background: rgba(37,211,102,0.15); }
+
+    .contact-info { flex: 1; }
+    .contact-type { font-size: 0.72rem; color: var(--muted); margin-bottom: 2px; }
+    .contact-value { font-family: 'DM Mono', monospace; font-size: 0.88rem; }
+
+    .arrow { color: var(--muted); font-size: 0.8rem; }
+
+    .footer {
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--muted);
+      font-family: 'DM Mono', monospace;
+    }
+
+    .footer span { color: var(--accent); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="badge">SUPPORT</div>
+    <h1>z <span>NSH</span></h1>
+    <p class="subtitle">Internal HR Management App — For authorized NSH Company employees only.</p>
+    <div class="divider"></div>
+    <p class="label">Contact Us</p>
+    <div class="contact-list">
+      <a class="contact-item" href="mailto:aazunaydi@gmail.com">
+        <div class="contact-icon icon-email">✉️</div>
+        <div class="contact-info">
+          <div class="contact-type">Email Support</div>
+          <div class="contact-value">aazunaydi@gmail.com</div>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+      <a class="contact-item" href="https://wa.me/966551061089">
+        <div class="contact-icon icon-whatsapp">💬</div>
+        <div class="contact-info">
+          <div class="contact-type">WhatsApp</div>
+          <div class="contact-value">+966 551 061 089</div>
+        </div>
+        <span class="arrow">→</span>
+      </a>
+    </div>
+    <p class="footer">z NSH · Powered by <span>z-app.biz</span></p>
+  </div>
+</body>
+</html>

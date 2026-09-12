@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+{% block content %}
+<section class="report">
+  <header class="report-header">
+    <div class="report-head-left">
+      <img class="report-logo" src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo">
+    </div>
+    <div class="report-head-center">
+      <h1>Admin • KPI Dashboard</h1>
+      <p class="muted">Week: {{ ws }} → {{ we }} &nbsp; (Prev: {{ pws }} → {{ pwe }})</p>
+    </div>
+    <div class="report-head-right"></div>
+  </header>
+
+  <section class="card no-print">
+    <form method="post" class="grid3">
+      <label>Week Start (Sunday)<input type="date" name="week_start" value="{{ ws.isoformat() }}" required></label>
+      <label>Week End (Thursday)<input type="date" name="week_end" value="{{ we.isoformat() }}" required></label>
+      <div class="align-end"><button class="btn primary">Refresh</button></div>
+    </form>
+  </section>
+
+  <section class="kpi-cards">
+    <div class="kpi">
+      <div class="kpi-title">Total evaluations (this week)</div>
+      <div class="kpi-value">{{ total_this_week }}</div>
+      <div class="kpi-sub">Last week: {{ total_prev_week }}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-title">Growth (only entities with 2+ evals)</div>
+      <div class="kpi-value">
+        {% if growth_pct >= 0 %}▲{% else %}▼{% endif %}
+        {{ '%.1f'|format(growth_pct) }}%
+      </div>
+      <div class="kpi-sub">{{ pws }} → {{ ws }}</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-title">Employees coverage</div>
+      <div class="kpi-value">
+        {% if overall_emp_cov is not none %}{{ '%.1f'|format(overall_emp_cov) }}%{% else %}—{% endif %}
+      </div>
+      <div class="kpi-sub">Evaluated employees / active employees</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-title">Supervisors coverage</div>
+      <div class="kpi-value">
+        {% if overall_sup_cov is not none %}{{ '%.1f'|format(overall_sup_cov) }}%{% else %}—{% endif %}
+      </div>
+      <div class="kpi-sub">Evaluated supervisors / assigned supervisors</div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Supervisors → Employees</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th><th>Name</th><th class="right">Employees</th>
+          <th class="right">This week</th><th class="right">Last week</th>
+          <th class="right">Coverage</th><th class="center">Trend</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in sup_rows %}
+        <tr>
+          <td class="mono">{{ r.code }}</td>
+          <td>{{ r.name or '—' }}</td>
+          <td class="right">{{ r.target }}</td>
+          <td class="right">{{ r.done_c }}</td>
+          <td class="right">{{ r.done_p }}</td>
+          <td class="right">{% if r.coverage is not none %}{{ '%.1f'|format(r.coverage) }}%{% else %}—{% endif %}</td>
+          <td class="center">
+            {% if r.trend == 'up' %}▲ +{{ r.delta }}{% elif r.trend == 'down' %}▼ {{ r.delta }}{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="center muted">No supervisors.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+
+  <section class="card">
+    <h2>Site Supervisors → Supervisors</h2>
+    <table class="table">
+      <thead>
+        <tr>
+          <th>ID</th><th>Name</th><th class="right">Assigned</th>
+          <th class="right">This week</th><th class="right">Last week</th>
+          <th class="right">Coverage</th><th class="center">Trend</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in site_rows %}
+        <tr>
+          <td class="mono">{{ r.code }}</td>
+          <td>{{ r.name or '—' }}</td>
+          <td class="right">{{ r.target }}</td>
+          <td class="right">{{ r.done_c }}</td>
+          <td class="right">{{ r.done_p }}</td>
+          <td class="right">{% if r.coverage is not none %}{{ '%.1f'|format(r.coverage) }}%{% else %}—{% endif %}</td>
+          <td class="center">
+            {% if r.trend == 'up' %}▲ +{{ r.delta }}{% elif r.trend == 'down' %}▼ {{ r.delta }}{% else %}—{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="center muted">No site supervisors.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </section>
+</section>
+{% endblock %}

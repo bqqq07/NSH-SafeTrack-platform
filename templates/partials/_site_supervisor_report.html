@@ -24,7 +24,7 @@
 </section>
 
 <h2>1. Weekly Targets</h2>
-<table class="table compact">
+<div class="table-wrap"><table class="table compact">
   <thead><tr><th>Target / Task</th><th class="nowrap">Achieved %</th><th>Remarks</th></tr></thead>
   <tbody>
     {% for i in [1,2,3,4] %}
@@ -40,10 +40,10 @@
   </tbody>
   <tfoot><tr><th class="right">Subtotal</th>
     <th class="nowrap">{% if se %}{{ '%.2f'|format(se.targets_score or 0) }}{% else %}—{% endif %} / 40</th><th></th></tr></tfoot>
-</table>
+</table></div>
 
 <h2>2. Performance</h2>
-<table class="table compact">
+<div class="table-wrap"><table class="table compact">
   <colgroup><col style="width:46%"><col style="width:12%"><col style="width:42%"></colgroup>
   <thead><tr><th>Criteria</th><th class="nowrap">Rating</th><th>Comments</th></tr></thead>
   <tbody>
@@ -72,9 +72,9 @@
         {% if se %}{{ se.overall_band or '—' }}{% else %}—{% endif %}
       </th><th></th></tr>
   </tfoot>
-</table>
+</table></div>
 <h2>3. Summary & Notes</h2>
-<table class="table kv">
+<div class="table-wrap"><table class="table kv">
   <tbody>
     <tr>
       <th>Strengths observed</th>
@@ -89,7 +89,7 @@
       <td>{{ se.training_needed if se else '' }}</td>
     </tr>
   </tbody>
-</table>
+</table></div>
 
 <h2>4. Signatures</h2>
 <div class="signatures">

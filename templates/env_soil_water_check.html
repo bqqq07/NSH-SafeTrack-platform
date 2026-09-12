@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}Soil & Water Protection{% endblock %}
+{% block content %}
+<div style="max-width:750px;margin:auto;">
+  <p style="opacity:.6;font-size:.85rem;margin-bottom:.25rem;">Environment → Phase 2</p>
+  <h2 style="margin-top:0;">Soil & Water Protection</h2>
+  <p style="font-size:.85rem;opacity:.6;">{{ today }}</p>
+  <form method="POST">
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">A — Dewatering Points</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:.5rem;">
+        <div><label>Pump location</label>
+          <input type="text" name="dewater_pump_loc" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;"></div>
+        <div><label>Discharge point</label>
+          <input type="text" name="dewater_discharge" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <input type="checkbox" name="dewater_silt_ok"> Silt barrier / filter present and effective
+      </label>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">B — Concrete Washout</h3>
+      <div style="display:flex;gap:2rem;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="washout_pit_ok"> Pit intact and not full
+        </label>
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="washout_overflow_risk"> Overflow risk (action required)
+        </label>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">C — Fuel / Oil Area</h3>
+      <div style="display:flex;gap:2rem;flex-wrap:wrap;margin-bottom:.5rem;">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="fuel_berm_ok"> Earthen berm / secondary containment good
+        </label>
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="fuel_drip_tray_ok"> Drip tray in place
+        </label>
+      </div>
+      <input type="text" name="fuel_notes" placeholder="Notes..."
+             style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;">
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">D — Spill Kit</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:center;">
+        <div><label>Location</label>
+          <input type="text" name="spill_kit_location" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;"></div>
+        <div style="padding-top:1.4rem;">
+          <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+            <input type="checkbox" name="spill_kit_complete"> Complete
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">E — Soil Inspection</h3>
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;margin-bottom:.5rem;">
+        <input type="checkbox" name="soil_contamination"> Visible soil contamination
+      </label>
+      <input type="text" name="soil_action" placeholder="Action taken..."
+             style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;">
+    </div>
+    <div style="margin-bottom:1.5rem;">
+      <label><strong>General Notes</strong></label>
+      <textarea name="notes" rows="2" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <a href="{{ url_for('env_dashboard') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+
+  {% if history %}
+  <h3 style="margin-top:2rem;">Previous Records</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+    <thead><tr style="border-bottom:2px solid #e5e7eb;">
+      <th style="padding:.5rem;text-align:left;">Date</th>
+      <th style="padding:.5rem;">Dewater</th><th style="padding:.5rem;">Washout</th>
+      <th style="padding:.5rem;">Fuel</th><th style="padding:.5rem;">Spill Kit</th><th style="padding:.5rem;">Soil</th>
+    </tr></thead>
+    <tbody>{% for h in history %}<tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:.5rem;">{{ h.date }}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.dewater_silt_ok %}✓{% else %}—{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.washout_pit_ok %}✓{% else %}✗{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.fuel_berm_ok %}✓{% else %}✗{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.spill_kit_complete %}✓{% else %}✗{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.soil_contamination %}<span style="color:#dc2626;">✗</span>{% else %}✓{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

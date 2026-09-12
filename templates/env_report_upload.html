@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Upload Environment Report{% endblock %}
+{% block content %}
+<div style="max-width:580px;margin:0 auto">
+  <h2 style="margin-bottom:16px">Upload Report PDF</h2>
+  <div class="card">
+    <form method="post" enctype="multipart/form-data">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+      <label>Report Type *
+        <select name="report_type" id="reportTypeSelect">
+          <option value="">— Select —</option>
+          {% for t in type_options %}
+          <option value="{{ t.name }}">{{ t.name }}</option>
+          {% endfor %}
+          <option value="__new__">+ Add new type…</option>
+        </select>
+      </label>
+
+      <div id="newTypeRow" style="display:none">
+        <label>New Report Type
+          <input type="text" name="new_type" id="newTypeInput" placeholder="e.g. Environmental Inspection">
+        </label>
+      </div>
+
+      <label>Report Date *
+        <input type="date" name="report_date" value="{{ today.isoformat() }}" required>
+      </label>
+
+      <label>Notes
+        <input type="text" name="notes" placeholder="Optional short note">
+      </label>
+
+      <label>PDF File *
+        <input type="file" name="pdf_file" accept="application/pdf" required>
+        <small style="color:#64748b">PDF only · max 10 MB</small>
+      </label>
+
+      <div style="display:flex;gap:8px;margin-top:16px">
+        <button type="submit" class="btn primary">Upload Report</button>
+        <a href="{{ url_for('env_dashboard') }}" class="btn">Cancel</a>
+      </div>
+    </form>
+  </div>
+</div>
+<script>
+  document.getElementById('reportTypeSelect').addEventListener('change', function() {
+    var row = document.getElementById('newTypeRow');
+    var inp = document.getElementById('newTypeInput');
+    if (this.value === '__new__') {
+      row.style.display = '';
+      inp.required = true;
+      this.value = '';
+    } else {
+      row.style.display = 'none';
+      inp.required = false;
+    }
+  });
+</script>
+{% endblock %}

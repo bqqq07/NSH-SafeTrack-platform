@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Edit Employee{% endblock %}
+{% block content %}
+<h1>تعديل بيانات الموظف</h1>
+
+<section class="card">
+  <form method="post" class="grid2" autocomplete="off">
+    <label>الاسم
+      <input name="name" required value="{{ emp.name }}">
+    </label>
+
+    <label>رقم الموظف (ID)
+      <input name="emp_number" required inputmode="numeric" value="{{ emp.emp_number }}">
+    </label>
+
+    <label>تاريخ انتهاء البطاقة 
+      <input type="date" name="id_expiry_date"
+             value="{{ emp.id_expiry_date.isoformat() if emp.id_expiry_date else '' }}">
+    </label>
+
+    <div class="actions span2">
+      <button class="btn primary">حفظ التعديلات</button>
+      <a class="btn" href="{{ back_url }}">رجوع</a>
+    </div>
+  </form>
+</section>
+{% endblock %}

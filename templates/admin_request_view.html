@@ -1,0 +1,64 @@
+{% extends "base.html" %}
+{% block content %}
+<h1>Request #{{ req.id }}</h1>
+
+<section class="card">
+  <div class="grid2">
+    <div>
+      <div><b>Supervisor:</b> {{ sup.name or '—' }} <span class="muted">({{ sup.supervisor_code }})</span></div>
+      <div><b>Employee:</b> {{ emp.name }} <span class="muted mono">({{ emp.emp_number }})</span></div>
+      <div><b>Type:</b> {{ req.req_type }}</div>
+      <div><b>Target date:</b> {{ req.target_date }}</div>
+      <div><b>Title:</b> {{ req.title }}</div>
+      <div><b>Details:</b> {{ req.details or '—' }}</div>
+      <div><b>Status:</b> <span class="badge {{ req.status }}">{{ req.status.title() }}</span></div>
+      {% if req.admin_note %}
+        <div><b>Admin note:</b> {{ req.admin_note }}</div>
+      {% endif %}
+      <div class="muted small">Submitted: {{ req.created_at.strftime('%Y-%m-%d %H:%M') }}</div>
+    </div>
+
+    <div>
+      <details open>
+        <summary><b>Employee summary (last 30 days)</b></summary>
+        <div class="grid2" style="margin-top:8px;">
+          <div class="card soft">
+            <div class="muted small">Attendance</div>
+            <div>Total days: {{ summary.att_total }}</div>
+            <div>Present: {{ summary.present }}, Leave: {{ summary.leave }}, Absent: {{ summary.absent }}</div>
+          </div>
+          <!-- استبدل بطاقة الـ averages بهذا -->
+<div class="card soft">
+  <div class="muted small">Evaluation averages (weekly)</div>
+  <div>Weekly avg: {{ summary.weekly_avg if summary.weekly_avg is not none else '—' }} ({{ summary.weekly_cnt }} recs)</div>
+  <div class="muted small" style="margin-top:6px;">
+    <a class="btn" href="{{ url_for('admin_employees', q=emp.name) }}">Open in Employees</a>
+    <a class="btn" href="{{ url_for('admin_employee_history', emp_id=emp.id) }}">History</a>
+  </div>
+</div>
+
+        <div class="muted small">Window: {{ summary.since }} → {{ summary.today }}</div>
+      </details>
+    </div>
+  </div>
+</section>
+
+{% if req.status == 'pending' %}
+<section class="card no-print">
+  <form method="post" action="{{ url_for('admin_request_decide', req_id=req.id) }}" class="grid2">
+    <label>Admin note (optional)
+      <textarea name="admin_note" rows="2" placeholder="Optional note visible to supervisor..."></textarea>
+    </label>
+    <div class="align-end" style="display:flex; gap:8px;">
+      <button class="btn success" name="action" value="approve">Approve</button>
+      <button class="btn danger"  name="action" value="reject">Reject</button>
+      <a class="btn" href="{{ url_for('admin_requests') }}">Back</a>
+    </div>
+  </form>
+</section>
+{% else %}
+<section class="card no-print">
+  <div class="muted">This request is <b>{{ req.status }}</b>. <a class="btn" href="{{ url_for('admin_requests') }}">Back</a></div>
+</section>
+{% endif %}
+{% endblock %}

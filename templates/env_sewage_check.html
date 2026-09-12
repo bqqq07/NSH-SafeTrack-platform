@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Sewage Monitoring{% endblock %}
+{% block content %}
+<div style="max-width:750px;margin:auto;">
+  <p style="opacity:.6;font-size:.85rem;margin-bottom:.25rem;">Environment → Phase 5</p>
+  <h2 style="margin-top:0;">External Sewage — Monitoring</h2>
+  <p style="font-size:.85rem;opacity:.6;">{{ today }}</p>
+  <form method="POST">
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">A — External Observation</h3>
+      <div style="display:flex;gap:2rem;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="sewage_on_ground"> Sewage visible on ground
+        </label>
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="odor_noted"> Odor noted
+        </label>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">B — Drain Lines</h3>
+      <div style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap;">
+        <div>
+          <label>Line condition</label>
+          <select name="pipes_condition"
+                  style="display:block;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+            <option value="good">Good</option>
+            <option value="fair">Fair</option>
+            <option value="poor">Poor</option>
+          </select>
+        </div>
+        <div style="padding-top:1.4rem;">
+          <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+            <input type="checkbox" name="cracks_observed"> Cracks observed
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">C — Treatment Units</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div><label>Contractor</label>
+          <input type="text" name="treatment_contractor"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;"></div>
+        <div><label>Last service date</label>
+          <input type="date" name="last_service_date"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;"></div>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">D — Discharge Points</h3>
+      <div style="display:flex;gap:2rem;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="no_overflow" checked> No overflow
+        </label>
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="discharge_covered"> Points covered
+        </label>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">E — Reports & Actions</h3>
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;margin-bottom:.5rem;">
+        <input type="checkbox" name="complaints_received"> Complaints received
+      </label>
+      <input type="text" name="complaints_action" placeholder="Action taken..."
+             style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;">
+    </div>
+    <div style="margin-bottom:1.5rem;">
+      <label><strong>Notes</strong></label>
+      <textarea name="notes" rows="2" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <a href="{{ url_for('env_dashboard') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+
+  {% if history %}
+  <h3 style="margin-top:2rem;">Previous Records</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+    <thead><tr style="border-bottom:2px solid #e5e7eb;">
+      <th style="padding:.5rem;text-align:left;">Date</th>
+      <th style="padding:.5rem;">On ground</th><th style="padding:.5rem;">Odor</th>
+      <th style="padding:.5rem;">Lines</th><th style="padding:.5rem;">Overflow</th>
+    </tr></thead>
+    <tbody>{% for h in history %}<tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:.5rem;">{{ h.date }}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.sewage_on_ground %}<span style="color:#dc2626;">Yes</span>{% else %}No{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.odor_noted %}<span style="color:#f59e0b;">Yes</span>{% else %}No{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{{ h.pipes_condition }}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.no_overflow %}✓{% else %}<span style="color:#dc2626;">✗</span>{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

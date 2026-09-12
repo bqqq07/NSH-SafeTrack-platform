@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Heat Flag Log{% endblock %}
+{% block content %}
+<div style="max-width:680px;margin:0 auto">
+  <h2>Heat flag log — {{ today }}</h2>
+  <p style="color:#64748b;margin-top:0">Copy the hourly contractor update here. Ten seconds a day, and it becomes your audit evidence.</p>
+
+  <form method="post" style="border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:16px">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <input name="hour_label" type="time" required
+             style="padding:12px;border-radius:10px;border:1px solid #cbd5e1">
+      <select name="flag" style="flex:1;padding:12px;border-radius:10px;border:1px solid #cbd5e1">
+        {% for v,lbl in flags %}<option value="{{ v }}">{{ lbl }}</option>{% endfor %}
+      </select>
+      <input name="index_value" placeholder="Index" style="width:100px;padding:12px;border-radius:10px;border:1px solid #cbd5e1">
+      <button style="padding:12px 18px;border:0;background:#0f172a;color:#fff;border-radius:10px;font-weight:700">Add</button>
+    </div>
+  </form>
+
+  <table style="width:100%;border-collapse:collapse">
+    <tr style="background:#f1f5f9"><th style="text-align:left;padding:8px">Time</th><th style="text-align:left;padding:8px">Flag</th><th style="text-align:left;padding:8px">Index</th></tr>
+    {% for r in rows %}
+      <tr style="border-bottom:1px solid #e2e8f0">
+        <td style="padding:8px">{{ r.hour_label }}</td>
+        <td style="padding:8px">{{ r.flag }}</td>
+        <td style="padding:8px">{{ r.index_value }}</td></tr>
+    {% else %}
+      <tr><td colspan="3" style="padding:12px;color:#64748b">Nothing logged today.</td></tr>
+    {% endfor %}
+  </table>
+
+  {% if hist %}
+  <h3 style="margin-top:24px">Previous days</h3>
+  <table style="width:100%;border-collapse:collapse">
+    {% for r in hist %}
+      <tr style="border-bottom:1px solid #e2e8f0">
+        <td style="padding:6px">{{ r.date }}</td><td style="padding:6px">{{ r.hour_label }}</td>
+        <td style="padding:6px">{{ r.flag }}</td><td style="padding:6px">{{ r.index_value }}</td></tr>
+    {% endfor %}
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

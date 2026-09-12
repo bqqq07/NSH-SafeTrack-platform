@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block content %}
+<header class="page-head">
+  <h1>Requests Inbox</h1>
+  <nav class="breadcrumbs muted small">
+    {% if request_new_url %}
+      <a href="{{ request_new_url }}">New</a> / <span>Inbox</span>
+    {% else %}
+      <span>Inbox</span>
+    {% endif %}
+  </nav>
+</header>
+
+<section class="card no-print">
+  <form method="get" class="grid3" autocomplete="off">
+    <label>Status
+      <select name="status">
+        <option value="pending"  {{ 'selected' if status=='pending'  else '' }}>Pending</option>
+        <option value="approved" {{ 'selected' if status=='approved' else '' }}>Approved</option>
+        <option value="rejected" {{ 'selected' if status=='rejected' else '' }}>Rejected</option>
+        <option value="all"      {{ 'selected' if status=='all'      else '' }}>All</option>
+      </select>
+    </label>
+    <label>Search (emp name / number)
+      <input name="q" value="{{ q or '' }}" placeholder="e.g. 2540 or John">
+    </label>
+    <div class="align-end">
+      <button class="btn">Apply</button>
+    </div>
+  </form>
+</section>
+
+<section class="card">
+  <div class="table-wrap">
+    <table class="table compact">
+      <!-- أعمدة ثابتة العرض + نص لا يلف، والسحب أفقي عند الحاجة -->
+      <colgroup>
+        <col style="width:110px">  {# # (ID) #}
+        <col style="width:200px">  {# Created #}
+        <col style="width:240px">  {# Supervisor #}
+        <col style="width:300px">  {# Employee #}
+        <col style="width:140px">  {# Type #}
+        <col style="width:220px">  {# Dates #}
+        <col style="width:420px">  {# Reason #}
+        <col style="width:140px">  {# Status #}
+        <col style="width:240px">  {# Action #}
+      </colgroup>
+      <thead>
+        <tr>
+          <th class="mono nowrap">#</th>
+          <th class="nowrap">Created</th>
+          <th class="nowrap">Supervisor</th>
+          <th class="nowrap">Employee</th>
+          <th class="nowrap">Type</th>
+          <th class="nowrap">Dates</th>
+          <th class="nowrap">Reason</th>
+          <th class="nowrap">Status</th>
+          <th class="no-print nowrap">Action</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for r in rows %}
+        <tr>
+          <td class="mono nowrap">{{ r.id }}</td>
+
+          <td class="mono nowrap">{{ r.created_at|local_dt("%Y-%m-%d %H:%M") }}</td>
+
+          <td class="nowrap">{{ (r.supervisor.name if r.supervisor else '—') }}</td>
+
+          <td class="nowrap">
+            {% set emp_name = (r.employee.name if r.employee else '—') %}
+            {% if employee_summary_url_map and r.employee_id in employee_summary_url_map %}
+              <a href="{{ employee_summary_url_map[r.employee_id] }}">{{ emp_name }}</a>
+            {% else %}
+              {{ emp_name }}
+            {% endif %}
+            <div class="muted small mono">{{ (r.employee.emp_number if r.employee and r.employee.emp_number else '—') }}</div>
+          </td>
+
+          <td class="mono nowrap">{{ (r.type|capitalize) if r.type else '—' }}</td>
+
+          <td class="mono nowrap">
+            {% if r.start_date or r.end_date %}
+              {{ r.start_date or '—' }} → {{ r.end_date or '—' }}
+            {% else %} — {% endif %}
+          </td>
+
+          <td class="nowrap">
+            {{ r.reason or '—' }}
+            {% if attachment_url_map and r.id in attachment_url_map %}
+            <div><a class="btn" style="padding:2px 8px;font-size:11px" href="{{ attachment_url_map[r.id] }}" target="_blank">📎 View attachment</a></div>
+            {% endif %}
+          </td>
+
+          <td class="nowrap">
+            {% set s = r.status or 'pending' %}
+            {% set badge = 'warning' if s=='pending' else ('success' if s=='approved' else 'danger') %}
+            <span class="badge {{ badge }}">{{ s|capitalize }}</span>
+            {% if r.decided_at %}<div class="muted small">on {{ r.decided_at.strftime('%Y-%m-%d') }}</div>{% endif %}
+          </td>
+
+          <td class="no-print nowrap">
+            {% if (r.status or 'pending') == 'pending' %}
+            <form method="post" action="{{ url_for('request_decide', req_id=r.id) }}" class="inline" style="display:grid; grid-template-columns: 1fr auto; gap:6px;">
+              {% if csrf_token is defined %}<input type="hidden" name="csrf_token" value="{{ csrf_token() }}">{% endif %}
+              <input name="admin_comment" placeholder="Comment (optional)">
+              <div class="actions">
+                <button class="btn success" name="decision" value="approve" onclick="return confirm('Approve this request?')">Approve</button>
+                <button class="btn danger"  name="decision" value="reject"  onclick="return confirm('Reject this request?')">Reject</button>
+              </div>
+            </form>
+            {% else %} — {% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="9" class="center muted">No requests.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</section>
+{% endblock %}

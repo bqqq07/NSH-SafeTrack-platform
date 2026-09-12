@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Ask the Officer{% endblock %}
+{% block content %}
+<div style="margin-bottom:1.25rem">
+  <a href="{{ url_for('welfare_home') }}" style="color:#94a3b8;font-size:.9rem">← Home</a>
+  <h2 style="margin-top:.25rem">Ask the Officer</h2>
+  <p style="color:#94a3b8;font-size:.9rem">Send a question to the HSE officer on the ground in any unit — get a documented answer.</p>
+</div>
+
+<!-- New inquiry form -->
+<details {% if not inquiries %}open{% endif %}
+  style="margin-bottom:1.5rem;background:#1e293b;border-radius:8px;padding:1rem">
+  <summary style="cursor:pointer;font-weight:600;color:#67e8f9">+ New Inquiry</summary>
+  <form method="post" action="{{ url_for('welfare_inquiry_new') }}"
+        enctype="multipart/form-data" style="margin-top:1rem">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.75rem">
+      <div>
+        <label style="font-size:.85rem;color:#94a3b8">Unit *</label>
+        <select name="to_unit" required class="form-control">
+          <option value="">Select unit</option>
+          {% for u in units %}
+          <option value="{{ u }}">{{ u }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label style="font-size:.85rem;color:#94a3b8">Facility / Asset</label>
+        <input name="facility" class="form-control" placeholder="e.g. Cooler WS-07">
+      </div>
+      <div>
+        <label style="font-size:.85rem;color:#94a3b8">Photo (optional)</label>
+        <input type="file" name="photo" accept="image/*" class="form-control">
+      </div>
+    </div>
+    <div style="margin-top:.75rem">
+      <label style="font-size:.85rem;color:#94a3b8">Question *</label>
+      <textarea name="question" required rows="3" class="form-control"
+                placeholder="Describe what you need to know or verify..."></textarea>
+    </div>
+    <div style="margin-top:.75rem">
+      <button type="submit" class="btn">Send Inquiry</button>
+    </div>
+  </form>
+</details>
+
+<!-- Inquiry list -->
+{% if inquiries %}
+<div style="display:flex;flex-direction:column;gap:1rem">
+{% for inq in inquiries %}
+<div style="background:#1e293b;border-radius:8px;padding:1rem;border-left:4px solid {% if inq.reply_text %}#22c55e{% else %}#f59e0b{% endif %}">
+  <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:.5rem;margin-bottom:.5rem">
+    <div>
+      <span style="font-weight:600;color:#fcd34d">{{ inq.to_unit }}</span>
+      {% if inq.facility %}
+        <span style="color:#94a3b8;font-size:.88rem"> · {{ inq.facility }}</span>
+      {% endif %}
+    </div>
+    <span style="color:#64748b;font-size:.82rem">{{ inq.created_at.strftime('%d %b %Y %H:%M') }}</span>
+  </div>
+  <p style="margin:0 0 .5rem;color:#e2e8f0">{{ inq.question }}</p>
+  {% if inq.question_photo %}
+  <img src="{{ url_for('hse_photo_serve', path=inq.question_photo) }}"
+       style="max-height:120px;border-radius:4px;margin-bottom:.5rem">
+  {% endif %}
+
+  {% if inq.reply_text %}
+  <div style="background:#0f172a;border-radius:6px;padding:.75rem;margin-top:.5rem">
+    <div style="font-size:.82rem;color:#22c55e;margin-bottom:.25rem">
+      ✓ Answered by {{ inq.replied_by.name if inq.replied_by else 'Officer' }}
+      · {{ inq.replied_at.strftime('%d %b %H:%M') if inq.replied_at else '' }}
+    </div>
+    <p style="margin:0;color:#e2e8f0">{{ inq.reply_text }}</p>
+    {% if inq.reply_photo %}
+    <img src="{{ url_for('hse_photo_serve', path=inq.reply_photo) }}"
+         style="max-height:120px;border-radius:4px;margin-top:.5rem">
+    {% endif %}
+  </div>
+  {% else %}
+  <div style="color:#f59e0b;font-size:.85rem;margin-top:.25rem">⏳ Awaiting reply…</div>
+  {% endif %}
+</div>
+{% endfor %}
+</div>
+{% else %}
+<p style="color:#64748b">No inquiries yet. Send your first one above.</p>
+{% endif %}
+{% endblock %}

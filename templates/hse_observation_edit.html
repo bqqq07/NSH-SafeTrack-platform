@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Edit Observation</h2>
+<div class="card" style="max-width:620px">
+  <form method="post" enctype="multipart/form-data">
+    <label>Date
+      <input type="date" name="date" value="{{ obs.date.isoformat() }}" required>
+    </label>
+
+    <label>Location
+      <input type="text" name="location" id="locationInput"
+             value="{{ obs.location or '' }}" list="locationList" placeholder="Site area / location">
+      <datalist id="locationList">
+        {% for loc in locations %}<option value="{{ loc }}">{% endfor %}
+      </datalist>
+    </label>
+
+    <label>Observation Type *
+      <select name="obs_type" required>
+        <option value="">— Select —</option>
+        <option value="unsafe_act"        {{ 'selected' if obs.obs_type=='unsafe_act' }}>Unsafe Act</option>
+        <option value="unsafe_condition"  {{ 'selected' if obs.obs_type=='unsafe_condition' }}>Unsafe Condition</option>
+        <option value="positive"          {{ 'selected' if obs.obs_type=='positive' }}>Positive</option>
+      </select>
+    </label>
+
+    <label>Category
+      <select name="category">
+        <option value="">— Select —</option>
+        {% for cat in categories %}
+        <option value="{{ cat }}" {{ 'selected' if obs.category==cat }}>{{ cat }}</option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>Risk Level
+      <select name="risk_level">
+        <option value=""  {{ 'selected' if not obs.risk_level }}>— N/A —</option>
+        <option value="L" {{ 'selected' if obs.risk_level=='L' }}>L — Low</option>
+        <option value="M" {{ 'selected' if obs.risk_level=='M' }}>M — Medium</option>
+        <option value="H" {{ 'selected' if obs.risk_level=='H' }}>H — High</option>
+      </select>
+    </label>
+
+    <label>Description
+      <textarea name="description" rows="3">{{ obs.description or '' }}</textarea>
+    </label>
+
+    <label>Immediate Action Taken
+      <textarea name="action_taken" rows="2">{{ obs.action_taken or '' }}</textarea>
+    </label>
+
+    <div style="display:flex;gap:8px;margin-top:8px">
+      <button type="submit" class="btn primary">Save Changes</button>
+      <a href="{{ url_for('hse_observations') }}" class="btn">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

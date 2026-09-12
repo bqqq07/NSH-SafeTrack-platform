@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Dust Control{% endblock %}
+{% block content %}
+<div style="max-width:750px;margin:auto;">
+  <p style="opacity:.6;font-size:.85rem;margin-bottom:.25rem;">Environment → Phase 3</p>
+  <h2 style="margin-top:0;">Dust Control</h2>
+  <p style="font-size:.85rem;opacity:.6;">{{ today }}</p>
+  <form method="POST">
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">A — Roads & Haul Routes</h3>
+      <div style="display:flex;gap:2rem;align-items:center;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="roads_watered"> Watering done today
+        </label>
+        <div style="flex:1;min-width:180px;">
+          <label>Watering frequency</label>
+          <input type="text" name="roads_frequency" placeholder="e.g. twice daily"
+                 style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;">
+        </div>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">B — Excavation Areas</h3>
+      <div style="display:flex;gap:2rem;flex-wrap:wrap;">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="excavation_covered"> Covered / barrier-enclosed
+        </label>
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="excavation_misted"> Wetted / misted
+        </label>
+      </div>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">C — Material Stockpiles</h3>
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <input type="checkbox" name="stockpiles_covered"> Covered or sprayed
+      </label>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">D — Wheel Wash Station</h3>
+      <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+        <input type="checkbox" name="wheelwash_ok"> Operational and water clean
+      </label>
+    </div>
+    <div class="card" style="padding:1.25rem;margin-bottom:1rem;">
+      <h3 style="margin-top:0;border-bottom:1px solid #e5e7eb;padding-bottom:.5rem;">E — Neighbouring Area Protection</h3>
+      <div style="display:flex;gap:2rem;flex-wrap:wrap;margin-bottom:.5rem;">
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="neighbor_complaint"> Dust complaint received
+        </label>
+        <label style="display:flex;align-items:center;gap:.5rem;cursor:pointer;">
+          <input type="checkbox" name="dust_fence_ok"> Dust fence in good condition
+        </label>
+      </div>
+      <input type="text" name="neighbor_notes" placeholder="Details..."
+             style="width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;">
+    </div>
+    <div style="margin-bottom:1.5rem;">
+      <label><strong>Notes</strong></label>
+      <textarea name="notes" rows="2" style="display:block;width:100%;padding:.55rem;border:1px solid #d1d5db;border-radius:.5rem;margin-top:.3rem;resize:vertical;"></textarea>
+    </div>
+    <div style="display:flex;gap:1rem;">
+      <button type="submit" class="btn btn-primary">Save</button>
+      <a href="{{ url_for('env_dashboard') }}" class="btn btn-secondary">Cancel</a>
+    </div>
+  </form>
+
+  {% if history %}
+  <h3 style="margin-top:2rem;">Previous Records</h3>
+  <table style="width:100%;border-collapse:collapse;font-size:.85rem;">
+    <thead><tr style="border-bottom:2px solid #e5e7eb;">
+      <th style="padding:.5rem;text-align:left;">Date</th>
+      <th style="padding:.5rem;">Roads</th><th style="padding:.5rem;">Excavation</th>
+      <th style="padding:.5rem;">Stockpiles</th><th style="padding:.5rem;">Wheel Wash</th><th style="padding:.5rem;">Complaint</th>
+    </tr></thead>
+    <tbody>{% for h in history %}<tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:.5rem;">{{ h.date }}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.roads_watered %}✓{% else %}✗{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.excavation_covered %}✓{% else %}✗{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.stockpiles_covered %}✓{% else %}✗{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.wheelwash_ok %}✓{% else %}✗{% endif %}</td>
+      <td style="padding:.5rem;text-align:center;">{% if h.neighbor_complaint %}<span style="color:#dc2626;">Yes</span>{% else %}No{% endif %}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8">
+  <title>{% block title %}NSH{% endblock %}{% if g.company %} — {{ g.company.name }}{% endif %}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+  <link href="{{ url_for('static', filename='css/print.css') }}" rel="stylesheet" media="print">
+
+  <!-- hide elements with .no-print when printing -->
+  <style>
+    @media print {
+      .no-print {
+        display: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Navigation -->
+  <header class="topbar no-print">
+    <div class="wrap">
+      <a class="brand" href="{{ url_for('index') }}">
+        <img class="logo" src="{{ url_for('static', filename='img/logo.png') }}" alt="Company logo">
+        <span class="title">
+          {% if g.company %}{{ g.company.name }}{% else %}Weekly Employee Evaluation{% endif %}
+        </span>
+      </a>
+
+      {% if g.user %}
+      <!-- Mobile menu toggle -->
+      <button class="hamburger no-print" id="menuToggle"
+              aria-label="Menu" aria-expanded="false" aria-controls="mainNav">
+        <span></span><span></span><span></span>
+      </button>
+
+      <nav class="navlinks" id="mainNav">
+        {% if g.role == 'safety_officer' %}
+          <a href="{{ url_for('user_location_page') }}" style="color:#f59e0b;font-weight:600">📍 My Location</a>
+          <a href="{{ url_for('hse_observations') }}">Observations</a>
+          <a href="{{ url_for('hse_jso_list') }}">JSO</a>
+          <a href="{{ url_for('hse_tbt_list') }}">TBT</a>
+          <a href="{{ url_for('hse_nearmiss_list') }}">Near Miss</a>
+          <a href="{{ url_for('hse_bbs') }}">BBS</a>
+          <a href="{{ url_for('hse_ptw') }}">PTW</a>
+          <a href="{{ url_for('hse_manpower') }}">Man Power</a>
+          <a href="{{ url_for('hse_inspection') }}">Inspection</a>
+          <a href="{{ url_for('hse_my_ca') }}" style="color:#f59e0b;font-weight:600">📋 CAs</a>
+        {% elif g.role == 'admin' %}
+          <a href="{{ url_for('admin_kpi') }}" style="font-weight:600">Dashboard</a>
+          <a href="{{ url_for('admin_employees') }}">Employees</a>
+          <a href="{{ url_for('requests_inbox') }}">Requests</a>
+          <a href="{{ url_for('admin_users') }}">Users</a>
+          <a href="{{ url_for('user_location_page') }}" style="color:#f59e0b">📍 Locations</a>
+          <a href="{{ url_for('settings_company') }}">Settings</a>
+          {% if g_is_hse_supervisor %}
+          <a href="{{ url_for('hse_dashboard') }}" style="color:#86efac">HSE</a>
+          {% endif %}
+        {% elif g.role == 'site_supervisor' %}
+          <a href="{{ url_for('site_supervisors') }}">My Supervisors</a>
+          <a href="{{ url_for('site_unassigned_employees') }}">Unassigned Employees</a>
+          <a href="{{ url_for('site_employee_requests') }}">Employee Requests</a>
+          <a href="{{ url_for('site_report_select') }}">Site Reports</a>
+          <a href="{{ url_for('user_location_page') }}" style="color:#f59e0b">📍 Locations</a>
+          {% if g_is_hse_supervisor %}
+          <a href="{{ url_for('hse_dashboard') }}" style="color:#86efac">HSE</a>
+          {% endif %}
+        {% elif g.role == 'safety_supervisor' %}
+          <a href="{{ url_for('safety_supervisor_home') }}" style="font-weight:600">🏠 Home</a>
+          <a href="{{ url_for('safety_supervisor_officers') }}" style="color:#86efac">👷 Officers</a>
+          <a href="{{ url_for('user_location_page') }}" style="color:#f59e0b">📍 My Location</a>
+          <a href="{{ url_for('hse_tbt_list') }}">TBT</a>
+          <a href="{{ url_for('hse_observations') }}">Observations</a>
+          <a href="{{ url_for('request_new') }}">New Request</a>
+          <a href="{{ url_for('requests_mine') }}">My Requests</a>
+        {% elif g.role == 'hr' %}
+          <a href="{{ url_for('hr_inbox') }}">HR Inbox</a>
+        {% elif g.role == 'supervisor' %}
+          <a href="{{ url_for('employees') }}">Employees</a>
+          <a href="{{ url_for('supervisor_report_select') }}">Reports</a>
+          <a href="{{ url_for('request_new') }}">New Request</a>
+          <a href="{{ url_for('requests_mine') }}">My Requests</a>
+          <a href="{{ url_for('attendance_mark') }}">Attendance</a>
+          <a href="{{ url_for('user_location_page') }}" style="color:#f59e0b">📍 My Location</a>
+          {% if g_is_hse_supervisor %}
+          <a href="{{ url_for('hse_dashboard') }}" style="color:#86efac">HSE</a>
+          {% endif %}
+        {% else %}
+          <a href="{{ url_for('employees') }}">Employees</a>
+          <a href="{{ url_for('supervisor_report_select') }}">Reports</a>
+          <a href="{{ url_for('request_new') }}">New Request</a>
+          <a href="{{ url_for('requests_mine') }}">My Requests</a>
+          <a href="{{ url_for('attendance_mark') }}">Attendance</a>
+        {% endif %}
+        <a href="{{ url_for('logout') }}">Sign out</a>
+      </nav>
+      {% endif %}
+    </div>
+  </header>
+
+  <!-- Impersonation banner -->
+  {% if session.get('impersonating') %}
+  <div style="background:#7c3aed;color:#fff;text-align:center;padding:0.5rem 1rem;font-size:0.88rem;" class="no-print">
+    ⚠️ أنت تتصفح كـ <strong>{{ g.user.name }}</strong> ({{ g.user.role }})
+    — <a href="{{ url_for('superadmin_stop_impersonate') }}" style="color:#ddd8fe;text-decoration:underline;">العودة لـ Super Admin</a>
+  </div>
+  {% endif %}
+
+  <!-- Page content -->
+  <main class="container">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="flash no-print">
+          {% for cat, msg in messages %}
+            <div class="alert {{ cat }}">{{ msg }}</div>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    {% block content %}{% endblock %}
+  </main>
+
+  <!-- Disable autocomplete site-wide + mobile menu toggle + CSRF auto-inject -->
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      // Disable autocomplete site-wide
+      document.querySelectorAll('form').forEach(f => f.setAttribute('autocomplete','off'));
+      document.querySelectorAll('input[type="text"],input[type="search"],input[type="email"],input[type="number"],input[type="password"],textarea')
+        .forEach(el => {
+          el.setAttribute('autocomplete','off');
+          el.setAttribute('autocorrect','off');
+          el.setAttribute('autocapitalize','off');
+          el.setAttribute('spellcheck','false');
+        });
+
+      // Mobile menu toggle
+      const btn = document.getElementById('menuToggle');
+      const nav = document.getElementById('mainNav');
+      if (btn && nav) {
+        btn.addEventListener('click', () => {
+          const isOpen = nav.classList.toggle('open');
+          btn.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+        });
+      }
+
+      // CSRF — حقن التوكن تلقائياً في كل نموذج POST ويب
+      const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+      if (csrfMeta) {
+        const csrfToken = csrfMeta.content;
+        document.querySelectorAll('form').forEach(form => {
+          const method = (form.method || '').toUpperCase();
+          if (method === 'POST' && !form.querySelector('input[name="csrf_token"]')) {
+            const inp = document.createElement('input');
+            inp.type  = 'hidden';
+            inp.name  = 'csrf_token';
+            inp.value = csrfToken;
+            form.appendChild(inp);
+          }
+        });
+      }
+    });
+  </script>
+
+  <div class="made-by-z">
+    Made by <a href="https://z-app.biz/" target="_blank">z</a>
+  </div>
+</body>
+</html>

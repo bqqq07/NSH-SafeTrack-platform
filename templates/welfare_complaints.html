@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Complaints{% endblock %}
+{% block content %}
+<div style="max-width:720px;margin:0 auto">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <h2>Complaints</h2>
+    <a href="{{ url_for('welfare_complaint_new') }}"
+       style="background:#0f172a;color:#fff;padding:10px 16px;border-radius:10px;font-weight:800;text-decoration:none">+ New</a>
+  </div>
+  {% for c in rows %}
+    <div style="border:1px solid #e2e8f0;border-radius:12px;padding:12px;margin-bottom:10px">
+      <div style="font-weight:700">{{ c.description }}</div>
+      <div style="color:#64748b;font-size:.9rem;margin-top:4px">
+        {{ c.date }} · Unit {{ c.unit }}{% if c.ref_no %} · {{ c.ref_no }}{% endif %}
+        · {{ c.raised_by_n }} worker(s)
+        {% if c.kind == 'escalate' %} · <span style="color:#b45309;font-weight:700">escalated</span>{% endif %}
+      </div>
+    </div>
+  {% else %}
+    <p style="color:#64748b">Nothing recorded yet.</p>
+  {% endfor %}
+</div>
+{% endblock %}

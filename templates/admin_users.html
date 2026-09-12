@@ -1,9 +1,10 @@
-{% extends "base.html" %}
+﻿{% extends "base.html" %}
 {% block content %}
 <h1>Admin · Allowed Users</h1>
 
 <section class="card">
   <form method="post" class="grid2">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Supervisor ID
       <input name="code" required>
     </label>
@@ -14,7 +15,11 @@
       <select name="role">
         <option value="site_supervisor">Site Supervisor</option>
         <option value="supervisor">Supervisor</option>
+        <option value="hr">HR</option>
         <option value="admin">Admin</option>
+        <option value="safety_officer">Safety Officer</option>
+        <option value="safety_welfare">Welfare Officer</option>
+        <option value="environment_officer">Environment Officer</option>
       </select>
     </label>
     <div class="align-end">
@@ -24,25 +29,61 @@
 </section>
 
 <section class="card">
-  <table class="table">
-    <thead><tr><th>ID</th><th>Name</th><th>Role</th><th>Status</th><th class="no-print">Actions</th></tr></thead>
-    <tbody>
-      {% for u in users %}
-      <tr>
-        <td>{{ u.supervisor_code }}</td>
-        <td>{{ u.name }}</td>
-        <td>{{ u.role }}</td>
-        <td>{{ 'Active' if u.is_active else 'Inactive' }}</td>
-        <td class="no-print">
-          {% if u.role != 'admin' %}
-          <form method="post" action="{{ url_for('admin_users_toggle', user_id=u.id) }}">
-            <button class="btn">{{ 'Deactivate' if u.is_active else 'Activate' }}</button>
-          </form>
-          {% else %}<span class="muted">—</span>{% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  <div class="table-wrap">
+    <table class="table compact">
+      <colgroup>
+        <col style="width:160px">
+        <col style="width:220px">
+        <col style="width:160px">
+        <col style="width:110px">
+        <col style="width:130px">
+        <col style="width:160px">
+      </colgroup>
+      <thead>
+        <tr>
+          <th class="nowrap">ID</th>
+          <th class="nowrap">Name</th>
+          <th class="nowrap">Role</th>
+          <th class="nowrap">Status</th>
+          <th class="no-print nowrap">PTW Training</th>
+          <th class="no-print nowrap">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for u in users %}
+        <tr>
+          <td class="mono nowrap">{{ u.supervisor_code }}</td>
+          <td class="nowrap">{{ u.name }}</td>
+          <td class="nowrap">{{ u.role }}</td>
+          <td class="nowrap">{{ 'Active' if u.is_active else 'Inactive' }}</td>
+          <td class="no-print nowrap">
+            {% if u.role == 'safety_officer' %}
+            <form method="post" action="{{ url_for('admin_users_toggle_ptw', user_id=u.id) }}" style="display:inline">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              {% if u.ptw_training_active %}
+              <button class="btn" style="background:#22c55e;color:#052e16;border-color:#22c55e">Training ON</button>
+              {% else %}
+              <button class="btn">Activate</button>
+              {% endif %}
+            </form>
+            {% else %}
+            <span class="muted">—</span>
+            {% endif %}
+          </td>
+          <td class="no-print nowrap">
+            {% if u.role != 'admin' %}
+            <form method="post" action="{{ url_for('admin_users_toggle', user_id=u.id) }}">
+              <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+              <button class="btn">{{ 'Deactivate' if u.is_active else 'Activate' }}</button>
+            </form>
+            {% else %}
+              <span class="muted">—</span>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
 </section>
 {% endblock %}
