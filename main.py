@@ -19612,15 +19612,19 @@ def api_hse_trainee_report_generate_auto():
             })
 
         # ── HSE aggregate ─────────────────────────────────────────────
-        week_obs = HseObservation.query.filter(
+        _active_ids = [t.id for t in trainees_qs]
+        week_obs_q = HseObservation.query.filter(
             HseObservation.company_id == _c,
             HseObservation.date >= week_start, HseObservation.date <= week_end,
-        ).all()
-        _co_ids = [u.id for u in User.query.filter_by(company_id=_c).all()]
-        week_tbts = HseTbt.query.filter(
-            HseTbt.officer_id.in_(_co_ids),
+        )
+        if selected_ids:
+            week_obs_q = week_obs_q.filter(HseObservation.officer_id.in_(_active_ids))
+        week_obs = week_obs_q.all()
+        week_tbts_q = HseTbt.query.filter(
+            HseTbt.officer_id.in_(_active_ids if selected_ids else [u.id for u in User.query.filter_by(company_id=_c).all()]),
             HseTbt.date >= week_start, HseTbt.date <= week_end,
-        ).all()
+        )
+        week_tbts = week_tbts_q.all()
         tbt_attend_total = sum(t.attendance.count() for t in week_tbts)
         jso_count = HseJsoClosure.query.filter(
             HseJsoClosure.company_id == _c,
@@ -19675,9 +19679,12 @@ def api_hse_trainee_report_generate_auto():
         # ── Delta vs previous week ────────────────────────────────────
         prev_start = week_start - timedelta(days=7)
         prev_end   = week_start - timedelta(days=1)
-        prev_obs   = HseObservation.query.filter(HseObservation.company_id == _c,
-                        HseObservation.date >= prev_start, HseObservation.date <= prev_end).count()
-        prev_tbts  = HseTbt.query.filter(HseTbt.officer_id.in_(_co_ids),
+        prev_obs_q = HseObservation.query.filter(HseObservation.company_id == _c,
+                        HseObservation.date >= prev_start, HseObservation.date <= prev_end)
+        if selected_ids:
+            prev_obs_q = prev_obs_q.filter(HseObservation.officer_id.in_(_active_ids))
+        prev_obs  = prev_obs_q.count()
+        prev_tbts = HseTbt.query.filter(HseTbt.officer_id.in_(_active_ids),
                         HseTbt.date >= prev_start, HseTbt.date <= prev_end).count()
         delta = {
             "modules_passed": sum(len(t["new_passes"]) for t in trainees_out),
