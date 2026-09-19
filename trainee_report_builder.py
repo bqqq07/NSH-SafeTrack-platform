@@ -783,15 +783,18 @@ def _s_obs_detail(prs, data):
     RISK_BG  = {"H": BG_HIGH, "M": BG_MED, "L": BG_LOW}
     RISK_CLR = {"H": C_RED,   "M": C_AMBER, "L": C_GREEN}
 
-    # Column widths
-    COL_W = [Inches(1.4), Inches(1.7), Inches(1.6), Inches(0.65), Inches(0.7),
-             Inches(3.8), Inches(2.6), Inches(0.7)]
+    # Column widths (no Status column)
+    COL_W = [Inches(1.3), Inches(1.65), Inches(1.55), Inches(0.6), Inches(0.65),
+             Inches(3.9), Inches(2.7)]
     HEADERS = ["Date", "Officer", "Location", "Risk", "Type",
-               "Description", "Action Taken", "Status"]
+               "Description", "Action Taken"]
     tbl_w = sum(COL_W)
     tbl_l = (SW - tbl_w) / 2
 
-    ROWS_PER_SLIDE = 25
+    HDR_H = Inches(0.38)
+    ROW_H = Inches(0.38)
+    MAX_H = SH - Inches(1.1) - HDR_H   # available height for data rows
+    ROWS_PER_SLIDE = max(1, int(MAX_H / ROW_H))
 
     if not obs_all:
         slide = _blank(prs)
@@ -815,13 +818,11 @@ def _s_obs_detail(prs, data):
                      f"{len(obs_all)} observations total  ·  {ws} – {we}")
 
         n_rows = len(page_rows) + 1
-        fs     = _tfont(n_rows)
+        fs     = _tfont(n_rows + 5)
         tbl_t  = cy + Inches(0.06)
-        HDR_H  = Inches(0.38)
-        ROW_H  = Inches(0.38)
         tbl_h  = HDR_H + ROW_H * len(page_rows)
 
-        tf  = slide.shapes.add_table(n_rows, 8, tbl_l, tbl_t, tbl_w, tbl_h)
+        tf  = slide.shapes.add_table(n_rows, 7, tbl_l, tbl_t, tbl_w, tbl_h)
         tbl = tf.table
         for ci, cw in enumerate(COL_W):
             tbl.columns[ci].width = cw
@@ -835,7 +836,7 @@ def _s_obs_detail(prs, data):
                 align=PP_ALIGN.LEFT if ci > 3 else PP_ALIGN.CENTER)
 
         for ri, obs in enumerate(page_rows, 1):
-            alt = BG_ALT if ri % 2 == 0 else C_WHITE
+            alt  = BG_ALT if ri % 2 == 0 else C_WHITE
             risk = obs.get("risk", "—")
             r_bg  = RISK_BG.get(risk, alt)
             r_clr = RISK_CLR.get(risk, C_DARK)
@@ -854,11 +855,6 @@ def _s_obs_detail(prs, data):
                 align=PP_ALIGN.LEFT, color=C_DARK)
             _cs(tbl.cell(ri, 6), obs.get("action", ""),      size=fs, bg=alt,
                 align=PP_ALIGN.LEFT, color=C_GRAY)
-
-            st    = obs.get("status", "open")
-            st_bg = BG_PASS if st == "closed" else BG_PROG
-            _cs(tbl.cell(ri, 7), st.capitalize(), size=fs, bg=st_bg,
-                align=PP_ALIGN.CENTER, color=C_DARK)
 
 
 # ── Slide 12 — Week Summary ───────────────────────────────────────────────────
