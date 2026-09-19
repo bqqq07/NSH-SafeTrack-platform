@@ -19535,174 +19535,177 @@ def api_hse_trainees():
 @app.post("/api/hse/trainee-report/generate-auto")
 @api_hse_supervisor_required
 def api_hse_trainee_report_generate_auto():
-    """Mobile API: generate trainee weekly report from DB, return PPTX bytes."""
-    if not os.path.exists(TRAINEE_TEMPLATE_PATH):
-        return jsonify({"error": "القالب غير موجود — يرجى رفعه أولاً"}), 404
+    """Mobile API: generate trainee weekly report from DB using build_report (no template needed)."""
     try:
-        from trainee_report_generator import generate_report_from_data
-        from models.lms import (LmsEnrollment, LmsModuleProgress,
-                                 LmsModule, LmsCourse)
+        from trainee_report_builder import build_report
+        from models.lms import (LmsEnrollment, LmsModuleProgress, LmsModule)
+        from collections import defaultdict as _dd
 
         _c   = cid()
         now  = datetime.now(RIYADH_TZ)
         week_start = (now - timedelta(days=now.weekday())).date()
         week_end   = week_start + timedelta(days=6)
+        week_start_dt = datetime.combine(week_start, datetime.min.time())
+        week_end_dt   = datetime.combine(week_end,   datetime.max.time())
 
         body = request.get_json(silent=True) or {}
         selected_ids = body.get("trainee_ids") or []
 
-        trainees_qs = User.query.filter(
+        trainees_base = User.query.filter(
             User.company_id == _c,
             User.role.in_(["safety_officer", "safety_welfare", "environment_officer"]),
         ).order_by(User.name).all()
-        if selected_ids:
-            trainees_qs = [u for u in trainees_qs if u.id in selected_ids]
+        trainees_qs = [t for t in trainees_base if t.id in selected_ids] if selected_ids else trainees_base
 
-        csv_trainees = []
+        # ── E-Learning + PTW per trainee ──────────────────────────────
+        trainees_out = []
         for u_tr in trainees_qs:
             enroll = LmsEnrollment.query.filter_by(officer_id=u_tr.id).first()
-            modules_data = []
+            modules_data, new_passes = [], []
             if enroll:
                 progresses = {mp.module_id: mp for mp in LmsModuleProgress.query.filter_by(enrollment_id=enroll.id).all()}
-                course_modules = (LmsModule.query.filter_by(course_id=enroll.course_id).order_by(LmsModule.seq).limit(7).all())
-                for mod in course_modules:
+                course_modules = LmsModule.query.filter_by(course_id=enroll.course_id).order_by(LmsModule.seq).limit(7).all()
+                for idx, mod in enumerate(course_modules):
                     mp = progresses.get(mod.id)
                     if mp is None:
                         status, score = "—", ""
                     elif mp.passed_at:
                         status, score = "Passed", str(mp.best_score or "")
+                        if week_start_dt <= mp.passed_at <= week_end_dt:
+                            new_passes.append(idx)
                     elif mp.attempts_used > 0 or mp.content_opened_at:
                         status, score = "In Progress", ""
                     else:
                         status, score = "—", ""
-                    modules_data.append({"score": score, "status": status})
+                    modules_data.append({"status": status, "score": score})
             while len(modules_data) < 7:
-                modules_data.append({"score": "", "status": "—"})
-            csv_trainees.append({"name": u_tr.name, "modules": modules_data})
-        csv_data = {"trainees": csv_trainees}
+                modules_data.append({"status": "—", "score": ""})
 
-        from collections import defaultdict
-        ptw_week_subs = PtwDoorSubmission.query.join(User, PtwDoorSubmission.officer_id == User.id).filter(
-            User.company_id == _c,
-            PtwDoorSubmission.submitted_at >= datetime.combine(week_start, datetime.min.time()),
-            PtwDoorSubmission.submitted_at <= datetime.combine(week_end, datetime.max.time()),
-        ).all()
-        all_ptw_subs = PtwDoorSubmission.query.join(User, PtwDoorSubmission.officer_id == User.id).filter(User.company_id == _c).all()
-        officer_all  = defaultdict(list)
-        officer_week = defaultdict(list)
-        officer_ids  = set()
-        for sub in all_ptw_subs:
-            officer_all[sub.officer_id].append(sub)
-            officer_ids.add(sub.officer_id)
-        for sub in ptw_week_subs:
-            officer_week[sub.officer_id].append(sub)
-
-        ptw_trainees = []
-        total_approved_week = 0
-        for oid in officer_ids:
-            u_obj = User.query.get(oid)
-            if not u_obj:
-                continue
-            week_subs  = officer_week[oid]
-            all_subs_o = officer_all[oid]
-            sub_w = len(week_subs)
-            app_w = sum(1 for s in week_subs if s.status == "approved")
-            rej_w = sum(1 for s in week_subs if s.status == "rejected")
-            pend  = sum(1 for s in week_subs if s.status == "pending")
-            total_approved_week += app_w
-            total_app_all = sum(1 for s in all_subs_o if s.status == "approved")
-            overall = f"{total_app_all}/35"
-            pct     = int(total_app_all / 35 * 100)
-            per_module = []
+            all_subs_tr = PtwDoorSubmission.query.filter_by(officer_id=u_tr.id).all()
+            ptw_per_module = []
+            ptw_stages_week = sum(1 for s in all_subs_tr if s.status == "approved"
+                                  and s.submitted_at and week_start_dt <= s.submitted_at <= week_end_dt)
             for mi in range(1, 8):
-                mod_subs = [s for s in all_subs_o if s.module_seq == mi]
+                mod_subs = [s for s in all_subs_tr if s.module_seq == mi]
                 approved = sum(1 for s in mod_subs if s.status == "approved")
-                total_m  = len(mod_subs)
-                if approved == 5:
-                    per_module.append("5/5")
-                elif approved > 0 or total_m > 0:
-                    per_module.append(f"{approved}/5")
-                else:
-                    per_module.append("—")
-            cur_mod = "Module 1"
-            for mi, val in enumerate(per_module, 1):
-                if val != "5/5":
-                    cur_mod = f"Module {mi}"
-                    break
-            ptw_trainees.append({"name": u_obj.name, "cur_module": cur_mod,
-                                  "sub_week": sub_w, "app_week": app_w,
-                                  "rej_week": rej_w, "pending": pend,
-                                  "overall": overall, "pct": pct,
-                                  "per_module": per_module, "active": sub_w > 0})
-        ptw_data = {"week_label": f"{week_start.strftime('%d %b')} – {week_end.strftime('%d %b %Y')}",
-                    "active": len([t for t in ptw_trainees if t["active"]]),
-                    "submitted": sum(t["sub_week"] for t in ptw_trainees),
-                    "approved": total_approved_week,
-                    "rejected": sum(t["rej_week"] for t in ptw_trainees),
-                    "trainees": ptw_trainees}
+                ptw_per_module.append("5/5" if approved == 5 else (f"{approved}/5" if approved > 0 or mod_subs else "—"))
+            total_ptw_app = sum(1 for s in all_subs_tr if s.status == "approved")
 
+            obs_tr = HseObservation.query.filter(
+                HseObservation.officer_id == u_tr.id,
+                HseObservation.date >= week_start,
+                HseObservation.date <= week_end,
+            ).all()
+
+            trainees_out.append({
+                "name": u_tr.name, "modules": modules_data, "new_passes": new_passes,
+                "ptw_per_module": ptw_per_module, "ptw_overall": f"{total_ptw_app}/35",
+                "ptw_stages_this_week": ptw_stages_week,
+                "obs_count": len(obs_tr), "obs_high": sum(1 for o in obs_tr if o.risk_level == "H"),
+            })
+
+        # ── HSE aggregate ─────────────────────────────────────────────
         week_obs = HseObservation.query.filter(
             HseObservation.company_id == _c,
-            HseObservation.date >= week_start,
-            HseObservation.date <= week_end,
+            HseObservation.date >= week_start, HseObservation.date <= week_end,
         ).all()
-        _all_officer_ids = [u_o.id for u_o in User.query.filter_by(company_id=_c).all()]
+        _co_ids = [u.id for u in User.query.filter_by(company_id=_c).all()]
         week_tbts = HseTbt.query.filter(
-            HseTbt.officer_id.in_(_all_officer_ids),
-            HseTbt.date >= week_start,
-            HseTbt.date <= week_end,
+            HseTbt.officer_id.in_(_co_ids),
+            HseTbt.date >= week_start, HseTbt.date <= week_end,
         ).all()
-        tbt_attend_total = sum(tbt.attendance.count() for tbt in week_tbts)
-        all_officers_qs = User.query.filter_by(company_id=_c, role="safety_officer").all()
-        hse_data = {"week_label": f"{week_start.strftime('%d %b')} – {week_end.strftime('%d %b %Y')}",
-                    "total_obs": len(week_obs),
-                    "high_risk": sum(1 for o in week_obs if o.risk_level == "H"),
-                    "jso_closures": HseJsoClosure.query.filter(
-                        HseJsoClosure.company_id == _c,
-                        HseJsoClosure.date >= week_start,
-                        HseJsoClosure.date <= week_end,
-                    ).count(),
-                    "tbt_sessions": len(week_tbts),
-                    "tbt_attend": tbt_attend_total,
-                    "officers_active": len({o.officer_id for o in week_obs}),
-                    "officers_total": len(all_officers_qs)}
+        tbt_attend_total = sum(t.attendance.count() for t in week_tbts)
+        jso_count = HseJsoClosure.query.filter(
+            HseJsoClosure.company_id == _c,
+            HseJsoClosure.date >= week_start, HseJsoClosure.date <= week_end,
+        ).count()
+        hse_agg = {
+            "total_obs": len(week_obs), "high": sum(1 for o in week_obs if o.risk_level == "H"),
+            "medium": sum(1 for o in week_obs if o.risk_level == "M"),
+            "low": sum(1 for o in week_obs if o.risk_level == "L"),
+            "positive": sum(1 for o in week_obs if o.obs_type == "positive"),
+            "tbt_sessions": len(week_tbts), "tbt_attend": tbt_attend_total,
+            "officers_active": len({o.officer_id for o in week_obs}), "jso_closures": jso_count,
+        }
 
-        from collections import defaultdict as _dd
-        day_obs  = _dd(list)
-        day_tbts = _dd(list)
-        for o in week_obs:
-            day_obs[o.date].append(o)
-        for tbt in week_tbts:
-            day_tbts[tbt.date].append(tbt)
-        obs_data = []
-        for day in sorted(day_obs.keys()):
-            obs_list_day = day_obs[day]
-            tbts_day     = day_tbts[day]
-            tbt_attend_day = sum(t.attendance.count() for t in tbts_day)
-            sgl_sessions = []
-            for tbt in tbts_day:
-                officer_u = User.query.get(tbt.officer_id)
-                sgl_sessions.append({"num": str(len(sgl_sessions) + 1), "topic": tbt.topic or "—",
-                                     "location": tbt.location or "—",
-                                     "officer": officer_u.name if officer_u else "—",
-                                     "attend": tbt.attendance.count()})
-            key_obs = [o.description[:80] for o in obs_list_day if o.description and len(o.description) > 15][:4]
-            obs_data.append({"date": day.strftime("%d %b %Y"), "date_label": day.strftime("%a %d %b"),
-                             "total_obs": len(obs_list_day), "sgl_count": len(tbts_day),
-                             "sgl_attend": tbt_attend_day,
-                             "high": sum(1 for o in obs_list_day if o.risk_level == "H"),
-                             "medium": sum(1 for o in obs_list_day if o.risk_level == "M"),
-                             "low": sum(1 for o in obs_list_day if o.risk_level == "L"),
-                             "positive": sum(1 for o in obs_list_day if o.obs_type == "positive"),
-                             "key_obs": key_obs, "sgl_sessions": sgl_sessions})
+        # ── PTW summary ───────────────────────────────────────────────
+        all_week_ptw = PtwDoorSubmission.query.join(User, PtwDoorSubmission.officer_id == User.id).filter(
+            User.company_id == _c,
+            PtwDoorSubmission.submitted_at >= week_start_dt,
+            PtwDoorSubmission.submitted_at <= week_end_dt,
+        ).all()
+        ptw_summary = {
+            "submitted": len(all_week_ptw),
+            "approved":  sum(1 for s in all_week_ptw if s.status == "approved"),
+            "rejected":  sum(1 for s in all_week_ptw if s.status == "rejected"),
+            "pending":   sum(1 for s in all_week_ptw if s.status == "pending"),
+        }
 
-        pptx_bytes = generate_report_from_data(
-            template_path=TRAINEE_TEMPLATE_PATH,
-            csv_data=csv_data, hse_data=hse_data,
-            ptw_data=ptw_data, obs_data=obs_data,
-        )
-        now_str  = now.strftime("%Y%m%d_%H%M")
-        filename = f"Trainee_Weekly_Report_{now_str}.pptx"
+        # ── Daily obs breakdown ───────────────────────────────────────
+        day_obs_map  = _dd(list)
+        day_tbts_map = _dd(list)
+        for o in week_obs: day_obs_map[o.date].append(o)
+        for t in week_tbts: day_tbts_map[t.date].append(t)
+        obs_by_day = []
+        for day in sorted(set(list(day_obs_map.keys()) + list(day_tbts_map.keys()))):
+            obs_d  = day_obs_map[day]; tbts_d = day_tbts_map[day]
+            key_obs = [o.description[:80] for o in obs_d if o.description and len(o.description) > 15][:4]
+            obs_by_day.append({
+                "date_label": day.strftime("%a %d %b"), "total": len(obs_d),
+                "high": sum(1 for o in obs_d if o.risk_level == "H"),
+                "medium": sum(1 for o in obs_d if o.risk_level == "M"),
+                "low": sum(1 for o in obs_d if o.risk_level == "L"),
+                "positive": sum(1 for o in obs_d if o.obs_type == "positive"),
+                "tbt": len(tbts_d), "tbt_attend": sum(t.attendance.count() for t in tbts_d),
+                "key_obs": key_obs,
+            })
+
+        # ── TBT sessions list ─────────────────────────────────────────
+        tbt_sessions_list = [{"topic": t.topic or "—",
+                               "officer": (User.query.get(t.officer_id).name if User.query.get(t.officer_id) else "—"),
+                               "location": t.location or "—", "attend": t.attendance.count()} for t in week_tbts]
+
+        # ── Delta vs previous week ────────────────────────────────────
+        prev_start = week_start - timedelta(days=7)
+        prev_end   = week_start - timedelta(days=1)
+        prev_obs   = HseObservation.query.filter(HseObservation.company_id == _c,
+                        HseObservation.date >= prev_start, HseObservation.date <= prev_end).count()
+        prev_tbts  = HseTbt.query.filter(HseTbt.officer_id.in_(_co_ids),
+                        HseTbt.date >= prev_start, HseTbt.date <= prev_end).count()
+        delta = {
+            "modules_passed": sum(len(t["new_passes"]) for t in trainees_out),
+            "ptw_stages":     sum(t["ptw_stages_this_week"] for t in trainees_out),
+            "obs":            len(week_obs) - prev_obs,
+            "tbt":            len(week_tbts) - prev_tbts,
+        }
+
+        # ── Obs detail slide ──────────────────────────────────────────
+        obs_detail = []
+        for o in sorted(week_obs, key=lambda x: (x.date, x.id)):
+            u_o = User.query.get(o.officer_id)
+            obs_detail.append({
+                "date": o.date.strftime("%a %d %b"), "officer": u_o.name if u_o else "—",
+                "location": o.location or "—", "risk": o.risk_level or "—",
+                "obs_type": o.obs_type or "—", "description": (o.description or "")[:120],
+                "action": (o.action_taken or "")[:80], "status": o.status or "open",
+            })
+
+        company_obj  = Company.query.get(_c)
+        company_name = company_obj.name if company_obj else ""
+
+        data = {
+            "week_start": week_start, "week_end": week_end,
+            "company_name": company_name, "generated_at": now,
+            "trainees": trainees_out, "hse": hse_agg,
+            "ptw_summary": ptw_summary, "obs_by_day": obs_by_day,
+            "obs_detail": obs_detail, "tbt_sessions": tbt_sessions_list,
+            "delta": delta,
+        }
+
+        pptx_bytes = build_report(data)
+        ws_str   = week_start.strftime("%Y%m%d")
+        we_str   = week_end.strftime("%Y%m%d")
+        filename = f"Trainee_Report_{ws_str}_{we_str}.pptx"
         resp = make_response(pptx_bytes)
         resp.headers["Content-Type"] = ("application/vnd.openxmlformats-officedocument"
                                         ".presentationml.presentation")
