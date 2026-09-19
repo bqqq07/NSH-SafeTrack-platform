@@ -19277,9 +19277,11 @@ def hse_trainee_report_generate_auto():
         week_end   = week_start + timedelta(days=6)
 
         # ── 1. E-Learning progress (csv_data) ────────────────────────
-        # Trainees = safety_officers with ptw_training_active
-        trainees_qs = User.query.filter_by(
-            company_id=_c, role="safety_officer", ptw_training_active=True
+        # Trainees = safety_officer / safety_welfare / environment_officer
+        trainees_qs = User.query.filter(
+            User.company_id == _c,
+            User.role.in_(["safety_officer", "safety_welfare", "environment_officer"]),
+            User.ptw_training_active == True,
         ).order_by(User.name).all()
 
         STATUS_MAP = {True: "Passed", None: "In Progress", False: "—"}
@@ -19523,8 +19525,10 @@ def hse_trainee_report_generate_auto():
 def hse_trainee_report_filter():
     """Filter page: select trainees and week before generating the new report."""
     _c = cid()
-    trainees_qs = User.query.filter_by(
-        company_id=_c, role="safety_officer", ptw_training_active=True
+    trainees_qs = User.query.filter(
+        User.company_id == _c,
+        User.role.in_(["safety_officer", "safety_welfare", "environment_officer"]),
+        User.ptw_training_active == True,
     ).order_by(User.name).all()
 
     now        = datetime.now(RIYADH_TZ)
@@ -19564,8 +19568,10 @@ def hse_trainee_report_generate_v2():
         selected_ids_raw = request.form.getlist("trainee_ids")
         selected_ids = [int(x) for x in selected_ids_raw if x.isdigit()]
 
-        trainees_base = User.query.filter_by(
-            company_id=_c, role="safety_officer", ptw_training_active=True
+        trainees_base = User.query.filter(
+            User.company_id == _c,
+            User.role.in_(["safety_officer", "safety_welfare", "environment_officer"]),
+            User.ptw_training_active == True,
         ).order_by(User.name).all()
 
         if selected_ids:
