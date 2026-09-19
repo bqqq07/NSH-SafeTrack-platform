@@ -19416,8 +19416,9 @@ def hse_trainee_report_generate_auto():
             HseObservation.date <= week_end,
         ).all()
 
+        _all_officer_ids = [u_o.id for u_o in User.query.filter_by(company_id=_c).all()]
         week_tbts = HseTbt.query.filter(
-            HseTbt.company_id == _c,
+            HseTbt.officer_id.in_(_all_officer_ids),
             HseTbt.date >= week_start,
             HseTbt.date <= week_end,
         ).all()
@@ -19660,8 +19661,9 @@ def hse_trainee_report_generate_v2():
             HseObservation.date >= week_start,
             HseObservation.date <= week_end,
         ).all()
+        _co_officer_ids = [u_o.id for u_o in User.query.filter_by(company_id=_c).all()]
         week_tbts = HseTbt.query.filter(
-            HseTbt.company_id == _c,
+            HseTbt.officer_id.in_(_co_officer_ids),
             HseTbt.date >= week_start,
             HseTbt.date <= week_end,
         ).all()
