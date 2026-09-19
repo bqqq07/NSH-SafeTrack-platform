@@ -19518,6 +19518,20 @@ def hse_trainee_report_generate_auto():
         return redirect(url_for("hse_trainee_report"))
 
 
+@app.get("/api/hse/trainees")
+@api_hse_supervisor_required
+def api_hse_trainees():
+    """Return list of trainees (safety_officer / safety_welfare / environment_officer)."""
+    _c = cid()
+    trainees = User.query.filter(
+        User.company_id == _c,
+        User.role.in_(["safety_officer", "safety_welfare", "environment_officer"]),
+        User.is_active == True,
+    ).order_by(User.role, User.name).all()
+    return jsonify([{"id": u.id, "name": u.name, "code": u.employee_id or str(u.id),
+                     "role": u.role} for u in trainees])
+
+
 @app.post("/api/hse/trainee-report/generate-auto")
 @api_hse_supervisor_required
 def api_hse_trainee_report_generate_auto():
@@ -19534,10 +19548,15 @@ def api_hse_trainee_report_generate_auto():
         week_start = (now - timedelta(days=now.weekday())).date()
         week_end   = week_start + timedelta(days=6)
 
+        body = request.get_json(silent=True) or {}
+        selected_ids = body.get("trainee_ids") or []
+
         trainees_qs = User.query.filter(
             User.company_id == _c,
             User.role.in_(["safety_officer", "safety_welfare", "environment_officer"]),
         ).order_by(User.name).all()
+        if selected_ids:
+            trainees_qs = [u for u in trainees_qs if u.id in selected_ids]
 
         csv_trainees = []
         for u_tr in trainees_qs:
