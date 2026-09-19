@@ -161,12 +161,28 @@
     </form>
   </div>
 
-  <!-- Auto Generate section -->
+  <!-- New V2 Report -->
+  <div class="full-card" style="margin-bottom:20px; border-color:#86efac; border-width:2px">
+    <h3>✨ التقرير الجديد (English · بدون قالب)</h3>
+    <p class="hint">
+      يبني تقريراً إنجليزياً كاملاً من قاعدة البيانات مباشرةً — بدون رفع أي ملف أو قالب.
+      يشمل: E-Learning + PTW Field Training + HSE Observations + TBT.
+      <br>يمكنك تحديد متدربين معينين أو توليد التقرير لجميعهم.
+    </p>
+    <a href="{{ url_for('hse_trainee_report_filter') }}"
+       class="tr-btn btn-auto"
+       style="display:block;text-align:center;text-decoration:none;padding:.65rem 1rem">
+      ✨ فتح صفحة التصفية وتوليد التقرير
+    </a>
+  </div>
+
+  <!-- Auto Generate section (old template-based) -->
   <div class="full-card" style="margin-bottom:20px; border-color:#86efac">
-    <h3>⚡ توليد تلقائي من قاعدة البيانات</h3>
+    <h3>⚡ توليد تلقائي من قاعدة البيانات (قالب)</h3>
     <p class="hint">
       يسحب بيانات الأسبوع الحالي مباشرةً من الموقع (E-Learning + PTW Submissions + Observations + TBT)
       دون الحاجة لرفع أي ملف. يغطي من <strong>الاثنين</strong> إلى <strong>الأحد</strong> لهذا الأسبوع.
+      يستخدم القالب المرفوع مسبقاً.
     </p>
     <form method="post"
           action="{{ url_for('hse_trainee_report_generate_auto') }}"

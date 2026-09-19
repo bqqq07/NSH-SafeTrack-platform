@@ -1,0 +1,196 @@
+{% extends "base.html" %}
+{% block title %}New Trainee Report — Select Trainees{% endblock %}
+{% block content %}
+<style>
+.filter-wrap {
+  max-width:820px; margin:0 auto;
+}
+.filter-card {
+  background:#fff; border:1px solid var(--border,#E4EAF0);
+  border-radius:14px; padding:24px;
+  box-shadow:0 1px 4px rgba(90,110,130,.07);
+  margin-bottom:20px;
+}
+.filter-card h2 { margin:0 0 4px; font-size:1.05rem; color:#1e293b; font-weight:700 }
+.filter-card .hint { font-size:.82rem; color:#64748b; margin-bottom:18px; line-height:1.5 }
+
+.week-row {
+  display:flex; gap:14px; flex-wrap:wrap; margin-bottom:18px;
+}
+.week-row label { font-size:.78rem; font-weight:600; color:#475569; display:block; margin-bottom:4px }
+.week-row input[type=date] {
+  padding:.45rem .7rem; border:1px solid #D5DFE8; border-radius:8px;
+  font-size:.9rem; color:#1e293b; background:#f8fafc;
+}
+
+.trainee-grid {
+  display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr));
+  gap:10px; margin-bottom:18px;
+}
+.trainee-item {
+  display:flex; align-items:center; gap:9px;
+  padding:9px 12px; border:1px solid #e2e8f0; border-radius:9px;
+  cursor:pointer; transition:background .12s, border-color .12s;
+  user-select:none;
+}
+.trainee-item:hover { background:#f0f9ff; border-color:#93c5fd }
+.trainee-item input[type=checkbox] { accent-color:#1e40af; width:15px; height:15px; cursor:pointer }
+.trainee-item.checked { background:#eff6ff; border-color:#1e40af }
+.trainee-name { font-size:.87rem; color:#1e293b; font-weight:500 }
+
+.ctrl-row {
+  display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;
+}
+.ctrl-btn {
+  padding:.35rem .85rem; border:1px solid #cbd5e1; border-radius:7px;
+  font-size:.8rem; font-weight:600; color:#475569; background:#f8fafc;
+  cursor:pointer; transition:background .12s;
+}
+.ctrl-btn:hover { background:#f1f5f9 }
+
+.gen-btn {
+  width:100%; padding:.7rem 1rem; border:none; border-radius:10px;
+  background:#1e40af; color:#fff; font-weight:700; font-size:.95rem;
+  cursor:pointer; letter-spacing:.2px; transition:opacity .15s;
+}
+.gen-btn:hover { opacity:.9 }
+.gen-btn:disabled { background:#94a3b8; cursor:not-allowed }
+
+.back-link {
+  display:inline-flex; align-items:center; gap:6px;
+  font-size:.85rem; color:#475569; text-decoration:none; margin-bottom:16px;
+}
+.back-link:hover { color:#1e40af }
+
+.badge {
+  display:inline-block; background:#eff6ff; color:#1d4ed8;
+  border:1px solid #bfdbfe; border-radius:20px;
+  font-size:.75rem; font-weight:700; padding:2px 9px; margin-left:6px;
+}
+
+.info-box {
+  font-size:.82rem; background:#f0fdf4; border:1px solid #86efac;
+  border-radius:8px; padding:10px 14px; color:#15803d; margin-bottom:16px;
+  line-height:1.6;
+}
+</style>
+
+<section class="report filter-wrap">
+
+  <a href="{{ url_for('hse_trainee_report') }}" class="back-link">← Back to Report Generator</a>
+
+  <header class="report-header" style="margin-bottom:18px">
+    <div class="report-head-center">
+      <h1>New Auto Report</h1>
+      <p class="muted">Select trainees and week range, then generate a fully English PPTX from the database.</p>
+    </div>
+  </header>
+
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in msgs %}
+      <div style="padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:.9rem;font-weight:600;
+                  background:{{ '#f0fdf4' if cat=='success' else '#fff1f2' }};
+                  color:{{ '#15803d' if cat=='success' else '#be123c' }};
+                  border:1px solid {{ '#86efac' if cat=='success' else '#fca5a5' }}">
+        {{ msg }}
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <form method="post" action="{{ url_for('hse_trainee_report_generate_v2') }}" id="v2Form">
+
+    <!-- Week Range -->
+    <div class="filter-card">
+      <h2>Week Range</h2>
+      <p class="hint">Defaults to the current week (Monday – Sunday). Adjust if you need a different period.</p>
+      <div class="week-row">
+        <div>
+          <label>Week Start (Monday)</label>
+          <input type="date" name="week_start" id="weekStart" value="{{ week_start }}" required>
+        </div>
+        <div>
+          <label>Week End (Sunday)</label>
+          <input type="date" name="week_end" id="weekEnd" value="{{ week_end }}" required>
+        </div>
+      </div>
+    </div>
+
+    <!-- Trainee Filter -->
+    <div class="filter-card">
+      <h2>Trainees <span class="badge" id="selCount">{{ trainees|length }}</span></h2>
+      <p class="hint">
+        Uncheck any trainee to exclude them from the report.
+        All are selected by default — leaving all unchecked also includes everyone.
+      </p>
+
+      {% if trainees %}
+        <div class="ctrl-row">
+          <button type="button" class="ctrl-btn" onclick="setAll(true)">Select All</button>
+          <button type="button" class="ctrl-btn" onclick="setAll(false)">Deselect All</button>
+        </div>
+
+        <div class="trainee-grid" id="traineeGrid">
+          {% for tr in trainees %}
+          <label class="trainee-item checked" id="lbl_{{ tr.id }}">
+            <input type="checkbox" name="trainee_ids" value="{{ tr.id }}"
+                   checked onchange="onCheck(this)">
+            <span class="trainee-name">{{ tr.name }}</span>
+          </label>
+          {% endfor %}
+        </div>
+
+        <div class="info-box">
+          <strong>Tip:</strong> Selecting specific trainees generates a focused report. Selecting all (or leaving all unchecked) generates the full weekly report.
+        </div>
+      {% else %}
+        <p style="color:#94a3b8;font-size:.9rem">No active trainees found in this company.</p>
+      {% endif %}
+    </div>
+
+    <!-- Generate -->
+    <button class="gen-btn" type="submit" id="genBtn"
+            {% if not trainees %}disabled{% endif %}>
+      ⚡ Generate Report (PPTX)
+    </button>
+
+  </form>
+</section>
+
+<script>
+var total = {{ trainees|length }};
+
+function updateBadge() {
+  var checked = document.querySelectorAll('input[name="trainee_ids"]:checked').length;
+  document.getElementById('selCount').textContent = checked === 0 ? total + ' (all)' : checked;
+}
+
+function onCheck(cb) {
+  var lbl = cb.closest('.trainee-item');
+  lbl.classList.toggle('checked', cb.checked);
+  updateBadge();
+}
+
+function setAll(state) {
+  document.querySelectorAll('input[name="trainee_ids"]').forEach(function(cb) {
+    cb.checked = state;
+    cb.closest('.trainee-item').classList.toggle('checked', state);
+  });
+  updateBadge();
+}
+
+document.getElementById('v2Form').addEventListener('submit', function() {
+  var btn = document.getElementById('genBtn');
+  btn.disabled = true;
+  btn.textContent = '⏳ Generating report…';
+});
+
+// Auto-adjust week_end when week_start changes (keep 6-day span)
+document.getElementById('weekStart').addEventListener('change', function() {
+  var s = new Date(this.value);
+  if (!isNaN(s.getTime())) {
+    s.setDate(s.getDate() + 6);
+    document.getElementById('weekEnd').value = s.toISOString().slice(0,10);
+  }
+});
+</script>
+{% endblock %}
