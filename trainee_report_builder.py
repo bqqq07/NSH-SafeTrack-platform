@@ -742,11 +742,15 @@ def _s_tbt(prs, data):
     tbl_w  = sum(COL_W)
     tbl_l  = (SW - tbl_w) / 2
     tbl_t  = cy + Inches(0.08)
-    tbl_h  = SH - tbl_t - Inches(0.15)
+    HDR_H  = Inches(0.38)
+    ROW_H  = Inches(0.42)
+    tbl_h  = HDR_H + ROW_H * len(sessions)
 
     tf  = slide.shapes.add_table(n_rows, 5, tbl_l, tbl_t, tbl_w, tbl_h)
     tbl = tf.table
     for ci, cw in enumerate(COL_W): tbl.columns[ci].width = cw
+    tbl.rows[0].height = HDR_H
+    for ri in range(1, n_rows): tbl.rows[ri].height = ROW_H
 
     hdr_bg = _c(0x0d,0x94,0x88)
     for ci, h in enumerate(["#","Topic","Officer","Location","Attendance"]):
@@ -813,12 +817,16 @@ def _s_obs_detail(prs, data):
         n_rows = len(page_rows) + 1
         fs     = _tfont(n_rows)
         tbl_t  = cy + Inches(0.06)
-        tbl_h  = SH - tbl_t - Inches(0.12)
+        HDR_H  = Inches(0.38)
+        ROW_H  = Inches(0.38)
+        tbl_h  = HDR_H + ROW_H * len(page_rows)
 
         tf  = slide.shapes.add_table(n_rows, 8, tbl_l, tbl_t, tbl_w, tbl_h)
         tbl = tf.table
         for ci, cw in enumerate(COL_W):
             tbl.columns[ci].width = cw
+        tbl.rows[0].height = HDR_H
+        for ri in range(1, n_rows): tbl.rows[ri].height = ROW_H
 
         # Header row
         for ci, h in enumerate(HEADERS):
