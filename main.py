@@ -19742,15 +19742,30 @@ def hse_trainee_report_generate_v2():
                 "attend":   tbt.attendance.count(),
             })
 
-        # ── Delta (new this week) ─────────────────────────────────────
+        # ── Delta vs previous week ────────────────────────────────────
         new_modules_total = sum(len(t["new_passes"]) for t in trainees_out)
         new_ptw_stages    = sum(t["ptw_stages_this_week"] for t in trainees_out)
+
+        prev_start = week_start - timedelta(days=7)
+        prev_end   = week_start - timedelta(days=1)
+
+        prev_obs_count = HseObservation.query.filter(
+            HseObservation.company_id == _c,
+            HseObservation.date >= prev_start,
+            HseObservation.date <= prev_end,
+        ).count()
+
+        prev_tbts = HseTbt.query.filter(
+            HseTbt.officer_id.in_(_co_officer_ids),
+            HseTbt.date >= prev_start,
+            HseTbt.date <= prev_end,
+        ).count()
 
         delta = {
             "modules_passed": new_modules_total,
             "ptw_stages":     new_ptw_stages,
-            "obs":            len(week_obs),
-            "tbt":            len(week_tbts),
+            "obs":            len(week_obs) - prev_obs_count,
+            "tbt":            len(week_tbts) - prev_tbts,
         }
 
         company_obj = Company.query.get(_c)
