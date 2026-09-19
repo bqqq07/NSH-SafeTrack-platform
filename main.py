@@ -19820,6 +19820,425 @@ def hse_trainee_report_generate_v2():
         return redirect(url_for("hse_trainee_report_filter"))
 
 
+# ══════════════════════════════════════════════════════════════════════════════
+#  API: Admin Safety Management (iOS)
+# ══════════════════════════════════════════════════════════════════════════════
+
+# ── Admin Safety Teams ────────────────────────────────────────────────────────
+@app.get("/api/admin/safety-teams")
+@api_admin_required
+def api_admin_safety_teams_get():
+    _c = api_cid()
+    sups_q = User.query.filter_by(role="safety_supervisor", is_active=True)
+    if _c:
+        sups_q = sups_q.filter_by(company_id=_c)
+    supervisors = sups_q.order_by(User.name).all()
+
+    offs_q = User.query.filter(User.role.in_(OFFICER_ROLES), User.is_active == True)
+    if _c:
+        offs_q = offs_q.filter(User.company_id == _c)
+    all_officers = offs_q.order_by(User.role, User.name).all()
+
+    result = []
+    assigned_ids = set()
+    for sup in supervisors:
+        rows = (db.session.query(OfficerTeam, User)
+                .join(User, OfficerTeam.officer_id == User.id)
+                .filter(OfficerTeam.supervisor_id == sup.id)
+                .order_by(User.role, User.name).all())
+        officers_list = []
+        for team_row, officer in rows:
+            assigned_ids.add(officer.id)
+            officers_list.append({
+                "team_id":    team_row.id,
+                "officer_id": officer.id,
+                "name":       officer.name or officer.supervisor_code,
+                "code":       officer.supervisor_code,
+                "role":       officer.role,
+                "role_label": officer.role.replace("_", " ").title()
+            })
+        result.append({
+            "sup_id":   sup.id,
+            "name":     sup.name or sup.supervisor_code,
+            "code":     sup.supervisor_code,
+            "officers": officers_list
+        })
+
+    unassigned = [
+        {"officer_id": o.id, "name": o.name or o.supervisor_code,
+         "code": o.supervisor_code, "role": o.role,
+         "role_label": o.role.replace("_", " ").title()}
+        for o in all_officers if o.id not in assigned_ids
+    ]
+    all_offs_list = [
+        {"officer_id": o.id, "name": o.name or o.supervisor_code,
+         "code": o.supervisor_code, "role": o.role,
+         "role_label": o.role.replace("_", " ").title(),
+         "assigned": o.id in assigned_ids}
+        for o in all_officers
+    ]
+    return jsonify({"supervisors": result, "unassigned": unassigned,
+                    "all_officers": all_offs_list})
+
+
+@app.post("/api/admin/safety-teams")
+@api_admin_required
+def api_admin_safety_teams_post():
+    _c = api_cid()
+    data   = freq.get_json(force=True) or {}
+    action = data.get("action")
+    if action == "assign":
+        sup_id = int(data.get("sup_id") or 0)
+        off_id = int(data.get("off_id") or 0)
+        if sup_id and off_id:
+            exists = OfficerTeam.query.filter_by(supervisor_id=sup_id, officer_id=off_id).first()
+            if not exists:
+                db.session.add(OfficerTeam(supervisor_id=sup_id, officer_id=off_id, company_id=_c))
+                db.session.commit()
+        return jsonify({"ok": True})
+    elif action == "remove":
+        tid = int(data.get("team_id") or 0)
+        row = db.session.get(OfficerTeam, tid) if tid else None
+        if row:
+            db.session.delete(row)
+            db.session.commit()
+        return jsonify({"ok": True})
+    return jsonify({"error": "Invalid action"}), 400
+
+
+# ── Admin Officers Activity Report ────────────────────────────────────────────
+@app.post("/api/admin/officers-report")
+@api_admin_required
+def api_admin_officers_report():
+    _c   = api_cid()
+    data = freq.get_json(force=True) or {}
+    raw_from    = (data.get("date_from") or "").strip()
+    raw_to      = (data.get("date_to")   or "").strip()
+    officer_ids = data.get("officer_ids") or []
+
+    try:
+        date_from = parse_date(raw_from)
+        date_to   = parse_date(raw_to)
+    except Exception:
+        return jsonify({"error": "Invalid dates"}), 400
+
+    officers_q = User.query.filter(User.role.in_(OFFICER_ROLES), User.is_active == True)
+    if _c:
+        officers_q = officers_q.filter(User.company_id == _c)
+    all_officers = officers_q.order_by(User.role, User.name).all()
+
+    if not officer_ids:
+        selected = [o.id for o in all_officers]
+    else:
+        selected = [int(x) for x in officer_ids]
+
+    rows = []
+    for o in all_officers:
+        if o.id not in selected:
+            continue
+        if o.role == "safety_officer":
+            submissions = HseCheckin.query.filter(
+                HseCheckin.officer_id == o.id,
+                HseCheckin.date.between(date_from, date_to)).count()
+            finds = 0
+            detail = f"{submissions} check-ins"
+            label  = "Safety Officer"
+        elif o.role == "safety_welfare":
+            submissions = WlfLevelWork.query.filter(
+                WlfLevelWork.officer_id == o.id,
+                WlfLevelWork.date.between(date_from, date_to)).count()
+            finds = WlfFinding.query.filter(
+                WlfFinding.officer_id == o.id,
+                WlfFinding.date.between(date_from, date_to)).count()
+            detail = f"{submissions} field submissions"
+            label  = "Welfare Officer"
+        elif o.role == "environment_officer":
+            submissions = EnvLevelWork.query.filter(
+                EnvLevelWork.officer_id == o.id,
+                EnvLevelWork.date.between(date_from, date_to)).count()
+            finds = WlfFinding.query.filter(
+                WlfFinding.officer_id == o.id,
+                WlfFinding.date.between(date_from, date_to)).count()
+            detail = f"{submissions} env submissions"
+            label  = "Environment Officer"
+        else:
+            continue
+        rows.append({"officer_id": o.id, "name": o.name or o.supervisor_code,
+                     "code": o.supervisor_code, "role": o.role, "role_label": label,
+                     "submissions": submissions, "findings": finds, "detail": detail})
+
+    all_offs_list = [
+        {"officer_id": o.id, "name": o.name or o.supervisor_code,
+         "code": o.supervisor_code, "role": o.role,
+         "role_label": o.role.replace("_", " ").title()}
+        for o in all_officers
+    ]
+    return jsonify({
+        "date_from":        date_from.isoformat(),
+        "date_to":          date_to.isoformat(),
+        "rows":             rows,
+        "all_officers":     all_offs_list,
+        "total_submissions": sum(r["submissions"] for r in rows),
+        "total_findings":   sum(r["findings"] for r in rows)
+    })
+
+
+# ── Admin Safety Supervisor Assignments ───────────────────────────────────────
+@app.get("/api/admin/safety-supervisor/assign")
+@api_admin_required
+def api_admin_safety_sup_assign_get():
+    _c = api_cid()
+    sups = User.query.filter_by(role="safety_supervisor", is_active=True,
+                                 company_id=_c).order_by(User.name).all()
+    offs = User.query.filter_by(role="safety_officer", is_active=True,
+                                 company_id=_c).order_by(User.name).all()
+    maps = SafetySupervisorMap.query.filter(SafetySupervisorMap.company_id == _c).all()
+    map_dict = {}
+    for m in maps:
+        map_dict.setdefault(m.safety_sup_id, []).append(m.officer_id)
+
+    assigned_ids = set()
+    result = []
+    for sup in sups:
+        assigned = map_dict.get(sup.id, [])
+        assigned_ids.update(assigned)
+        result.append({
+            "sup_id":             sup.id,
+            "name":               sup.name or sup.supervisor_code,
+            "code":               sup.supervisor_code,
+            "assigned_officers":  [
+                {"officer_id": o.id, "name": o.name or o.supervisor_code, "code": o.supervisor_code}
+                for o in offs if o.id in assigned
+            ]
+        })
+
+    all_offs = [
+        {"officer_id": o.id, "name": o.name or o.supervisor_code,
+         "code": o.supervisor_code, "assigned": o.id in assigned_ids}
+        for o in offs
+    ]
+    return jsonify({"supervisors": result, "all_officers": all_offs,
+                    "unassigned": [x for x in all_offs if not x["assigned"]]})
+
+
+@app.post("/api/admin/safety-supervisor/assign")
+@api_admin_required
+def api_admin_safety_sup_assign_post():
+    _c        = api_cid()
+    data      = freq.get_json(force=True) or {}
+    action    = data.get("action")
+    sup_id    = int(data.get("sup_id") or 0)
+    officer_id = int(data.get("officer_id") or 0)
+    if action == "add" and sup_id and officer_id:
+        exists = SafetySupervisorMap.query.filter_by(safety_sup_id=sup_id,
+                                                      officer_id=officer_id).first()
+        if not exists:
+            db.session.add(SafetySupervisorMap(safety_sup_id=sup_id, officer_id=officer_id,
+                                                company_id=_c))
+            db.session.commit()
+        return jsonify({"ok": True})
+    elif action == "remove" and sup_id and officer_id:
+        SafetySupervisorMap.query.filter_by(safety_sup_id=sup_id,
+                                             officer_id=officer_id).delete()
+        db.session.commit()
+        return jsonify({"ok": True})
+    return jsonify({"error": "Invalid action"}), 400
+
+
+# ── Admin HSE Access ──────────────────────────────────────────────────────────
+@app.route("/admin/hse-access", methods=["GET", "POST"])
+@admin_required
+def admin_hse_access():
+    primary = User.query.filter_by(supervisor_code=HSE_SUPERVISOR_CODE, is_active=True).first()
+    if request.method == "POST":
+        action = request.form.get("action")
+        if action == "add":
+            code = (request.form.get("code") or "").strip().upper()
+            u = User.query.filter_by(supervisor_code=code, is_active=True).first()
+            if u:
+                if not HseSupervisorAccess.query.filter_by(user_id=u.id).first():
+                    db.session.add(HseSupervisorAccess(user_id=u.id))
+                    db.session.commit()
+                    flash("Access granted.", "success")
+                else:
+                    flash("User already has access.", "info")
+            else:
+                flash("User not found.", "danger")
+        elif action == "remove":
+            uid = int(request.form.get("user_id") or 0)
+            acc = HseSupervisorAccess.query.filter_by(user_id=uid).first()
+            if acc:
+                db.session.delete(acc)
+                db.session.commit()
+                flash("Access removed.", "success")
+        return redirect(url_for("admin_hse_access"))
+    access_rows = (db.session.query(HseSupervisorAccess, User)
+                   .join(User, HseSupervisorAccess.user_id == User.id)
+                   .order_by(User.name).all())
+    return render_template("admin_hse_access.html", primary=primary, access_list=access_rows)
+
+
+@app.get("/api/admin/hse-access")
+@api_admin_required
+def api_admin_hse_access_get():
+    primary = User.query.filter_by(supervisor_code=HSE_SUPERVISOR_CODE, is_active=True).first()
+    access_rows = (db.session.query(HseSupervisorAccess, User)
+                   .join(User, HseSupervisorAccess.user_id == User.id)
+                   .order_by(User.name).all())
+    result = []
+    if primary:
+        result.append({"user_id": primary.id, "name": primary.name,
+                        "code": primary.supervisor_code, "role": primary.role,
+                        "granted": None, "is_primary": True})
+    for acc, u in access_rows:
+        if primary and u.id == primary.id:
+            continue
+        result.append({"user_id": u.id, "name": u.name, "code": u.supervisor_code,
+                        "role": u.role,
+                        "granted": acc.granted_at.isoformat() if acc.granted_at else None,
+                        "is_primary": False})
+    return jsonify({"access_list": result})
+
+
+@app.post("/api/admin/hse-access")
+@api_admin_required
+def api_admin_hse_access_post():
+    data   = freq.get_json(force=True) or {}
+    action = data.get("action")
+    if action == "add":
+        code = (data.get("code") or "").strip().upper()
+        u = User.query.filter_by(supervisor_code=code, is_active=True).first()
+        if not u:
+            return jsonify({"error": "User not found"}), 404
+        if not HseSupervisorAccess.query.filter_by(user_id=u.id).first():
+            db.session.add(HseSupervisorAccess(user_id=u.id))
+            db.session.commit()
+        return jsonify({"ok": True,
+                        "user": {"user_id": u.id, "name": u.name, "code": u.supervisor_code}})
+    elif action == "remove":
+        uid = int(data.get("user_id") or 0)
+        acc = HseSupervisorAccess.query.filter_by(user_id=uid).first()
+        if acc:
+            db.session.delete(acc)
+            db.session.commit()
+        return jsonify({"ok": True})
+    return jsonify({"error": "Invalid action"}), 400
+
+
+# ── API: Safety Manager Dashboard (enhanced — admin / safety_manager) ─────────
+@app.get("/api/hse/safety-manager-dashboard")
+@api_admin_required
+def api_hse_safety_manager_dashboard():
+    from calendar import monthrange
+    _c          = api_cid()
+    today       = datetime.now(RIYADH_TZ).date()
+    period      = freq.args.get("period", "week")
+    week_offset = int(freq.args.get("week_offset", 0))
+
+    if period == "month":
+        first_day  = date(today.year, today.month, 1)
+        last_day   = today
+        period_lbl = today.strftime("%B %Y")
+        week_offset = 0
+        prev_m = today.month - 1 or 12
+        prev_y = today.year if today.month > 1 else today.year - 1
+        prev_first = date(prev_y, prev_m, 1)
+        prev_last  = date(prev_y, prev_m, monthrange(prev_y, prev_m)[1])
+    else:
+        dsun      = today.isoweekday() % 7
+        this_sun  = today - timedelta(days=dsun)
+        first_day = this_sun + timedelta(weeks=week_offset)
+        last_day  = min(first_day + timedelta(days=6), today)
+        period_lbl = f"{first_day.strftime('%d %b')} – {last_day.strftime('%d %b %Y')}"
+        prev_first = first_day - timedelta(days=7)
+        prev_last  = first_day - timedelta(days=1)
+
+    rows      = _hse_weekly_report_data(first_day, last_day, company_id=_c)
+    prev_rows = _hse_weekly_report_data(prev_first, prev_last, company_id=_c)
+    prev_map  = {r["officer_id"]: r["score"] for r in prev_rows}
+    for r in rows:
+        prev         = prev_map.get(r["officer_id"], 0)
+        r["prev_score"] = prev
+        r["trend"]      = round(r["score"] - prev, 1)
+    rows.sort(key=lambda r: r["score"], reverse=True)
+
+    total_off   = len(rows)
+    active_off  = sum(1 for r in rows if r["checkin_days"] > 0)
+    comp_pct    = round(active_off / total_off * 100) if total_off else 0
+    avg_score   = round(sum(r["score"] for r in rows) / total_off, 1) if total_off else 0
+    total_obs   = sum(r["obs_total"] for r in rows)
+    inactive    = [{"officer_id": r["officer_id"], "name": r["officer_name"]}
+                   for r in rows if r["checkin_days"] == 0]
+
+    # High-risk open observations
+    hr_q = HseObservation.query.filter_by(status="open", risk_level="H")
+    if _c:
+        hr_q = hr_q.filter(HseObservation.company_id == _c)
+    hr_list = [{"id": obs.id, "date": obs.date.isoformat(),
+                "officer_id": obs.officer_id, "category": obs.category or "",
+                "location": obs.location or "", "description": obs.description or ""}
+               for obs in hr_q.order_by(HseObservation.date).limit(15)]
+
+    # Overdue corrective actions
+    ca_q = HseCorrectiveAction.query.filter(
+        HseCorrectiveAction.status != "completed",
+        HseCorrectiveAction.due_date < today)
+    if _c:
+        ca_q = ca_q.filter(HseCorrectiveAction.company_id == _c)
+    ca_list = [{"id": ca.id,
+                "action_required": (ca.action_required or "")[:80],
+                "due_date": ca.due_date.isoformat() if ca.due_date else None}
+               for ca in ca_q.order_by(HseCorrectiveAction.due_date).limit(10)]
+
+    # 6-week team score trend
+    weekly_labels, weekly_avg = [], []
+    for i in range(5, -1, -1):
+        dsun_i = today.isoweekday() % 7
+        ws_i   = today - timedelta(days=dsun_i + i * 7)
+        we_i   = ws_i + timedelta(days=4)
+        wr     = _hse_weekly_report_data(ws_i, we_i, company_id=_c)
+        wavg   = round(sum(x["score"] for x in wr) / len(wr), 1) if wr else 0
+        weekly_labels.append(ws_i.strftime("%d %b"))
+        weekly_avg.append(wavg)
+
+    # Welfare summary
+    wlf_q = User.query.filter_by(role="safety_welfare", is_active=True)
+    if _c:
+        wlf_q = wlf_q.filter(User.company_id == _c)
+    wlf_rows = []
+    for o in wlf_q.order_by(User.name).all():
+        d = _wlf_monthly_card_data(o, first_day, last_day)
+        wlf_rows.append({"officer_id": o.id, "officer_name": o.name,
+                         "rounds": d["rounds"], "avg_score": d["avg_score"],
+                         "finds_closed": d["finds_closed"], "finds_open": d["finds_open"],
+                         "complaints": d["complaints"]})
+    wlf_rows.sort(key=lambda r: r["rounds"], reverse=True)
+
+    return jsonify({
+        "today":            today.isoformat(),
+        "period":           period,
+        "period_lbl":       period_lbl,
+        "first_day":        first_day.isoformat(),
+        "last_day":         last_day.isoformat(),
+        "week_offset":      week_offset,
+        "total_officers":   total_off,
+        "active_officers":  active_off,
+        "inactive_officers": inactive,
+        "compliance_pct":   comp_pct,
+        "avg_score":        avg_score,
+        "total_obs":        total_obs,
+        "total_ua":         sum(r["obs_unsafe_act"]  for r in rows),
+        "total_uc":         sum(r["obs_unsafe_cond"] for r in rows),
+        "total_pos":        sum(r["obs_positive"]    for r in rows),
+        "high_risk_open":   hr_list,
+        "overdue_cas":      ca_list,
+        "officers":         rows,
+        "weekly_labels":    weekly_labels,
+        "weekly_avg":       weekly_avg,
+        "welfare_rows":     wlf_rows,
+    })
+
+
 # ── LMS blueprint ────────────────────────────────────────────────────────────
 from models.lms import (LmsCourse, LmsModule, LmsModuleSection, LmsQuestion,
                          LmsQuestionOption, LmsEnrollment, LmsModuleProgress,
