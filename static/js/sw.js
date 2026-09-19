@@ -8,7 +8,7 @@
  *   /uploads/* → network-only (large files, skip)
  */
 
-var CACHE_NAME = 'nsh-v4';
+var CACHE_NAME = 'nsh-v5';
 
 // Pre-cached on install — the minimum needed to render any page
 var PRECACHE = [
@@ -24,8 +24,41 @@ var PRECACHE = [
 var WARM_PAGES = [
   // ── Daily field work ──
   '/location',
+  '/hse/checkin',
+
+  // ── Observations ──
   '/hse/observation/new',
   '/hse/observations',
+
+  // ── JSO ──
+  '/hse/jso',
+  '/hse/jso/new',
+
+  // ── SGL / TBT ──
+  '/hse/sgl',
+  '/hse/tbt/new',
+  '/hse/tbt',
+
+  // ── Near Miss ──
+  '/hse/nearmiss/new',
+  '/hse/nearmiss',
+
+  // ── BBS ──
+  '/hse/bbs',
+
+  // ── PTW Permits ──
+  '/hse/ptw',
+
+  // ── Manpower ──
+  '/hse/manpower',
+
+  // ── Inspection ──
+  '/hse/inspection',
+
+  // ── Corrective Actions ──
+  '/hse/my-ca',
+
+  // ── Environment ──
   '/env/',
   '/env/checklist/new',
   '/env/checklist/fill/P2-EC',
@@ -33,11 +66,6 @@ var WARM_PAGES = [
   '/env/checklist/fill/P2-SPC',
   '/welfare/observation/new',
   '/env/observation/new',
-  '/hse/tbt/new',
-  '/hse/tbt',
-  '/hse/nearmiss/new',
-  '/hse/nearmiss',
-  '/hse/my-ca',
 
   // ── PTW Training home + all 7 modules ──
   '/ptw-training',
