@@ -19301,18 +19301,17 @@ def hse_trainee_report_generate_auto():
                 # Get modules ordered by position
                 course_modules = (LmsModule.query
                                   .filter_by(course_id=enroll.course_id)
-                                  .order_by(LmsModule.position)
+                                  .order_by(LmsModule.seq)
                                   .limit(7).all())
                 for mod in course_modules:
                     mp = progresses.get(mod.id)
                     if mp is None:
                         status, score = "—", ""
-                    elif mp.passed:
+                    elif mp.passed_at:
                         status = "Passed"
                         score  = str(mp.best_score or "")
-                    elif mp.started:
-                        status = "In Progress"
-                        score  = ""
+                    elif mp.attempts_used > 0 or mp.content_opened_at:
+                        status, score = "In Progress", ""
                     else:
                         status, score = "—", ""
                     modules_data.append({"score": score, "status": status})
@@ -19595,18 +19594,18 @@ def hse_trainee_report_generate_v2():
                 }
                 course_modules = (LmsModule.query
                                   .filter_by(course_id=enroll.course_id)
-                                  .order_by(LmsModule.position)
+                                  .order_by(LmsModule.seq)
                                   .limit(7).all())
                 for idx, mod in enumerate(course_modules):
                     mp = progresses.get(mod.id)
                     if mp is None:
                         status, score = "—", ""
-                    elif mp.passed:
+                    elif mp.passed_at:
                         status = "Passed"
                         score  = str(mp.best_score or "")
-                        if mp.passed_at and week_start_dt <= mp.passed_at <= week_end_dt:
+                        if week_start_dt <= mp.passed_at <= week_end_dt:
                             new_passes.append(idx)
-                    elif mp.started:
+                    elif mp.attempts_used > 0 or mp.content_opened_at:
                         status, score = "In Progress", ""
                     else:
                         status, score = "—", ""
