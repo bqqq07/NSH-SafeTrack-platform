@@ -19281,7 +19281,6 @@ def hse_trainee_report_generate_auto():
         trainees_qs = User.query.filter(
             User.company_id == _c,
             User.role.in_(["safety_officer", "safety_welfare", "environment_officer"]),
-            User.ptw_training_active == True,
         ).order_by(User.name).all()
 
         STATUS_MAP = {True: "Passed", None: "In Progress", False: "—"}
@@ -19528,7 +19527,6 @@ def hse_trainee_report_filter():
     trainees_qs = User.query.filter(
         User.company_id == _c,
         User.role.in_(["safety_officer", "safety_welfare", "environment_officer"]),
-        User.ptw_training_active == True,
     ).order_by(User.name).all()
 
     now        = datetime.now(RIYADH_TZ)
@@ -19571,7 +19569,6 @@ def hse_trainee_report_generate_v2():
         trainees_base = User.query.filter(
             User.company_id == _c,
             User.role.in_(["safety_officer", "safety_welfare", "environment_officer"]),
-            User.ptw_training_active == True,
         ).order_by(User.name).all()
 
         if selected_ids:
