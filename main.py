@@ -19543,13 +19543,20 @@ def api_hse_trainee_report_generate_auto():
 
         _c   = cid()
         now  = datetime.now(RIYADH_TZ)
-        week_start = (now - timedelta(days=now.weekday())).date()
+        body = request.get_json(silent=True) or {}
+        selected_ids = body.get("trainee_ids") or []
+
+        ws_param = body.get("week_start")
+        if ws_param:
+            try:
+                week_start = datetime.strptime(ws_param, "%Y-%m-%d").date()
+            except ValueError:
+                week_start = (now - timedelta(days=now.weekday())).date()
+        else:
+            week_start = (now - timedelta(days=now.weekday())).date()
         week_end   = week_start + timedelta(days=6)
         week_start_dt = datetime.combine(week_start, datetime.min.time())
         week_end_dt   = datetime.combine(week_end,   datetime.max.time())
-
-        body = request.get_json(silent=True) or {}
-        selected_ids = body.get("trainee_ids") or []
 
         trainees_base = User.query.filter(
             User.company_id == _c,
