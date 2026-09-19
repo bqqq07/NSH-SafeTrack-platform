@@ -929,11 +929,92 @@ def _s_intro(prs, data):
             m["metric"], size=13, bold=True, color=C_WHITE, align=PP_ALIGN.CENTER)
 
 
+# ── Slide 3 — Report Contents ────────────────────────────────────────────────
+
+def _s_contents(prs, data):
+    slide = _blank(prs)
+    _bg(slide, C_LIGHT)
+
+    _rect(slide, 0, 0, SW, Inches(0.9), C_BLUE)
+    _tb(slide, M, Inches(0.1), SW - 2*M, Inches(0.48),
+        "What's in This Report", size=22, bold=True, color=C_WHITE)
+    _tb(slide, M, Inches(0.58), SW - 2*M, Inches(0.28),
+        "A guide to each section — what it shows and why it matters",
+        size=10, color=_c(0xba, 0xcf, 0xf8))
+
+    sections = [
+        (C_PURPLE, "KPI Dashboard",
+         "Four headline numbers for the week: module completions, PTW stages approved, "
+         "total observations, and TBT sessions — with change vs. prior week."),
+        (C_BLUE,   "E-Learning Module Overview",
+         "Bar chart showing how many trainees passed each of the 7 theory modules on the "
+         "LMS platform. Quickly identifies which modules still need attention."),
+        (C_BLUE,   "Per-Trainee E-Learning Table",
+         "Row-by-row breakdown of every trainee's status across all 7 modules "
+         "(Passed / In Progress / Not Started). Stars (★) mark modules passed this week."),
+        (C_TEAL,   "Weekly Progress Delta",
+         "Side-by-side view of what changed this week: new module passes, "
+         "PTW stages completed, observations submitted, and TBT sessions held."),
+        (C_GREEN,  "PTW Field Training — Summary",
+         "Permit-to-Work field training overview: how many stages were submitted, "
+         "approved, rejected, or pending, plus a cumulative progress bar per trainee."),
+        (C_GREEN,  "Per-Trainee PTW Stages",
+         "Detailed grid showing each trainee's progress through 5 stages × 7 modules "
+         "(35 total field stages). Color-coded: green = complete, yellow = in progress."),
+        (C_TEAL,   "HSE Observations — Overview",
+         "Total safety observations for the week broken down by risk level "
+         "(High / Medium / Low / Positive) and per safety officer."),
+        (C_TEAL,   "Observations — Daily Breakdown",
+         "Day-by-day table of observations, TBT sessions, and attendance counts, "
+         "with key observation highlights for each day of the week."),
+        (C_AMBER,  "Toolbox Talk (TBT) Sessions",
+         "List of all safety briefings conducted: topic, officer, location, and number "
+         "of attendees. Confirms HSE engagement on site."),
+    ]
+
+    # Two-column layout
+    col_w   = (SW - 3 * M) / 2
+    col_gap = M
+    row_h   = Inches(0.72)
+    top_y   = Inches(1.0)
+
+    for i, (color, title, desc) in enumerate(sections):
+        col  = i % 2
+        row  = i // 2
+        cx   = M + col * (col_w + col_gap)
+        cy   = top_y + row * row_h
+
+        _rect(slide, cx, cy + Inches(0.1), Inches(0.06), Inches(0.46), color)
+        _tb(slide, cx + Inches(0.14), cy + Inches(0.08),
+            col_w - Inches(0.2), Inches(0.26),
+            title, size=10, bold=True, color=color)
+        _tb(slide, cx + Inches(0.14), cy + Inches(0.32),
+            col_w - Inches(0.2), Inches(0.36),
+            desc, size=8, color=C_GRAY)
+
+        if i < len(sections) - 2:
+            _rect(slide, cx, cy + row_h - Inches(0.02),
+                  col_w, Inches(0.01), _c(0xe2, 0xe8, 0xf0))
+
+    # Last row (index 8) sits in col 0 — add Week Summary note on col 1
+    last_row = (len(sections) - 1) // 2
+    cx2 = M + (col_w + col_gap)
+    cy2 = top_y + last_row * row_h
+    _rect(slide, cx2, cy2 + Inches(0.1), Inches(0.06), Inches(0.46), C_DARK)
+    _tb(slide, cx2 + Inches(0.14), cy2 + Inches(0.08),
+        col_w - Inches(0.2), Inches(0.26),
+        "Week Summary", size=10, bold=True, color=C_DARK)
+    _tb(slide, cx2 + Inches(0.14), cy2 + Inches(0.32),
+        col_w - Inches(0.2), Inches(0.36),
+        "Closing slide with the week's key highlights in bullet form — "
+        "suitable for a one-page executive summary.", size=8, color=C_GRAY)
+
+
 # ── Main entry point ──────────────────────────────────────────────────────────
 
 def build_report(data: dict) -> bytes:
     """
-    Build a complete 12-slide PPTX from structured data dict.
+    Build a complete 13-slide PPTX from structured data dict.
 
     Required keys: week_start, week_end, company_name, generated_at,
     trainees, hse, ptw_summary, obs_by_day, tbt_sessions, delta
@@ -944,6 +1025,7 @@ def build_report(data: dict) -> bytes:
 
     _s_cover(prs, data)
     _s_intro(prs, data)
+    _s_contents(prs, data)
     _s_kpi(prs, data)
     _s_lms_overview(prs, data)
     _s_lms_table(prs, data)
