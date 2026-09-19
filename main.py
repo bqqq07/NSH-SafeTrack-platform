@@ -19541,7 +19541,7 @@ def api_hse_trainee_report_generate_auto():
         from models.lms import (LmsEnrollment, LmsModuleProgress, LmsModule)
         from collections import defaultdict as _dd
 
-        _c   = cid()
+        _c   = api_cid()
         now  = datetime.now(RIYADH_TZ)
         body = request.get_json(silent=True) or {}
         selected_ids = body.get("trainee_ids") or []
