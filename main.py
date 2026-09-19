@@ -455,6 +455,7 @@ class User(db.Model):
     company       = db.relationship("Company", foreign_keys=[company_id])
 
     ptw_training_active = db.Column(db.Boolean, default=False)
+    lms_active          = db.Column(db.Boolean, default=False)
 
     def set_password(self, pw):
         self.password_hash = generate_password_hash(pw)
@@ -849,6 +850,12 @@ def ensure_db_and_admin() -> None:
                     _conn.execute(_text(
                         "ALTER TABLE user ADD COLUMN ptw_training_active BOOLEAN NOT NULL DEFAULT FALSE"))
                 app.logger.info("DB migration: added user.ptw_training_active")
+
+            if "lms_active" not in _existing_user_cols:
+                with db.engine.begin() as _conn:
+                    _conn.execute(_text(
+                        "ALTER TABLE user ADD COLUMN lms_active BOOLEAN NOT NULL DEFAULT FALSE"))
+                app.logger.info("DB migration: added user.lms_active")
 
         except Exception as _mig_err:
             app.logger.error("DB self-migration check failed: %s", _mig_err)
@@ -5178,6 +5185,12 @@ def _not_found(e):
     return "Not Found", 404
 
 
+@app.errorhandler(413)
+def _too_large(e):
+    flash("الصورة كبيرة جداً — الحد الأقصى 10 ميجابايت لكل طلب.", "warning")
+    return redirect(request.referrer or url_for("index"))
+
+
 @app.route("/favicon.ico")
 @app.route("/apple-touch-icon.png")
 @app.route("/apple-touch-icon-precomposed.png")
@@ -6278,6 +6291,7 @@ def api_login():
             "hse_access":   is_hse_supervisor(user),
             "company_id":   user.company_id,
             "company_name": co.name if co else None,
+            "ptw_training_active": bool(getattr(user, "ptw_training_active", False)),
         }
     })
 
@@ -10314,24 +10328,30 @@ def hse_observation_new():
             flash("Observation type is required.", "warning")
             return redirect(url_for("hse_observation_new"))
 
-        obs = HseObservation(
-            officer_id=u.id, date=obs_date, location=location,
-            obs_type=obs_type, category=category, risk_level=risk_level,
-            description=description, action_taken=action_taken,
-            company_id=cid(),
-        )
-        db.session.add(obs)
-        db.session.flush()
+        try:
+            obs = HseObservation(
+                officer_id=u.id, date=obs_date, location=location,
+                obs_type=obs_type, category=category, risk_level=risk_level,
+                description=description, action_taken=action_taken,
+                company_id=cid(),
+            )
+            db.session.add(obs)
+            db.session.flush()
 
-        for i in range(1, 4):
-            f = request.files.get(f"photo_{i}")
+            f = request.files.get("photo_1")
             path = _save_hse_photo(f, "obs", company_id=cid())
             if path:
                 db.session.add(HseObservationPhoto(
                     observation_id=obs.id, photo_path=path, photo_type="before"
                 ))
 
-        db.session.commit()
+            db.session.commit()
+        except Exception as exc:
+            db.session.rollback()
+            app.logger.error("hse_observation_new failed: %s", exc)
+            flash("حدث خطأ أثناء الحفظ، حاول مرة أخرى.", "danger")
+            return redirect(url_for("hse_observation_new"))
+
         flash("Observation saved.", "success")
         if risk_level == "H":
             _notify_hse_supervisors("⚠ High-Risk Observation",
@@ -11069,6 +11089,7 @@ def hse_observation_edit(obs_id):
     u = cur_user()
     obs = HseObservation.query.filter_by(id=obs_id, officer_id=u.id).first_or_404()
     locations = _hse_locations()
+    existing_photos = list(obs.photos)
     if request.method == "POST":
         obs.date        = _safe_date(request.form.get("date")) or obs.date
         obs.location    = request.form.get("location", "").strip()
@@ -11077,11 +11098,18 @@ def hse_observation_edit(obs_id):
         obs.risk_level  = request.form.get("risk_level", "").strip() or None
         obs.description = request.form.get("description", "").strip()
         obs.action_taken= request.form.get("action_taken", "").strip()
+        f = request.files.get("photo_1")
+        path = _save_hse_photo(f, "obs", company_id=cid())
+        if path:
+            db.session.add(HseObservationPhoto(
+                observation_id=obs.id, photo_path=path, photo_type="before"
+            ))
         db.session.commit()
         flash("Observation updated.", "success")
         return redirect(url_for("hse_observations"))
     return render_template("hse_observation_edit.html",
-                           obs=obs, locations=locations, categories=OBS_CATEGORIES)
+                           obs=obs, locations=locations, categories=OBS_CATEGORIES,
+                           existing_photos=existing_photos)
 
 
 @app.route("/hse/observation/<int:obs_id>/delete", methods=["POST"])
@@ -11588,14 +11616,22 @@ def hse_daily_observations_pdf():
 
     def _load_photos(obs):
         """Return list of (RLImage, label) for an observation."""
+        from PIL import Image as _PIL
         result = []
         for ph in obs.photos:
             ph_path = os.path.join(HSE_UPLOAD_DIR, ph.photo_path)
             if not os.path.isfile(ph_path):
                 continue
             try:
+                # Resize + compress to thumbnail before embedding — keeps PDF small
+                buf_img = io.BytesIO()
+                with _PIL.open(ph_path) as pil:
+                    pil = pil.convert("RGB")
+                    pil.thumbnail((320, 240), _PIL.LANCZOS)
+                    pil.save(buf_img, format="JPEG", quality=70, optimize=True)
+                buf_img.seek(0)
                 result.append((
-                    RLImage(ph_path, width=PH_W, height=PH_H, kind="proportional"),
+                    RLImage(buf_img, width=PH_W, height=PH_H, kind="proportional"),
                     ph.photo_type.title()
                 ))
             except Exception:
@@ -14123,6 +14159,494 @@ def api_hse_my_ca():
 
 
 
+# ===================== PTW Training Mobile API =====================
+
+def api_ptw_officer_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        u = get_api_user()
+        if not u or not u.is_active or u.role not in ("safety_officer", "safety_supervisor",
+                                                       "admin", "super_admin"):
+            return jsonify({"error": "Forbidden"}), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+def _ptw_door_to_dict(mod_seq, door, sub):
+    return {
+        "seq":       door["seq"],
+        "title":     door["title"],
+        "ref":       door.get("ref", ""),
+        "brief":     door.get("brief", ""),
+        "questions": door.get("questions", []),
+        "ref_only":  bool(door.get("ref_only")),
+        "status":    sub.status if sub else "not_started",
+        "sub_id":    sub.id if sub else None,
+        "answers":   json.loads(sub.answers) if sub and sub.answers else [],
+        "photo_path": sub.photo_path if sub else None,
+        "reviewer_note": sub.reviewer_note if sub else None,
+        "submitted_at": sub.submitted_at.isoformat() if sub and sub.submitted_at else None,
+    }
+
+@app.get("/api/ptw-training/status")
+@api_ptw_officer_required
+def api_ptw_training_status():
+    u = get_api_user()
+    if u.role != "safety_officer":
+        return jsonify({"error": "Only safety_officer can access PTW training"}), 403
+    active = bool(getattr(u, "ptw_training_active", False))
+    if not active:
+        return jsonify({"active": False, "modules": []})
+    progress = _ptw_progress(u.id)
+    mods = []
+    for m in PTW_MODULES:
+        field_doors = [d for d in m["doors"] if not d.get("ref_only")]
+        done_count = sum(1 for d in field_doors
+                        if progress.get((m["seq"], d["seq"])) and
+                           progress[(m["seq"], d["seq"])].status == "approved")
+        mods.append({
+            "seq":     m["seq"],
+            "title":   m["title"],
+            "title_ar": m.get("title_ar", ""),
+            "done":    done_count,
+            "total":   len(field_doors),
+            "locked":  not _ptw_module_unlocked(progress, m["seq"]),
+        })
+    return jsonify({"active": True, "modules": mods})
+
+
+@app.get("/api/ptw-training/module/<int:mod_seq>/doors")
+@api_ptw_officer_required
+def api_ptw_module_doors(mod_seq):
+    u = get_api_user()
+    mod = PTW_MOD_BY_SEQ.get(mod_seq)
+    if not mod:
+        return jsonify({"error": "Module not found"}), 404
+    progress = _ptw_progress(u.id)
+    doors = []
+    for d in mod["doors"]:
+        sub = progress.get((mod_seq, d["seq"]))
+        door_dict = _ptw_door_to_dict(mod_seq, d, sub)
+        door_dict["unlocked"] = _ptw_door_unlocked(progress, mod_seq, d["seq"])
+        doors.append(door_dict)
+    return jsonify({"module_seq": mod_seq, "title": mod["title"], "doors": doors})
+
+
+@app.get("/api/ptw-training/module/<int:mod_seq>/door/<int:door_seq>")
+@api_ptw_officer_required
+def api_ptw_door_detail(mod_seq, door_seq):
+    u = get_api_user()
+    mod = PTW_MOD_BY_SEQ.get(mod_seq)
+    if not mod:
+        return jsonify({"error": "Module not found"}), 404
+    door = next((d for d in mod["doors"] if d["seq"] == door_seq), None)
+    if not door:
+        return jsonify({"error": "Door not found"}), 404
+    progress = _ptw_progress(u.id)
+    sub = progress.get((mod_seq, door_seq))
+    return jsonify(_ptw_door_to_dict(mod_seq, door, sub))
+
+
+@app.post("/api/ptw-training/module/<int:mod_seq>/door/<int:door_seq>/submit")
+@api_ptw_officer_required
+def api_ptw_door_submit(mod_seq, door_seq):
+    u = get_api_user()
+    if u.role != "safety_officer":
+        return jsonify({"error": "Forbidden"}), 403
+    mod = PTW_MOD_BY_SEQ.get(mod_seq)
+    if not mod:
+        return jsonify({"error": "Module not found"}), 404
+    door = next((d for d in mod["doors"] if d["seq"] == door_seq), None)
+    if not door:
+        return jsonify({"error": "Door not found"}), 404
+    progress = _ptw_progress(u.id)
+    if not _ptw_door_unlocked(progress, mod_seq, door_seq):
+        return jsonify({"error": "Door is locked"}), 400
+    existing = progress.get((mod_seq, door_seq))
+    if existing and existing.status in ("pending", "approved"):
+        return jsonify({"error": "Already submitted"}), 400
+    # Reference door: auto-approve
+    if door.get("ref_only"):
+        sub = PtwDoorSubmission(
+            officer_id=u.id, module_seq=mod_seq, door_seq=door_seq,
+            answers=json.dumps([], ensure_ascii=False),
+            photo_path=None, status="approved"
+        )
+        db.session.add(sub)
+        db.session.commit()
+        return jsonify({"status": "approved", "id": sub.id})
+    # Field door: parse JSON body or multipart
+    if freq.content_type and "multipart" in freq.content_type:
+        answers_raw = freq.form.get("answers", "[]")
+        try:
+            answers = json.loads(answers_raw)
+        except Exception:
+            answers = []
+        photo = freq.files.get("photo")
+        photo_path = None
+        if photo and photo.filename:
+            import os as _os
+            ext = _os.path.splitext(photo.filename)[1].lower()
+            fname = f"ptw_{u.id}_{mod_seq}_{door_seq}_{int(datetime.utcnow().timestamp())}{ext}"
+            save_dir = _os.path.join(app.root_path, "static", "hse_photos")
+            _os.makedirs(save_dir, exist_ok=True)
+            photo.save(_os.path.join(save_dir, fname))
+            photo_path = fname
+    else:
+        data = freq.get_json(force=True) or {}
+        answers = data.get("answers", [])
+        photo_path = None
+    sub = PtwDoorSubmission(
+        officer_id=u.id, module_seq=mod_seq, door_seq=door_seq,
+        answers=json.dumps(answers, ensure_ascii=False),
+        photo_path=photo_path, status="pending"
+    )
+    db.session.add(sub)
+    db.session.commit()
+    return jsonify({"status": "pending", "id": sub.id})
+
+
+@app.get("/api/ptw-training/supervisor/pending")
+@api_ptw_officer_required
+def api_ptw_supervisor_pending():
+    u = get_api_user()
+    if u.role not in ("safety_supervisor", "admin", "super_admin"):
+        return jsonify({"error": "Forbidden"}), 403
+    trainees = User.query.filter_by(role="safety_officer", is_active=True)
+    if u.company_id:
+        trainees = trainees.filter_by(company_id=u.company_id)
+    trainee_ids = [o.id for o in trainees.all()
+                   if getattr(o, "ptw_training_active", False)]
+    pending = (PtwDoorSubmission.query
+               .filter(PtwDoorSubmission.officer_id.in_(trainee_ids),
+                       PtwDoorSubmission.status == "pending")
+               .order_by(PtwDoorSubmission.submitted_at).all())
+    officer_cache = {}
+    def _off(oid):
+        if oid not in officer_cache:
+            off = db.session.get(User, oid)
+            officer_cache[oid] = off.name if off else "?"
+        return officer_cache[oid]
+    rows = []
+    for s in pending:
+        mod  = PTW_MOD_BY_SEQ.get(s.module_seq, {})
+        doors = mod.get("doors", [])
+        door = next((d for d in doors if d["seq"] == s.door_seq), {})
+        rows.append({
+            "id":          s.id,
+            "officer_id":  s.officer_id,
+            "officer_name": _off(s.officer_id),
+            "module_seq":  s.module_seq,
+            "module_title": mod.get("title", ""),
+            "door_seq":    s.door_seq,
+            "door_title":  door.get("title", ""),
+            "answers":     json.loads(s.answers) if s.answers else [],
+            "photo_path":  s.photo_path or "",
+            "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
+        })
+    return jsonify(rows)
+
+
+@app.post("/api/ptw-training/supervisor/review/<int:sub_id>")
+@api_ptw_officer_required
+def api_ptw_supervisor_review(sub_id):
+    u = get_api_user()
+    if u.role not in ("safety_supervisor", "admin", "super_admin"):
+        return jsonify({"error": "Forbidden"}), 403
+    sub = db.session.get(PtwDoorSubmission, sub_id)
+    if not sub:
+        return jsonify({"error": "Submission not found"}), 404
+    data = freq.get_json(force=True) or {}
+    action = data.get("action", "")
+    note   = (data.get("note") or "").strip()
+    if action not in ("approve", "reject"):
+        return jsonify({"error": "action must be approve or reject"}), 400
+    sub.status        = "approved" if action == "approve" else "rejected"
+    sub.reviewer_id   = u.id
+    sub.reviewer_note = note or None
+    db.session.commit()
+    return jsonify({"status": sub.status})
+
+
+# ===================== Welfare / Environment Mobile API =====================
+
+def api_welfare_required(f):
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        u = get_api_user()
+        if not u or not u.is_active or u.role not in (
+                "welfare_officer", "environment_officer",
+                "welfare_supervisor", "admin", "super_admin"):
+            return jsonify({"error": "Forbidden"}), 403
+        return f(*args, **kwargs)
+    return wrapper
+
+def _welfare_obs_to_dict(obs, officer_cache=None):
+    if officer_cache is not None:
+        if obs.officer_id not in officer_cache:
+            off = db.session.get(User, obs.officer_id)
+            officer_cache[obs.officer_id] = off.name if off else "?"
+        officer_name = officer_cache[obs.officer_id]
+    else:
+        off = db.session.get(User, obs.officer_id)
+        officer_name = off.name if off else "?"
+    photos = HseObservationPhoto.query.filter_by(observation_id=obs.id).all()
+    return {
+        "id":           obs.id,
+        "date":         obs.date.isoformat(),
+        "location":     obs.location or "",
+        "obs_type":     obs.obs_type or "",
+        "category":     obs.category or "",
+        "risk_level":   obs.risk_level or "",
+        "description":  obs.description or "",
+        "action_taken": obs.action_taken or "",
+        "status":       obs.status,
+        "officer_name": officer_name,
+        "closed_at":    obs.closed_at.isoformat() if obs.closed_at else None,
+        "closure_action": obs.closure_action or "",
+        "photos": [{"path": p.photo_path, "photo_type": p.photo_type} for p in photos],
+    }
+
+@app.get("/api/welfare/observations")
+@api_welfare_required
+def api_welfare_observations():
+    u = get_api_user()
+    if u.role in ("welfare_supervisor", "admin", "super_admin"):
+        q = HseObservation.query
+        if u.company_id:
+            officers = User.query.filter(
+                User.role.in_(["welfare_officer", "environment_officer"]),
+                User.company_id == u.company_id, User.is_active == True
+            ).all()
+            oids = [o.id for o in officers]
+            q = q.filter(HseObservation.officer_id.in_(oids))
+        else:
+            officers = User.query.filter(
+                User.role.in_(["welfare_officer", "environment_officer"]),
+                User.is_active == True
+            ).all()
+            q = q.filter(HseObservation.officer_id.in_([o.id for o in officers]))
+    else:
+        q = HseObservation.query.filter_by(officer_id=u.id)
+    page  = int(freq.args.get("page", 1))
+    per   = 20
+    total = q.count()
+    obs_list = q.order_by(HseObservation.date.desc()).offset((page-1)*per).limit(per).all()
+    cache = {}
+    return jsonify({
+        "items": [_welfare_obs_to_dict(o, cache) for o in obs_list],
+        "page":  page,
+        "pages": max(1, -(-total // per)),
+        "total": total,
+    })
+
+@app.post("/api/welfare/observation")
+@api_welfare_required
+def api_welfare_observation_create():
+    u = get_api_user()
+    if u.role not in ("welfare_officer", "environment_officer"):
+        return jsonify({"error": "Only welfare/environment officer can submit"}), 403
+    data = freq.get_json(force=True) or {}
+    date_str    = (data.get("date") or "").strip()
+    location    = (data.get("location") or "").strip()
+    obs_type    = (data.get("obs_type") or "unsafe_condition").strip()
+    category    = (data.get("category") or "").strip()
+    risk_level  = (data.get("risk_level") or "L").strip()
+    description = (data.get("description") or "").strip()
+    action_taken = (data.get("action_taken") or "").strip()
+    if not description:
+        return jsonify({"error": "description required"}), 400
+    try:
+        obs_date = datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else datetime.now(RIYADH_TZ).date()
+    except ValueError:
+        obs_date = datetime.now(RIYADH_TZ).date()
+    obs = HseObservation(
+        officer_id=u.id, company_id=u.company_id,
+        date=obs_date, location=location,
+        obs_type=obs_type, category=category, risk_level=risk_level,
+        description=description, action_taken=action_taken, status="open"
+    )
+    db.session.add(obs)
+    db.session.commit()
+    return jsonify({"id": obs.id})
+
+@app.post("/api/welfare/observation/<int:obs_id>/photo")
+@api_welfare_required
+def api_welfare_obs_photo(obs_id):
+    u = get_api_user()
+    obs = HseObservation.query.filter_by(id=obs_id, officer_id=u.id).first_or_404()
+    photo = freq.files.get("photo")
+    if not photo or not photo.filename:
+        return jsonify({"error": "No photo"}), 400
+    import os as _os
+    ext   = _os.path.splitext(photo.filename)[1].lower()
+    fname = f"wlf_obs_{obs_id}_{int(datetime.utcnow().timestamp())}{ext}"
+    save_dir = _os.path.join(app.root_path, "static", "hse_photos")
+    _os.makedirs(save_dir, exist_ok=True)
+    photo.save(_os.path.join(save_dir, fname))
+    p = HseObservationPhoto(observation_id=obs_id, photo_path=fname, photo_type="before")
+    db.session.add(p)
+    db.session.commit()
+    return jsonify({"path": fname})
+
+@app.get("/api/welfare/reports")
+@api_welfare_required
+def api_welfare_reports():
+    u = get_api_user()
+    if u.role in ("welfare_supervisor", "admin", "super_admin"):
+        q = ReportFile.query
+        if u.company_id:
+            q = q.filter_by(company_id=u.company_id)
+    else:
+        q = ReportFile.query.filter_by(uploaded_by=u.id)
+    items = q.order_by(ReportFile.report_date.desc()).limit(50).all()
+    officer_cache = {}
+    def _off(oid):
+        if oid not in officer_cache:
+            off = db.session.get(User, oid)
+            officer_cache[oid] = off.name if off else "?"
+        return officer_cache[oid]
+    return jsonify([{
+        "id":          r.id,
+        "report_type": r.report_type or "",
+        "report_date": r.report_date.isoformat() if r.report_date else "",
+        "role_type":   r.role_type or "",
+        "notes":       r.notes or "",
+        "uploaded_by": r.uploaded_by,
+        "officer_name": _off(r.uploaded_by),
+        "uploaded_at": r.uploaded_at.isoformat() if r.uploaded_at else "",
+    } for r in items])
+
+@app.post("/api/welfare/report/upload")
+@api_welfare_required
+def api_welfare_report_upload():
+    u = get_api_user()
+    if u.role not in ("welfare_officer", "environment_officer"):
+        return jsonify({"error": "Forbidden"}), 403
+    pdf_file  = freq.files.get("file")
+    report_type = (freq.form.get("report_type") or "").strip()
+    report_date_str = (freq.form.get("report_date") or "").strip()
+    notes       = (freq.form.get("notes") or "").strip()
+    role_type   = "welfare" if u.role == "welfare_officer" else "environment"
+    if not pdf_file or not pdf_file.filename:
+        return jsonify({"error": "No file"}), 400
+    import os as _os, uuid as _uuid
+    ext = _os.path.splitext(pdf_file.filename)[1].lower()
+    if ext not in (".pdf",):
+        return jsonify({"error": "Only PDF files accepted"}), 400
+    try:
+        rdate = datetime.strptime(report_date_str, "%Y-%m-%d").date() if report_date_str else datetime.now(RIYADH_TZ).date()
+    except ValueError:
+        rdate = datetime.now(RIYADH_TZ).date()
+    co_id = u.company_id or 0
+    save_dir = _os.path.join(app.root_path, "uploads", "reports", str(co_id))
+    _os.makedirs(save_dir, exist_ok=True)
+    fname = f"{_uuid.uuid4().hex}_{pdf_file.filename}"
+    pdf_file.save(_os.path.join(save_dir, fname))
+    file_path = f"{co_id}/{fname}"
+    rf = ReportFile(
+        company_id=u.company_id, uploaded_by=u.id,
+        role_type=role_type, report_type=report_type,
+        file_path=file_path, report_date=rdate, notes=notes
+    )
+    db.session.add(rf)
+    db.session.commit()
+    return jsonify({"id": rf.id})
+
+@app.get("/api/welfare/report/<int:rid>")
+@api_welfare_required
+def api_welfare_report_view(rid):
+    u = get_api_user()
+    if u.role in ("welfare_supervisor", "admin", "super_admin"):
+        rf = ReportFile.query.filter_by(id=rid)
+        if u.company_id:
+            rf = rf.filter_by(company_id=u.company_id)
+        rf = rf.first_or_404()
+    else:
+        rf = ReportFile.query.filter_by(id=rid, uploaded_by=u.id).first_or_404()
+    import os as _os
+    path = _os.path.join(app.root_path, "uploads", "reports", rf.file_path)
+    if not _os.path.exists(path):
+        return jsonify({"error": "File not found"}), 404
+    return send_file(path, mimetype="application/pdf",
+                     as_attachment=False, download_name=f"report_{rid}.pdf")
+
+@app.delete("/api/welfare/report/<int:rid>")
+@api_welfare_required
+def api_welfare_report_delete(rid):
+    u = get_api_user()
+    if u.role not in ("welfare_supervisor", "admin", "super_admin"):
+        return jsonify({"error": "Forbidden"}), 403
+    rf = ReportFile.query.filter_by(id=rid)
+    if u.company_id:
+        rf = rf.filter_by(company_id=u.company_id)
+    rf = rf.first_or_404()
+    import os as _os
+    path = _os.path.join(app.root_path, "uploads", "reports", rf.file_path)
+    try:
+        if _os.path.exists(path):
+            _os.remove(path)
+    except Exception:
+        pass
+    db.session.delete(rf)
+    db.session.commit()
+    return jsonify({"ok": True})
+
+@app.get("/api/welfare/supervisor/all")
+@api_welfare_required
+def api_welfare_supervisor_all():
+    u = get_api_user()
+    if u.role not in ("welfare_supervisor", "admin", "super_admin"):
+        return jsonify({"error": "Forbidden"}), 403
+    role_filter = freq.args.get("role", "")
+    date_from   = freq.args.get("from", "")
+    date_to     = freq.args.get("to", "")
+    officers = User.query.filter(
+        User.role.in_(["welfare_officer", "environment_officer"]),
+        User.is_active == True
+    )
+    if u.company_id:
+        officers = officers.filter_by(company_id=u.company_id)
+    if role_filter in ("welfare", "environment"):
+        role_map = {"welfare": "welfare_officer", "environment": "environment_officer"}
+        officers = officers.filter_by(role=role_map[role_filter])
+    officer_list = officers.all()
+    oids = [o.id for o in officer_list]
+    cache = {o.id: o.name for o in officer_list}
+    obs_q = HseObservation.query.filter(HseObservation.officer_id.in_(oids))
+    if date_from:
+        try: obs_q = obs_q.filter(HseObservation.date >= datetime.strptime(date_from, "%Y-%m-%d").date())
+        except ValueError: pass
+    if date_to:
+        try: obs_q = obs_q.filter(HseObservation.date <= datetime.strptime(date_to, "%Y-%m-%d").date())
+        except ValueError: pass
+    obs_list = obs_q.order_by(HseObservation.date.desc()).limit(100).all()
+    rpt_q = ReportFile.query.filter(ReportFile.uploaded_by.in_(oids))
+    if u.company_id:
+        rpt_q = rpt_q.filter_by(company_id=u.company_id)
+    if role_filter in ("welfare", "environment"):
+        rpt_q = rpt_q.filter_by(role_type=role_filter)
+    if date_from:
+        try: rpt_q = rpt_q.filter(ReportFile.report_date >= datetime.strptime(date_from, "%Y-%m-%d").date())
+        except ValueError: pass
+    if date_to:
+        try: rpt_q = rpt_q.filter(ReportFile.report_date <= datetime.strptime(date_to, "%Y-%m-%d").date())
+        except ValueError: pass
+    rpt_list = rpt_q.order_by(ReportFile.report_date.desc()).limit(100).all()
+    def _off(oid): return cache.get(oid, "?")
+    return jsonify({
+        "observations": [_welfare_obs_to_dict(o, cache) for o in obs_list],
+        "reports": [{
+            "id":          r.id,
+            "report_type": r.report_type or "",
+            "report_date": r.report_date.isoformat() if r.report_date else "",
+            "role_type":   r.role_type or "",
+            "notes":       r.notes or "",
+            "officer_name": _off(r.uploaded_by),
+            "uploaded_at": r.uploaded_at.isoformat() if r.uploaded_at else "",
+        } for r in rpt_list],
+    })
+
+
 # ===================== Welfare & Wellbeing Module =====================
 # Self-contained. Does not modify or read any HSE table.
 # All tables prefixed wlf_ ; all routes prefixed /welfare/ ; role: safety_welfare
@@ -16416,6 +16940,249 @@ def welfare_supervisor():
                            date_from=date_from, date_to=date_to)
 
 
+@app.get("/welfare/supervisor/pdf")
+@login_required
+@welfare_supervisor_required
+def welfare_supervisor_pdf():
+    """PDF summary — observations + checklists + uploaded reports for selected filters."""
+    import io
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import (
+        SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer,
+    )
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+
+    _c = cid()
+    role_filter = request.args.get("role", "all")
+    date_from   = _safe_date(request.args.get("from"))
+    date_to     = _safe_date(request.args.get("to"))
+
+    # ── fetch data (same logic as welfare_supervisor view) ──────────────
+    obs_q = (HseObservation.query.filter_by(company_id=_c)
+             .join(User, User.id == HseObservation.officer_id))
+    if role_filter == "welfare":
+        obs_q = obs_q.filter(User.role == "safety_welfare")
+    elif role_filter == "environment":
+        obs_q = obs_q.filter(User.role == "environment_officer")
+    else:
+        obs_q = obs_q.filter(User.role.in_(["safety_welfare", "environment_officer"]))
+    if date_from:
+        obs_q = obs_q.filter(HseObservation.date >= date_from)
+    if date_to:
+        obs_q = obs_q.filter(HseObservation.date <= date_to)
+    observations = obs_q.order_by(HseObservation.date.desc()).all()
+
+    files_q = ReportFile.query.filter_by(company_id=_c)
+    if role_filter in ("welfare", "environment"):
+        files_q = files_q.filter_by(role_type=role_filter)
+    if date_from:
+        files_q = files_q.filter(ReportFile.report_date >= date_from)
+    if date_to:
+        files_q = files_q.filter(ReportFile.report_date <= date_to)
+    report_files = files_q.order_by(ReportFile.report_date.desc()).all()
+
+    cl_q = EnvChecklist.query.filter_by(company_id=_c)
+    if role_filter == "welfare":
+        cl_q = cl_q.filter(db.literal(False))
+    if date_from:
+        cl_q = cl_q.filter(EnvChecklist.filled_date >= date_from)
+    if date_to:
+        cl_q = cl_q.filter(EnvChecklist.filled_date <= date_to)
+    checklists = cl_q.order_by(EnvChecklist.filled_date.desc()).all()
+
+    # ── PDF setup ───────────────────────────────────────────────────────
+    buf  = io.BytesIO()
+    PAGE = landscape(A4)
+    LM = RM = TM = BM = 12 * mm
+    W = PAGE[0] - LM - RM
+
+    doc = SimpleDocTemplate(buf, pagesize=PAGE,
+                            leftMargin=LM, rightMargin=RM,
+                            topMargin=TM, bottomMargin=BM)
+    styles  = getSampleStyleSheet()
+    _AR     = pdf_arabic_font()
+    _AR_B   = "Arabic-Bold" if _AR == "Arabic" else "Helvetica-Bold"
+
+    def _ps(name, size=8, leading=11, bold=False, color=None, align=0):
+        return ParagraphStyle(name, parent=styles["Normal"],
+                              fontSize=size, leading=leading,
+                              fontName=(_AR_B if bold else _AR),
+                              textColor=color or colors.black,
+                              alignment=align)
+
+    HDR_BG  = colors.HexColor("#1E293B")
+    ALT_BG  = colors.HexColor("#F8FAFC")
+    BDR     = colors.HexColor("#CBD5E1")
+    SEC_BG  = colors.HexColor("#EFF6FF")
+    TYPE_MAP = {"unsafe_act": "Unsafe Act", "unsafe_condition": "Unsafe Condition", "positive": "Positive"}
+    RISK_COLOR = {"H": colors.HexColor("#FCA5A5"), "M": colors.HexColor("#FDE68A"), "L": colors.HexColor("#86EFAC")}
+
+    title_s = _ps("wt", 14, 18, bold=True)
+    sub_s   = _ps("ws",  9, 12, color=colors.HexColor("#6B7280"))
+    sec_s   = _ps("wsc",10, 14, bold=True, color=colors.HexColor("#1E40AF"))
+    cell_s  = _ps("wc",  8, 11)
+    hdr_s   = _ps("wh",  8, 11, bold=True, color=colors.white)
+
+    def hdr_row(labels):
+        return [Paragraph(l, hdr_s) for l in labels]
+
+    def tbl_style(extra=None):
+        base = [
+            ("BACKGROUND",    (0, 0), (-1, 0),  HDR_BG),
+            ("ROWBACKGROUNDS",(0, 1), (-1, -1), [colors.white, ALT_BG]),
+            ("GRID",          (0, 0), (-1, -1),  0.35, BDR),
+            ("VALIGN",        (0, 0), (-1, -1),  "TOP"),
+            ("TOPPADDING",    (0, 0), (-1, -1),  3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1),  3),
+            ("LEFTPADDING",   (0, 0), (-1, -1),  3),
+            ("RIGHTPADDING",  (0, 0), (-1, -1),  3),
+            ("FONTSIZE",      (0, 0), (-1, -1),  8),
+        ]
+        if extra:
+            base += extra
+        return TableStyle(base)
+
+    story = []
+
+    # ── Title ────────────────────────────────────────────────────────────
+    role_label = {"all": "Welfare & Environment", "welfare": "Welfare", "environment": "Environment"}.get(role_filter, "All")
+    date_label = ""
+    if date_from and date_to:
+        date_label = f"  ·  {date_from.strftime('%d %b %Y')} — {date_to.strftime('%d %b %Y')}"
+    elif date_from:
+        date_label = f"  ·  From {date_from.strftime('%d %b %Y')}"
+    elif date_to:
+        date_label = f"  ·  Up to {date_to.strftime('%d %b %Y')}"
+
+    story.append(Paragraph(f"{role_label} Reports", title_s))
+    story.append(Paragraph(f"Generated {datetime.now(RIYADH_TZ).strftime('%d %b %Y  %H:%M')}{date_label}", sub_s))
+    story.append(Spacer(1, 6 * mm))
+
+    # ── Summary row ──────────────────────────────────────────────────────
+    sum_data = [[
+        Paragraph("Observations", _ps("sk", 8, 11, bold=True, color=colors.HexColor("#1D4ED8"))),
+        Paragraph("Checklists",   _ps("sk2",8, 11, bold=True, color=colors.HexColor("#16A34A"))),
+        Paragraph("PDF Reports",  _ps("sk3",8, 11, bold=True, color=colors.HexColor("#CA8A04"))),
+    ], [
+        Paragraph(str(len(observations)), _ps("sv",  16, 20, bold=True, color=colors.HexColor("#1D4ED8"), align=1)),
+        Paragraph(str(len(checklists)),   _ps("sv2", 16, 20, bold=True, color=colors.HexColor("#16A34A"), align=1)),
+        Paragraph(str(len(report_files)), _ps("sv3", 16, 20, bold=True, color=colors.HexColor("#CA8A04"), align=1)),
+    ]]
+    sum_col = [W / 3] * 3
+    sum_tbl = Table(sum_data, colWidths=sum_col)
+    sum_tbl.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#EFF6FF")),
+        ("BACKGROUND", (1, 0), (1, -1), colors.HexColor("#F0FDF4")),
+        ("BACKGROUND", (2, 0), (2, -1), colors.HexColor("#FEFCE8")),
+        ("ALIGN",      (0, 0), (-1, -1), "CENTER"),
+        ("VALIGN",     (0, 0), (-1, -1), "MIDDLE"),
+        ("GRID",       (0, 0), (-1, -1), 0.5, BDR),
+        ("TOPPADDING",    (0, 0), (-1, -1), 6),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 6),
+        ("ROUNDEDCORNERS", [4]),
+    ]))
+    story.append(sum_tbl)
+    story.append(Spacer(1, 7 * mm))
+
+    # ── Section 1: Observations ──────────────────────────────────────────
+    story.append(Paragraph(f"Observations  ({len(observations)})", sec_s))
+    story.append(Spacer(1, 2 * mm))
+
+    if observations:
+        C_obs = [10, 22, 36, 30, 24, 18, 52, 52, 31]   # mm  (total ≈ W/mm)
+        _diff = (W / mm) - sum(C_obs)
+        C_obs[6] += _diff / 2
+        C_obs[7] += _diff / 2
+        obs_cw = [c * mm for c in C_obs]
+
+        obs_rows = [hdr_row(["#", "Date", "Officer", "Location", "Type", "Risk",
+                              "Description", "Action Taken", "Status"])]
+        risk_styles = []
+        for i, obs in enumerate(observations, 1):
+            rval  = obs.risk_level or ""
+            rcol  = RISK_COLOR.get(rval)
+            if rcol:
+                risk_styles.append(("BACKGROUND", (5, i), (5, i), rcol))
+            obs_rows.append([
+                str(i),
+                obs.date.strftime("%d %b %Y"),
+                Paragraph(pdf_ar(obs.officer.name if obs.officer else "—"), cell_s),
+                Paragraph(pdf_ar(obs.location or "—"), cell_s),
+                TYPE_MAP.get(obs.obs_type, obs.obs_type or "—"),
+                rval or "—",
+                Paragraph(pdf_ar(obs.description or "—"), cell_s),
+                Paragraph(pdf_ar(obs.action_taken or "—"), cell_s),
+                Paragraph("CLOSED" if obs.status != "open" else "OPEN",
+                          _ps("st", 7, 10, bold=True,
+                              color=colors.HexColor("#16A34A" if obs.status != "open" else "#DC2626"))),
+            ])
+        obs_tbl = Table(obs_rows, colWidths=obs_cw, repeatRows=1)
+        obs_tbl.setStyle(tbl_style(risk_styles))
+        story.append(obs_tbl)
+    else:
+        story.append(Paragraph("No observations for the selected period.", _ps("no", 8, 11, color=colors.HexColor("#94A3B8"))))
+
+    story.append(Spacer(1, 7 * mm))
+
+    # ── Section 2: Checklists ─────────────────────────────────────────────
+    story.append(Paragraph(f"Environment Checklists  ({len(checklists)})", sec_s))
+    story.append(Spacer(1, 2 * mm))
+
+    if checklists:
+        C_cl = [10, 22, 50, 40, 40, W / mm - 162]
+        cl_cw = [c * mm for c in C_cl]
+        cl_rows = [hdr_row(["#", "Date", "Checklist Type", "Report No.", "Officer", "Area"])]
+        for i, cl in enumerate(checklists, 1):
+            cl_rows.append([
+                str(i),
+                cl.filled_date.strftime("%d %b %Y"),
+                Paragraph(pdf_ar(cl.checklist_type or "—"), cell_s),
+                cl.report_no or "—",
+                Paragraph(pdf_ar(cl.officer.name if cl.officer else "—"), cell_s),
+                Paragraph(pdf_ar(cl.area or "—"), cell_s),
+            ])
+        cl_tbl = Table(cl_rows, colWidths=cl_cw, repeatRows=1)
+        cl_tbl.setStyle(tbl_style())
+        story.append(cl_tbl)
+    else:
+        story.append(Paragraph("No checklists for the selected period.", _ps("no2", 8, 11, color=colors.HexColor("#94A3B8"))))
+
+    story.append(Spacer(1, 7 * mm))
+
+    # ── Section 3: Uploaded PDF Reports ──────────────────────────────────
+    story.append(Paragraph(f"Uploaded PDF Reports  ({len(report_files)})", sec_s))
+    story.append(Spacer(1, 2 * mm))
+
+    if report_files:
+        C_rf = [10, 22, 30, 40, 40, W / mm - 142]
+        rf_cw = [c * mm for c in C_rf]
+        rf_rows = [hdr_row(["#", "Date", "Type", "Report Name", "Uploaded By", "Notes"])]
+        for i, rf in enumerate(report_files, 1):
+            rf_rows.append([
+                str(i),
+                rf.report_date.strftime("%d %b %Y"),
+                rf.role_type.title(),
+                Paragraph(pdf_ar(rf.report_type or "—"), cell_s),
+                Paragraph(pdf_ar(rf.uploader.name if rf.uploader else "—"), cell_s),
+                Paragraph(pdf_ar(rf.notes or "—"), cell_s),
+            ])
+        rf_tbl = Table(rf_rows, colWidths=rf_cw, repeatRows=1)
+        rf_tbl.setStyle(tbl_style())
+        story.append(rf_tbl)
+    else:
+        story.append(Paragraph("No uploaded reports for the selected period.", _ps("no3", 8, 11, color=colors.HexColor("#94A3B8"))))
+
+    doc.build(story)
+    buf.seek(0)
+    fname = f"welfare_env_report_{date_from or 'all'}_{date_to or 'all'}.pdf"
+    resp = make_response(buf.read())
+    resp.headers["Content-Type"] = "application/pdf"
+    resp.headers["Content-Disposition"] = f'inline; filename="{fname}"'
+    return resp
+
+
 @app.route("/welfare/report/<int:rid>/env-delete", methods=["POST"])
 @login_required
 @welfare_supervisor_required
@@ -16434,6 +17201,9 @@ def env_report_delete(rid):
     return redirect(url_for("welfare_supervisor"))
 
 
+
+# ── LMS models — must be imported before db.create_all() ─────────────────────
+import models.lms  # noqa: F401  registers LMS tables with SQLAlchemy metadata
 
 # ===================== Bootstrapping =====================
 with app.app_context():
@@ -18400,6 +19170,360 @@ def _sync_dispatch(u, item_type, data):
     else:
         raise ValueError(f"unknown type: {item_type}")
 
+
+# ══════════════════════════════════════════════════════════════════════
+# TRAINEE WEEKLY REPORT GENERATOR  —  /hse/trainee-report
+# ══════════════════════════════════════════════════════════════════════
+
+TRAINEE_TEMPLATE_PATH = os.path.join(BASE_DIR, "uploads", "hse",
+                                     "trainee_report_template.pptx")
+
+
+@app.route("/hse/trainee-report", methods=["GET"])
+@login_required
+@hse_supervisor_required
+def hse_trainee_report():
+    template_exists = os.path.exists(TRAINEE_TEMPLATE_PATH)
+    return render_template("hse_trainee_report.html",
+                           template_exists=template_exists)
+
+
+@app.route("/hse/trainee-report/upload-template", methods=["POST"])
+@login_required
+@hse_supervisor_required
+def hse_trainee_report_upload_template():
+    f = request.files.get("template")
+    if not f or not f.filename.lower().endswith(".pptx"):
+        flash("يرجى رفع ملف PPTX صحيح", "error")
+        return redirect(url_for("hse_trainee_report"))
+    os.makedirs(os.path.dirname(TRAINEE_TEMPLATE_PATH), exist_ok=True)
+    f.save(TRAINEE_TEMPLATE_PATH)
+    flash("تم رفع القالب بنجاح ✓", "success")
+    return redirect(url_for("hse_trainee_report"))
+
+
+@app.route("/hse/trainee-report/generate", methods=["POST"])
+@login_required
+@hse_supervisor_required
+def hse_trainee_report_generate():
+    if not os.path.exists(TRAINEE_TEMPLATE_PATH):
+        flash("القالب غير موجود — يرجى رفعه أولاً", "error")
+        return redirect(url_for("hse_trainee_report"))
+
+    try:
+        from trainee_report_generator import generate_report
+
+        # Mandatory files
+        hse_file  = request.files.get("hse_pdf")
+        ptw_file  = request.files.get("ptw_pdf")
+        csv_file  = request.files.get("progress_csv")
+        obs_files = request.files.getlist("obs_pdfs")
+
+        missing = []
+        if not hse_file  or not hse_file.filename:  missing.append("HSE Weekly Report PDF")
+        if not ptw_file  or not ptw_file.filename:  missing.append("PTW Weekly Report PDF")
+        if not csv_file  or not csv_file.filename:  missing.append("Progress CSV")
+        if not obs_files or not obs_files[0].filename: missing.append("ملفات الاوبزرفيشنز اليومية")
+        if missing:
+            flash("الملفات الناقصة: " + ", ".join(missing), "error")
+            return redirect(url_for("hse_trainee_report"))
+
+        obs_list = [(f.filename, f.read()) for f in obs_files if f.filename]
+
+        pptx_bytes = generate_report(
+            template_path=TRAINEE_TEMPLATE_PATH,
+            csv_content=csv_file.read(),
+            hse_pdf=hse_file.read(),
+            ptw_pdf=ptw_file.read(),
+            obs_pdfs=obs_list,
+        )
+
+        from flask import make_response
+        now_str  = datetime.now(RIYADH_TZ).strftime("%Y%m%d_%H%M")
+        filename = f"Trainee_Weekly_Report_{now_str}.pptx"
+
+        resp = make_response(pptx_bytes)
+        resp.headers["Content-Type"] = (
+            "application/vnd.openxmlformats-officedocument"
+            ".presentationml.presentation"
+        )
+        resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
+
+    except Exception as e:
+        app.logger.exception("Trainee report generation failed")
+        flash(f"حدث خطأ أثناء التوليد: {e}", "error")
+        return redirect(url_for("hse_trainee_report"))
+
+
+@app.route("/hse/trainee-report/generate-auto", methods=["POST"])
+@login_required
+@hse_supervisor_required
+def hse_trainee_report_generate_auto():
+    """Generate trainee report entirely from DB — no file uploads needed."""
+    if not os.path.exists(TRAINEE_TEMPLATE_PATH):
+        flash("القالب غير موجود — يرجى رفعه أولاً", "error")
+        return redirect(url_for("hse_trainee_report"))
+
+    try:
+        from trainee_report_generator import generate_report_from_data
+        from models.lms import (LmsEnrollment, LmsModuleProgress,
+                                 LmsModule, LmsCourse)
+
+        _c   = cid()
+        now  = datetime.now(RIYADH_TZ)
+        # Current ISO week: Monday–Sunday
+        week_start = (now - timedelta(days=now.weekday())).date()
+        week_end   = week_start + timedelta(days=6)
+
+        # ── 1. E-Learning progress (csv_data) ────────────────────────
+        # Trainees = safety_officers with ptw_training_active
+        trainees_qs = User.query.filter_by(
+            company_id=_c, role="safety_officer", ptw_training_active=True
+        ).order_by(User.name).all()
+
+        STATUS_MAP = {True: "Passed", None: "In Progress", False: "—"}
+
+        csv_trainees = []
+        for u_tr in trainees_qs:
+            enroll = LmsEnrollment.query.filter_by(
+                officer_id=u_tr.id, company_id=_c
+            ).first()
+            modules_data = []
+            if enroll:
+                progresses = {
+                    mp.module_id: mp
+                    for mp in LmsModuleProgress.query.filter_by(
+                        enrollment_id=enroll.id
+                    ).all()
+                }
+                # Get modules ordered by position
+                course_modules = (LmsModule.query
+                                  .filter_by(course_id=enroll.course_id)
+                                  .order_by(LmsModule.position)
+                                  .limit(7).all())
+                for mod in course_modules:
+                    mp = progresses.get(mod.id)
+                    if mp is None:
+                        status, score = "—", ""
+                    elif mp.passed:
+                        status = "Passed"
+                        score  = str(mp.best_score or "")
+                    elif mp.started:
+                        status = "In Progress"
+                        score  = ""
+                    else:
+                        status, score = "—", ""
+                    modules_data.append({"score": score, "status": status})
+            # Pad to 7 modules
+            while len(modules_data) < 7:
+                modules_data.append({"score": "", "status": "—"})
+            csv_trainees.append({"name": u_tr.name, "modules": modules_data})
+
+        csv_data = {"trainees": csv_trainees}
+
+        # ── 2. PTW Field Training (ptw_data) ─────────────────────────
+        # All officers (trainee or not) who submitted PTW doors this week
+        ptw_week_subs = PtwDoorSubmission.query.join(
+            User, PtwDoorSubmission.officer_id == User.id
+        ).filter(
+            User.company_id == _c,
+            PtwDoorSubmission.submitted_at >= datetime.combine(week_start, datetime.min.time()),
+            PtwDoorSubmission.submitted_at <= datetime.combine(week_end,   datetime.max.time()),
+        ).all()
+
+        # Collect all officers who ever submitted (for per-module stages)
+        all_ptw_subs = PtwDoorSubmission.query.join(
+            User, PtwDoorSubmission.officer_id == User.id
+        ).filter(User.company_id == _c).all()
+
+        # Group by officer
+        from collections import defaultdict
+        officer_all   = defaultdict(list)
+        officer_week  = defaultdict(list)
+        officer_ids   = set()
+        for sub in all_ptw_subs:
+            officer_all[sub.officer_id].append(sub)
+            officer_ids.add(sub.officer_id)
+        for sub in ptw_week_subs:
+            officer_week[sub.officer_id].append(sub)
+
+        ptw_trainees = []
+        total_approved_week = 0
+        for oid in officer_ids:
+            u_obj = User.query.get(oid)
+            if not u_obj:
+                continue
+            week_subs  = officer_week[oid]
+            all_subs_o = officer_all[oid]
+
+            sub_w = len(week_subs)
+            app_w = sum(1 for s in week_subs if s.status == "approved")
+            rej_w = sum(1 for s in week_subs if s.status == "rejected")
+            pend  = sum(1 for s in week_subs if s.status == "pending")
+            total_approved_week += app_w
+
+            total_app_all = sum(1 for s in all_subs_o if s.status == "approved")
+            overall = f"{total_app_all}/35"
+            pct     = int(total_app_all / 35 * 100)
+
+            # Per-module stages (5 doors each, 7 modules)
+            per_module = []
+            for mi in range(1, 8):
+                mod_subs = [s for s in all_subs_o if s.module_seq == mi]
+                approved = sum(1 for s in mod_subs if s.status == "approved")
+                total_m  = len(mod_subs)
+                if approved == 5:
+                    per_module.append("5/5")
+                elif approved > 0 or total_m > 0:
+                    per_module.append(f"{approved}/5")
+                else:
+                    per_module.append("—")
+
+            # Current module = first module with incomplete approved count
+            cur_mod = "Module 1"
+            for mi, val in enumerate(per_module, 1):
+                if val != "5/5":
+                    cur_mod = f"Module {mi}"
+                    break
+
+            ptw_trainees.append({
+                "name":       u_obj.name,
+                "cur_module": cur_mod,
+                "sub_week":   sub_w,
+                "app_week":   app_w,
+                "rej_week":   rej_w,
+                "pending":    pend,
+                "overall":    overall,
+                "pct":        pct,
+                "per_module": per_module,
+                "active":     sub_w > 0,
+            })
+
+        ptw_data = {
+            "week_label": f"{week_start.strftime('%d %b')} – {week_end.strftime('%d %b %Y')}",
+            "active":     len([t for t in ptw_trainees if t["active"]]),
+            "submitted":  sum(t["sub_week"] for t in ptw_trainees),
+            "approved":   total_approved_week,
+            "rejected":   sum(t["rej_week"] for t in ptw_trainees),
+            "trainees":   ptw_trainees,
+        }
+
+        # ── 3. HSE Observations (hse_data) ───────────────────────────
+        week_obs = HseObservation.query.filter(
+            HseObservation.company_id == _c,
+            HseObservation.date >= week_start,
+            HseObservation.date <= week_end,
+        ).all()
+
+        week_tbts = HseTbt.query.filter(
+            HseTbt.company_id == _c,
+            HseTbt.date >= week_start,
+            HseTbt.date <= week_end,
+        ).all()
+        tbt_attend_total = sum(
+            tbt.attendance.count() for tbt in week_tbts
+        )
+
+        all_officers_qs = User.query.filter_by(
+            company_id=_c, role="safety_officer"
+        ).all()
+        officers_active_ids = {o.date for o in week_obs}
+
+        hse_data = {
+            "week_label":      f"{week_start.strftime('%d %b')} – {week_end.strftime('%d %b %Y')}",
+            "total_obs":       len(week_obs),
+            "high_risk":       sum(1 for o in week_obs if o.risk_level == "H"),
+            "jso_closures":    HseJsoClosure.query.filter(
+                                   HseJsoClosure.company_id == _c,
+                                   HseJsoClosure.date >= week_start,
+                                   HseJsoClosure.date <= week_end,
+                               ).count(),
+            "tbt_sessions":    len(week_tbts),
+            "tbt_attend":      tbt_attend_total,
+            "officers_active": len({o.officer_id for o in week_obs}),
+            "officers_total":  len(all_officers_qs),
+        }
+
+        # ── 4. Daily obs data (obs_data) ─────────────────────────────
+        from collections import defaultdict as _dd
+        day_obs = _dd(list)
+        for o in week_obs:
+            day_obs[o.date].append(o)
+
+        day_tbts = _dd(list)
+        for tbt in week_tbts:
+            day_tbts[tbt.date].append(tbt)
+
+        obs_data = []
+        for day in sorted(day_obs.keys()):
+            obs_list_day = day_obs[day]
+            tbts_day     = day_tbts[day]
+            tbt_attend_day = sum(t.attendance.count() for t in tbts_day)
+
+            sgl_sessions = []
+            for tbt in tbts_day:
+                officer_u = User.query.get(tbt.officer_id)
+                sgl_sessions.append({
+                    "num":      str(len(sgl_sessions) + 1),
+                    "topic":    tbt.topic or "—",
+                    "location": tbt.location or "—",
+                    "officer":  officer_u.name if officer_u else "—",
+                    "attend":   tbt.attendance.count(),
+                })
+
+            key_obs = []
+            for o in obs_list_day:
+                if o.description and len(o.description) > 15 and len(key_obs) < 4:
+                    key_obs.append(o.description[:80])
+
+            obs_data.append({
+                "date":        day.strftime("%d %b %Y"),
+                "date_label":  day.strftime("%a %d %b"),
+                "total_obs":   len(obs_list_day),
+                "sgl_count":   len(tbts_day),
+                "sgl_attend":  tbt_attend_day,
+                "high":        sum(1 for o in obs_list_day if o.risk_level == "H"),
+                "medium":      sum(1 for o in obs_list_day if o.risk_level == "M"),
+                "low":         sum(1 for o in obs_list_day if o.risk_level == "L"),
+                "positive":    sum(1 for o in obs_list_day if o.obs_type == "positive"),
+                "key_obs":     key_obs,
+                "sgl_sessions": sgl_sessions,
+            })
+
+        # ── 5. Generate ───────────────────────────────────────────────
+        pptx_bytes = generate_report_from_data(
+            template_path=TRAINEE_TEMPLATE_PATH,
+            csv_data=csv_data,
+            hse_data=hse_data,
+            ptw_data=ptw_data,
+            obs_data=obs_data,
+        )
+
+        from flask import make_response
+        now_str  = now.strftime("%Y%m%d_%H%M")
+        filename = f"Trainee_Weekly_Report_{now_str}.pptx"
+        resp = make_response(pptx_bytes)
+        resp.headers["Content-Type"] = (
+            "application/vnd.openxmlformats-officedocument"
+            ".presentationml.presentation"
+        )
+        resp.headers["Content-Disposition"] = f'attachment; filename="{filename}"'
+        return resp
+
+    except Exception as e:
+        app.logger.exception("Auto trainee report generation failed")
+        flash(f"حدث خطأ أثناء التوليد التلقائي: {e}", "error")
+        return redirect(url_for("hse_trainee_report"))
+
+
+# ── LMS blueprint ────────────────────────────────────────────────────────────
+from models.lms import (LmsCourse, LmsModule, LmsModuleSection, LmsQuestion,
+                         LmsQuestionOption, LmsEnrollment, LmsModuleProgress,
+                         LmsQuizAttempt, LmsAttemptQuestion, LmsAttemptAnswer,
+                         LmsAuditLog)
+from blueprints.lms import lms_bp
+app.register_blueprint(lms_bp)
 
 # نقطة دخول WSGI لاسم "application"
 application = app

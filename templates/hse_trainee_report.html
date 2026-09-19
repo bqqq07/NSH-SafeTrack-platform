@@ -1,0 +1,271 @@
+{% extends "base.html" %}
+{% block title %}Trainee Weekly Report{% endblock %}
+{% block content %}
+<style>
+.tr-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px }
+@media(max-width:768px){ .tr-grid{ grid-template-columns:1fr } }
+
+.tr-card {
+  background:#fff; border:1px solid var(--border,#E4EAF0);
+  border-radius:14px; padding:22px;
+  box-shadow:0 1px 4px rgba(90,110,130,.07);
+}
+.tr-card h3 { margin:0 0 4px; font-size:1rem; color:#1e293b; font-weight:700 }
+.tr-card .hint { font-size:.82rem; color:#64748b; margin-bottom:16px; line-height:1.5 }
+
+.fld { display:flex; flex-direction:column; gap:5px; margin-bottom:13px }
+.fld label { font-size:.78rem; font-weight:600; color:#475569; letter-spacing:.2px }
+.fld input[type=file] {
+  padding:.5rem; border:1px solid var(--border,#D5DFE8);
+  border-radius:8px; font-size:.88rem; width:100%;
+  box-sizing:border-box; background:#f8fafc; color:#374151;
+}
+.fld input[type=file]:focus { outline:none; border-color:#7593AE }
+
+.tr-btn {
+  width:100%; padding:.65rem 1rem; border:none; border-radius:9px;
+  color:#fff; font-weight:600; font-size:.92rem; cursor:pointer;
+  letter-spacing:.2px; transition:opacity .15s;
+}
+.tr-btn:hover { opacity:.9 }
+.btn-template { background:#7593AE }
+.btn-gen      { background:#1e40af }
+.btn-gen:disabled { background:#94a3b8; cursor:not-allowed }
+.btn-auto { background:#15803d }
+.btn-auto:disabled { background:#94a3b8; cursor:not-allowed }
+
+.tpl-status {
+  display:flex; align-items:center; gap:10px; padding:10px 14px;
+  border-radius:9px; font-size:.85rem; font-weight:600; margin-bottom:14px;
+}
+.tpl-ok   { background:#f0fdf4; color:#15803d; border:1px solid #86efac }
+.tpl-miss { background:#fff7ed; color:#c2410c; border:1px solid #fdba74 }
+
+.full-card {
+  background:#fff; border:1px solid var(--border,#E4EAF0);
+  border-radius:14px; padding:22px; margin-bottom:20px;
+  box-shadow:0 1px 4px rgba(90,110,130,.07);
+}
+.full-card h3 { margin:0 0 4px; font-size:1rem; color:#1e293b; font-weight:700 }
+.full-card .hint { font-size:.82rem; color:#64748b; margin-bottom:16px; line-height:1.5 }
+
+.step-row {
+  display:flex; align-items:flex-start; gap:12px; padding:12px 0;
+  border-bottom:1px solid #f1f5f9;
+}
+.step-row:last-child { border-bottom:none }
+.step-num {
+  min-width:28px; height:28px; border-radius:50%;
+  background:#1e40af; color:#fff; font-size:.8rem; font-weight:700;
+  display:flex; align-items:center; justify-content:center; flex-shrink:0;
+}
+.step-text { font-size:.88rem; color:#334155; line-height:1.5 }
+.step-text strong { color:#1e293b }
+
+.progress-hint {
+  font-size:.78rem; color:#6b7280; margin-top:5px;
+  display:flex; gap:8px; flex-wrap:wrap;
+}
+.tag {
+  padding:2px 8px; border-radius:10px; font-size:.75rem; font-weight:600;
+}
+.tag-csv  { background:#eff6ff; color:#1d4ed8 }
+.tag-hse  { background:#fef3c7; color:#92400e }
+.tag-ptw  { background:#f0fdf4; color:#166534 }
+.tag-obs  { background:#fdf2f8; color:#9d174d }
+
+.note {
+  font-size:.8rem; background:#f0f9ff; border:1px solid #bae6fd;
+  border-radius:8px; padding:10px 14px; color:#0369a1; margin-top:14px;
+  line-height:1.6;
+}
+</style>
+
+<section class="report">
+  <header class="report-header">
+    <div class="report-head-center">
+      <h1>Trainee Weekly Report Generator</h1>
+      <p class="muted">ارفع الملفات المطلوبة وسيتم تحديث التقرير الأسبوعي وتنزيله تلقائياً.</p>
+    </div>
+  </header>
+
+  <!-- Flash messages -->
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, msg in msgs %}
+      <div style="padding:10px 14px;border-radius:8px;margin-bottom:14px;font-size:.9rem;font-weight:600;
+                  background:{{ '#f0fdf4' if cat=='success' else '#fff1f2' }};
+                  color:{{ '#15803d' if cat=='success' else '#be123c' }};
+                  border:1px solid {{ '#86efac' if cat=='success' else '#fca5a5' }}">
+        {{ msg }}
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <!-- How it works -->
+  <div class="full-card" style="margin-bottom:20px">
+    <h3>كيف يعمل</h3>
+    <div class="step-row">
+      <div class="step-num">1</div>
+      <div class="step-text">
+        <strong>ارفع قالب PPTX مرة واحدة</strong> — القالب يُحفظ على السيرفر ولا تحتاج لإعادة رفعه في كل أسبوع.
+      </div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">2</div>
+      <div class="step-text">
+        <strong>في كل أسبوع:</strong> ارفع الملفات الأربعة ثم اضغط "توليد التقرير".
+        <div class="progress-hint">
+          <span class="tag tag-csv">progress CSV</span> التدريب النظري (E-Learning)
+          &nbsp;·&nbsp;
+          <span class="tag tag-ptw">PTW PDF</span> التدريب الميداني
+          &nbsp;·&nbsp;
+          <span class="tag tag-hse">HSE PDF</span> ملخص الملاحظات
+          &nbsp;·&nbsp;
+          <span class="tag tag-obs">Daily PDFs</span> الاوبزرفيشنز اليومية (متعددة)
+        </div>
+      </div>
+    </div>
+    <div class="step-row">
+      <div class="step-num">3</div>
+      <div class="step-text">
+        <strong>التنزيل التلقائي</strong> — يُحدَّث التقرير ويُنزَّل بنفس صيغة PPTX مباشرةً.
+      </div>
+    </div>
+  </div>
+
+  <!-- Template section -->
+  <div class="full-card" style="margin-bottom:20px">
+    <h3>القالب (PPTX Template)</h3>
+    <p class="hint">يُحفظ القالب مرة واحدة — كل التوليدات المستقبلية ستستخدمه تلقائياً.</p>
+
+    {% if template_exists %}
+      <div class="tpl-status tpl-ok">
+        ✓ &nbsp; القالب موجود ومحفوظ — جاهز للتوليد
+      </div>
+    {% else %}
+      <div class="tpl-status tpl-miss">
+        ⚠ &nbsp; القالب غير مرفوع — يجب رفعه قبل التوليد
+      </div>
+    {% endif %}
+
+    <form method="post"
+          action="{{ url_for('hse_trainee_report_upload_template') }}"
+          enctype="multipart/form-data">
+      <div class="fld">
+        <label>{{ 'استبدال القالب' if template_exists else 'رفع القالب' }} (.pptx)</label>
+        <input type="file" name="template" accept=".pptx" required>
+      </div>
+      <button class="tr-btn btn-template" type="submit">
+        {{ '🔄 استبدال القالب' if template_exists else '📤 رفع القالب' }}
+      </button>
+    </form>
+  </div>
+
+  <!-- Auto Generate section -->
+  <div class="full-card" style="margin-bottom:20px; border-color:#86efac">
+    <h3>⚡ توليد تلقائي من قاعدة البيانات</h3>
+    <p class="hint">
+      يسحب بيانات الأسبوع الحالي مباشرةً من الموقع (E-Learning + PTW Submissions + Observations + TBT)
+      دون الحاجة لرفع أي ملف. يغطي من <strong>الاثنين</strong> إلى <strong>الأحد</strong> لهذا الأسبوع.
+    </p>
+    <form method="post"
+          action="{{ url_for('hse_trainee_report_generate_auto') }}"
+          id="autoForm">
+      <button class="tr-btn btn-auto" type="submit" id="autoBtn"
+              {% if not template_exists %}disabled{% endif %}>
+        {% if template_exists %}
+          ⚡ توليد التقرير من قاعدة البيانات
+        {% else %}
+          (ارفع القالب أولاً)
+        {% endif %}
+      </button>
+    </form>
+  </div>
+
+  <!-- Manual Generate section -->
+  <div class="full-card">
+    <h3>📤 توليد يدوي (رفع ملفات)</h3>
+    <p class="hint">ارفع الملفات الأربعة ثم اضغط الزر — سيُنزَّل ملف PPTX محدَّث.</p>
+
+    <form method="post"
+          action="{{ url_for('hse_trainee_report_generate') }}"
+          enctype="multipart/form-data"
+          id="genForm">
+
+      <div class="tr-grid">
+        <!-- HSE PDF -->
+        <div class="tr-card">
+          <h3>📄 HSE Weekly Report</h3>
+          <p class="hint">ملخص الملاحظات الأسبوعية — يُحدِّث الأرقام الكبيرة وإجمالي الملاحظات.</p>
+          <div class="fld">
+            <label>HSE Weekly Report PDF</label>
+            <input type="file" name="hse_pdf" accept="application/pdf" required>
+          </div>
+        </div>
+
+        <!-- PTW PDF -->
+        <div class="tr-card">
+          <h3>🏗️ PTW Weekly Report</h3>
+          <p class="hint">تقدم التدريب الميداني — يُحدِّث جدول Field Training Progress.</p>
+          <div class="fld">
+            <label>PTW Weekly Report PDF</label>
+            <input type="file" name="ptw_pdf" accept="application/pdf" required>
+          </div>
+        </div>
+
+        <!-- Progress CSV -->
+        <div class="tr-card">
+          <h3>📊 Progress CSV</h3>
+          <p class="hint">نتائج التدريب النظري (E-Learning) — يُحدِّث جدول الوحدات النظرية.</p>
+          <div class="fld">
+            <label>progress_YYYYMMDD.csv</label>
+            <input type="file" name="progress_csv" accept=".csv" required>
+          </div>
+        </div>
+
+        <!-- Daily Obs PDFs -->
+        <div class="tr-card">
+          <h3>📋 Daily Observations PDFs</h3>
+          <p class="hint">
+            ملفات الاوبزرفيشنز اليومية (observations_YYYY-MM-DD.pdf) — يُحدِّث
+            الجدول اليومي ويستبدل شرائح الصور. اختر جميع الأيام دفعة واحدة.
+          </p>
+          <div class="fld">
+            <label>اختر ملفات متعددة</label>
+            <input type="file" name="obs_pdfs" accept="application/pdf" multiple required>
+          </div>
+        </div>
+      </div>
+
+      <div class="note">
+        <strong>ملاحظة:</strong> التوليد قد يستغرق 20–40 ثانية حسب حجم ملفات الاوبزرفيشنز.
+        لا تغلق الصفحة حتى يبدأ التنزيل.
+      </div>
+
+      <div style="margin-top:18px">
+        <button class="tr-btn btn-gen" type="submit" id="genBtn"
+                {% if not template_exists %}disabled{% endif %}>
+          {% if template_exists %}
+            ⚡ توليد التقرير وتنزيله
+          {% else %}
+            (ارفع القالب أولاً)
+          {% endif %}
+        </button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<script>
+document.getElementById("genForm").addEventListener("submit", function(){
+  var btn = document.getElementById("genBtn");
+  btn.disabled = true;
+  btn.textContent = "⏳ جارٍ التوليد...";
+});
+document.getElementById("autoForm").addEventListener("submit", function(){
+  var btn = document.getElementById("autoBtn");
+  btn.disabled = true;
+  btn.textContent = "⏳ جارٍ جلب البيانات والتوليد...";
+});
+</script>
+{% endblock %}
