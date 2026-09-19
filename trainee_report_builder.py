@@ -239,7 +239,7 @@ def _s_kpi(prs, data):
              sub=f"High-risk: {hse.get('high', 0)}",
              delta=delta.get("obs"),
              color=C_RED, bg=_c(0xff,0xf1,0xf2)),
-        dict(label="TBT Sessions",
+        dict(label="SGL Meetings",
              value=hse.get("tbt_sessions", 0),
              sub=f"{hse.get('tbt_attend', 0)} attendees",
              delta=delta.get("tbt"),
@@ -683,7 +683,7 @@ def _s_obs_daily(prs, data):
     tbl = tf.table
     for ci, cw in enumerate(COL_W): tbl.columns[ci].width = cw
 
-    for ci, h in enumerate(["Day","Total","High","Medium","Low","Positive","TBT","Attend.","Key Observations"]):
+    for ci, h in enumerate(["Day","Total","High","Medium","Low","Positive","SGL","Attend.","Key Observations"]):
         _cs(tbl.cell(0,ci), h, size=fs, bold=True, color=C_WHITE, bg=BG_HDR,
             align=PP_ALIGN.LEFT if ci in (0,8) else PP_ALIGN.CENTER)
 
@@ -720,19 +720,19 @@ def _s_obs_daily(prs, data):
     _cs(tbl.cell(lr,8), "", bg=C_BLUE)
 
 
-# ── Slide 10 — TBT Sessions ──────────────────────────────────────────────────
+# ── Slide 10 — SGL Meetings ──────────────────────────────────────────────────
 
 def _s_tbt(prs, data):
     slide = _blank(prs)
     _bg(slide)
     hse = data["hse"]
-    cy  = _header(slide, "Toolbox Talk (TBT) Sessions",
+    cy  = _header(slide, "SGL Meetings",
                   f"Week total:  {hse.get('tbt_sessions',0)} sessions  ·  {hse.get('tbt_attend',0)} attendees")
 
     sessions = data.get("tbt_sessions", [])
     if not sessions:
         _tb(slide, M, cy+Inches(0.5), SW-2*M, Inches(1),
-            "No TBT sessions recorded this week.", size=14,
+            "No SGL meetings recorded this week.", size=14,
             color=C_GRAY, align=PP_ALIGN.CENTER)
         return
 
@@ -811,7 +811,7 @@ def _s_summary(prs, data):
     att = hse.get("tbt_attend", 0)
     if tbt:
         bullets.append((C_TEAL,
-                        f"{tbt} TBT session{'s' if tbt!=1 else ''} conducted  ·  {att} attendees"))
+                        f"{tbt} SGL meeting{'s' if tbt!=1 else ''} conducted  ·  {att} attendees"))
 
     jso = hse.get("jso_closures", 0)
     if jso:
@@ -885,7 +885,7 @@ def _s_intro(prs, data):
             "lines": [
                 "Daily safety observations submitted via the SafeTrack mobile application.",
                 "Classified by risk level: High / Medium / Low / Positive.",
-                "Includes Toolbox Talks (TBT) conducted by safety officers on site.",
+                "Includes SGL Meetings conducted by safety officers on site.",
                 "JSO closures and officer activity are also captured and reported.",
             ],
             "metric": "Daily Field",
@@ -945,7 +945,7 @@ def _s_contents(prs, data):
     sections = [
         (C_PURPLE, "KPI Dashboard",
          "Four headline numbers for the week: module completions, PTW stages approved, "
-         "total observations, and TBT sessions — with change vs. prior week."),
+         "total observations, and SGL meetings — with change vs. prior week."),
         (C_BLUE,   "E-Learning Module Overview",
          "Bar chart showing how many trainees passed each of the 7 theory modules on the "
          "LMS platform. Quickly identifies which modules still need attention."),
@@ -954,7 +954,7 @@ def _s_contents(prs, data):
          "(Passed / In Progress / Not Started). Stars (★) mark modules passed this week."),
         (C_TEAL,   "Weekly Progress Delta",
          "Side-by-side view of what changed this week: new module passes, "
-         "PTW stages completed, observations submitted, and TBT sessions held."),
+         "PTW stages completed, observations submitted, and SGL meetings held."),
         (C_GREEN,  "PTW Field Training — Summary",
          "Permit-to-Work field training overview: how many stages were submitted, "
          "approved, rejected, or pending, plus a cumulative progress bar per trainee."),
@@ -965,9 +965,9 @@ def _s_contents(prs, data):
          "Total safety observations for the week broken down by risk level "
          "(High / Medium / Low / Positive) and per safety officer."),
         (C_TEAL,   "Observations — Daily Breakdown",
-         "Day-by-day table of observations, TBT sessions, and attendance counts, "
+         "Day-by-day table of observations, SGL meetings, and attendance counts, "
          "with key observation highlights for each day of the week."),
-        (C_AMBER,  "Toolbox Talk (TBT) Sessions",
+        (C_AMBER,  "SGL Meetings",
          "List of all safety briefings conducted: topic, officer, location, and number "
          "of attendees. Confirms HSE engagement on site."),
     ]
