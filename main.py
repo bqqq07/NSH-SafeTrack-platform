@@ -13148,7 +13148,7 @@ def api_hse_observation_get(obs_id):
                                           HseObservation.officer_id.in_(officer_ids)).first_or_404()
     else:
         obs = HseObservation.query.filter_by(id=obs_id, officer_id=u.id).first_or_404()
-    photos = [{"path": p.path, "photo_type": p.photo_type or "before"} for p in obs.photos]
+    photos = [{"path": p.photo_path, "photo_type": p.photo_type or "before"} for p in obs.photos]
     return jsonify({
         "id": obs.id, "date": obs.date.isoformat(), "location": obs.location or "",
         "obs_type": obs.obs_type or "", "category": obs.category or "",
@@ -19289,7 +19289,7 @@ def hse_trainee_report_generate_auto():
         csv_trainees = []
         for u_tr in trainees_qs:
             enroll = LmsEnrollment.query.filter_by(
-                officer_id=u_tr.id, company_id=_c
+                officer_id=u_tr.id
             ).first()
             modules_data = []
             if enroll:
@@ -19586,7 +19586,7 @@ def hse_trainee_report_generate_v2():
         trainees_out = []
         for u_tr in trainees_qs:
             enroll = LmsEnrollment.query.filter_by(
-                officer_id=u_tr.id, company_id=_c
+                officer_id=u_tr.id
             ).first()
             modules_data, new_passes = [], []
             if enroll:
