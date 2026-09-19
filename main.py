@@ -19756,6 +19756,21 @@ def hse_trainee_report_generate_v2():
         company_obj = Company.query.get(_c)
         company_name = company_obj.name if company_obj else ""
 
+        # ── Full observation list for detail slide ────────────────────
+        obs_detail = []
+        for o in sorted(week_obs, key=lambda x: (x.date, x.id)):
+            officer_u = User.query.get(o.officer_id)
+            obs_detail.append({
+                "date":        o.date.strftime("%a %d %b"),
+                "officer":     officer_u.name if officer_u else "—",
+                "location":    o.location or "—",
+                "risk":        o.risk_level or "—",
+                "obs_type":    o.obs_type or "—",
+                "description": (o.description or "")[:120],
+                "action":      (o.action_taken or "")[:80],
+                "status":      o.status or "open",
+            })
+
         data = {
             "week_start":   week_start,
             "week_end":     week_end,
@@ -19765,6 +19780,7 @@ def hse_trainee_report_generate_v2():
             "hse":          hse_agg,
             "ptw_summary":  ptw_summary,
             "obs_by_day":   obs_by_day,
+            "obs_detail":   obs_detail,
             "tbt_sessions": tbt_sessions_list,
             "delta":        delta,
         }

@@ -768,7 +768,92 @@ def _s_tbt(prs, data):
             color=C_TEAL if att else C_MID, align=PP_ALIGN.CENTER, bg=alt)
 
 
-# ── Slide 11 — Week Summary ───────────────────────────────────────────────────
+# ── Slide 11 — Full Observations Detail ──────────────────────────────────────
+
+def _s_obs_detail(prs, data):
+    """One or more slides listing every observation recorded during the week."""
+    obs_all = data.get("obs_detail", [])
+    ws = data["week_start"].strftime("%d %b")
+    we = data["week_end"].strftime("%d %b %Y")
+
+    RISK_BG  = {"H": BG_HIGH, "M": BG_MED, "L": BG_LOW}
+    RISK_CLR = {"H": C_RED,   "M": C_AMBER, "L": C_GREEN}
+
+    # Column widths
+    COL_W = [Inches(1.4), Inches(1.7), Inches(1.6), Inches(0.65), Inches(0.7),
+             Inches(3.8), Inches(2.6), Inches(0.7)]
+    HEADERS = ["Date", "Officer", "Location", "Risk", "Type",
+               "Description", "Action Taken", "Status"]
+    tbl_w = sum(COL_W)
+    tbl_l = (SW - tbl_w) / 2
+
+    ROWS_PER_SLIDE = 25
+
+    if not obs_all:
+        slide = _blank(prs)
+        _bg(slide, C_LIGHT)
+        _header(slide, "Weekly Observations — Full Detail",
+                f"All observations recorded  ·  {ws} – {we}")
+        _tb(slide, M, Inches(2), SW-2*M, Inches(1),
+            "No observations recorded this week.",
+            size=14, color=C_GRAY, align=PP_ALIGN.CENTER)
+        return
+
+    pages = [obs_all[i:i+ROWS_PER_SLIDE]
+             for i in range(0, len(obs_all), ROWS_PER_SLIDE)]
+
+    for pi, page_rows in enumerate(pages):
+        slide = _blank(prs)
+        _bg(slide, C_LIGHT)
+        page_label = f"  (page {pi+1}/{len(pages)})" if len(pages) > 1 else ""
+        cy = _header(slide,
+                     f"Weekly Observations — Full Detail{page_label}",
+                     f"{len(obs_all)} observations total  ·  {ws} – {we}")
+
+        n_rows = len(page_rows) + 1
+        fs     = _tfont(n_rows)
+        tbl_t  = cy + Inches(0.06)
+        tbl_h  = SH - tbl_t - Inches(0.12)
+
+        tf  = slide.shapes.add_table(n_rows, 8, tbl_l, tbl_t, tbl_w, tbl_h)
+        tbl = tf.table
+        for ci, cw in enumerate(COL_W):
+            tbl.columns[ci].width = cw
+
+        # Header row
+        for ci, h in enumerate(HEADERS):
+            _cs(tbl.cell(0, ci), h, size=fs, bold=True,
+                color=C_WHITE, bg=BG_HDR,
+                align=PP_ALIGN.LEFT if ci > 3 else PP_ALIGN.CENTER)
+
+        for ri, obs in enumerate(page_rows, 1):
+            alt = BG_ALT if ri % 2 == 0 else C_WHITE
+            risk = obs.get("risk", "—")
+            r_bg  = RISK_BG.get(risk, alt)
+            r_clr = RISK_CLR.get(risk, C_DARK)
+
+            _cs(tbl.cell(ri, 0), obs.get("date", ""),    size=fs, bg=alt, align=PP_ALIGN.CENTER, color=C_DARK)
+            _cs(tbl.cell(ri, 1), obs.get("officer", ""), size=fs, bg=alt, align=PP_ALIGN.LEFT,   color=C_DARK)
+            _cs(tbl.cell(ri, 2), obs.get("location",""), size=fs, bg=alt, align=PP_ALIGN.LEFT,   color=C_DARK)
+            _cs(tbl.cell(ri, 3), risk,                   size=fs, bg=r_bg, align=PP_ALIGN.CENTER, color=r_clr, bold=True)
+
+            obs_type = obs.get("obs_type", "—")
+            type_bg  = BG_POS if obs_type == "positive" else alt
+            _cs(tbl.cell(ri, 4), obs_type[:4].capitalize(), size=fs, bg=type_bg,
+                align=PP_ALIGN.CENTER, color=C_DARK)
+
+            _cs(tbl.cell(ri, 5), obs.get("description", ""), size=fs, bg=alt,
+                align=PP_ALIGN.LEFT, color=C_DARK)
+            _cs(tbl.cell(ri, 6), obs.get("action", ""),      size=fs, bg=alt,
+                align=PP_ALIGN.LEFT, color=C_GRAY)
+
+            st    = obs.get("status", "open")
+            st_bg = BG_PASS if st == "closed" else BG_PROG
+            _cs(tbl.cell(ri, 7), st.capitalize(), size=fs, bg=st_bg,
+                align=PP_ALIGN.CENTER, color=C_DARK)
+
+
+# ── Slide 12 — Week Summary ───────────────────────────────────────────────────
 
 def _s_summary(prs, data):
     slide = _blank(prs)
@@ -1035,6 +1120,7 @@ def build_report(data: dict) -> bytes:
     _s_obs_overview(prs, data)
     _s_obs_daily(prs, data)
     _s_tbt(prs, data)
+    _s_obs_detail(prs, data)
     _s_summary(prs, data)
 
     buf = io.BytesIO()
