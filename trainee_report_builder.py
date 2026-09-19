@@ -857,8 +857,8 @@ def _s_intro(prs, data):
             "lines": [
                 "7 theory modules delivered via the online learning platform.",
                 "Each module ends with a graded quiz; a passing score marks the module complete.",
-                "Modules: Foundation  ·  Hot Work  ·  Work at Height  ·  Confined Spaces",
-                "         Lifting & Equipment  ·  Electrical & Radiation  ·  Governance",
+                "Modules: Foundation  ·  Hot Work  ·  Work at Height  ·  Confined Spaces  ·  Lifting & Equipment  ·  Electrical & Radiation  ·  Governance",
+                "",
             ],
             "metric": "7 Modules",
         },
