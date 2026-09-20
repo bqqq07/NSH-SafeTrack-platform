@@ -20356,6 +20356,17 @@ def api_hse_safety_manager_dashboard():
         prev_y = today.year if today.month > 1 else today.year - 1
         prev_first = date(prev_y, prev_m, 1)
         prev_last  = date(prev_y, prev_m, monthrange(prev_y, prev_m)[1])
+    elif period == "custom":
+        try:
+            first_day = datetime.strptime(freq.args.get("date_from", ""), "%Y-%m-%d").date()
+            last_day  = datetime.strptime(freq.args.get("date_to",   ""), "%Y-%m-%d").date()
+        except ValueError:
+            first_day = today - timedelta(days=6)
+            last_day  = today
+        period_lbl = f"{first_day.strftime('%d %b')} – {last_day.strftime('%d %b %Y')}"
+        span       = (last_day - first_day).days + 1
+        prev_first = first_day - timedelta(days=span)
+        prev_last  = first_day - timedelta(days=1)
     else:
         dsun      = today.isoweekday() % 7
         this_sun  = today - timedelta(days=dsun)
