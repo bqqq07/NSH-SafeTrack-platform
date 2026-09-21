@@ -13820,37 +13820,50 @@ def api_hse_photo_serve(filename):
 @api_hse_supervisor_required
 def api_hse_officer_detail(officer_id):
     u = get_api_user()
-    days = min(int(freq.args.get("days", 30)), 180)
-    q = User.query.filter_by(id=officer_id, role="safety_officer", is_active=True)
+    today = datetime.now(RIYADH_TZ).date()
+    raw_from = freq.args.get("date_from", "")
+    raw_to   = freq.args.get("date_to", "")
+    try:
+        since    = datetime.strptime(raw_from, "%Y-%m-%d").date() if raw_from else None
+        date_to  = datetime.strptime(raw_to,   "%Y-%m-%d").date() if raw_to   else None
+    except ValueError:
+        since = date_to = None
+    if not since or not date_to:
+        days    = min(int(freq.args.get("days", 30)), 180)
+        since   = today - timedelta(days=days)
+        date_to = today
+    else:
+        days = (date_to - since).days + 1
+    OFFICER_ROLES_ALL = ["safety_officer", "safety_welfare", "environment_officer"]
+    q = User.query.filter(User.id == officer_id,
+                          User.role.in_(OFFICER_ROLES_ALL), User.is_active == True)
     if u.company_id:
         q = q.filter_by(company_id=u.company_id)
     officer = q.first_or_404()
-    today = datetime.now(RIYADH_TZ).date()
-    since = today - timedelta(days=days)
     ci = HseCheckin.query.filter_by(officer_id=officer_id, date=today).first()
     checkin_hist = HseCheckin.query.filter(
         HseCheckin.officer_id == officer_id,
-        HseCheckin.date >= since
+        HseCheckin.date >= since, HseCheckin.date <= date_to
     ).order_by(HseCheckin.date.desc()).all()
     obs_list = HseObservation.query.filter(
         HseObservation.officer_id == officer_id,
-        HseObservation.date >= since
+        HseObservation.date >= since, HseObservation.date <= date_to
     ).order_by(HseObservation.date.desc()).all()
     tbt_list = HseTbt.query.filter(
         HseTbt.officer_id == officer_id,
-        HseTbt.date >= since
+        HseTbt.date >= since, HseTbt.date <= date_to
     ).order_by(HseTbt.date.desc()).all()
     jso_list = HseJsoClosure.query.filter(
         HseJsoClosure.officer_id == officer_id,
-        HseJsoClosure.date >= since
+        HseJsoClosure.date >= since, HseJsoClosure.date <= date_to
     ).order_by(HseJsoClosure.date.desc()).all()
     nm_list = HseNearMiss.query.filter(
         HseNearMiss.officer_id == officer_id,
-        HseNearMiss.date >= since
+        HseNearMiss.date >= since, HseNearMiss.date <= date_to
     ).order_by(HseNearMiss.date.desc()).all()
     bbs_list = HseBbs.query.filter(
         HseBbs.officer_id == officer_id,
-        HseBbs.date >= since
+        HseBbs.date >= since, HseBbs.date <= date_to
     ).order_by(HseBbs.date.desc()).all()
     return jsonify({
         "officer": {"id": officer.id, "name": officer.name},
@@ -13859,6 +13872,8 @@ def api_hse_officer_detail(officer_id):
         "checkin_history": [{"id": c.id, "date": c.date.isoformat(),
                               "location": c.location} for c in checkin_hist],
         "period_days": days,
+        "date_from": since.isoformat(),
+        "date_to":   date_to.isoformat(),
         "observations": [{
             "id": o.id, "date": o.date.isoformat(), "location": o.location or "",
             "obs_type": o.obs_type or "", "category": o.category or "",
