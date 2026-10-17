@@ -30,13 +30,12 @@ const CATEGORIES = [
     'maintenance'    => 'صيانة وإصلاحات',
     'transport'      => 'مواصلات',
     'other'          => 'أخرى (تذكر)',
-    'rent_warehouse' => 'إيجار مخازن',
-    'rent_housing'   => 'إيجار سكن',
-    'rent_other'     => 'إيجار أخرى (تذكر)',
+    'warehouses'     => 'مخازن',
+    'rent'           => 'إيجار',
     'shipping'       => 'شحن بضائع',
     'daily_services' => 'يومية خدمات',
 ];
-const NOTE_CATEGORIES = ['other', 'rent_other']; // بنود يلزم فيها ذكر التفاصيل
+const NOTE_CATEGORIES = ['other', 'rent']; // بنود فيها حقل تفاصيل (إلزامي في 'أخرى' فقط)
 const ADVANCE = 'advance'; // السلفة مفصولة عن باقي المصروفات والرصيد
 
 /* ---------- أدوات عامة ---------- */
@@ -157,9 +156,13 @@ function ensure_schema(): void
                     ADD is_active TINYINT(1) NOT NULL DEFAULT 1");
         db()->exec("UPDATE users SET role = 'admin'"); // المستخدمون الحاليون كانوا مديرين
     }
-    // الإيجارات صارت بنوداً مستقلة بدل بند واحد بأنواع فرعية
-    db()->exec("UPDATE expenses SET category = CASE sub_type WHEN 'warehouse' THEN 'rent_warehouse'
-                WHEN 'housing' THEN 'rent_housing' ELSE 'rent_other' END, sub_type = NULL WHERE category = 'rent'");
+    // مخازن بند مستقل، وإيجار بند مستقل (تحويل البيانات القديمة)
+    db()->exec("UPDATE expenses SET category = 'warehouses', sub_type = NULL
+                WHERE (category = 'rent' AND sub_type = 'warehouse') OR category = 'rent_warehouse'");
+    db()->exec("UPDATE expenses SET sub_note = 'سكن', sub_type = NULL
+                WHERE (category = 'rent' AND sub_type = 'housing') OR category = 'rent_housing'");
+    db()->exec("UPDATE expenses SET category = 'rent', sub_type = NULL WHERE category IN ('rent_housing','rent_other')");
+    db()->exec("UPDATE expenses SET sub_type = NULL WHERE category = 'rent'");
 }
 
 /** المستخدم الحالي يُقرأ من القاعدة في كل طلب، فيسري الإيقاف وتغيير الصلاحية فوراً. */

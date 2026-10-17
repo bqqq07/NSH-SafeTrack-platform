@@ -13,7 +13,7 @@
   var cat = document.getElementById('category');
   var noteBox = document.getElementById('noteBox');
   var noteLabel = document.getElementById('noteLabel');
-  var needsNote = { other: 'اذكر نوع المصروف (أخرى)', rent_other: 'اذكر نوع الإيجار (أخرى)' };
+  var needsNote = { other: 'اذكر نوع المصروف (أخرى)', rent: 'نوع الإيجار (اختياري: سكن، مكتب...)' };
   function syncCategory() {
     noteBox.hidden = !(cat.value in needsNote);
     if (cat.value in needsNote) noteLabel.textContent = needsNote[cat.value];

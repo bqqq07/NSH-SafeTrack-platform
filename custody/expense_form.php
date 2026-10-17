@@ -40,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     $f['sub_type'] = null;
     if (in_array($f['category'], NOTE_CATEGORIES, true)) {
-        if ($f['sub_note'] === '') $errors[] = 'اذكر تفاصيل البند';
+        if ($f['category'] === 'other' && $f['sub_note'] === '') $errors[] = 'اذكر تفاصيل البند (أخرى)';
     } else {
         $f['sub_note'] = null;
     }
