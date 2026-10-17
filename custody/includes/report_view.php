@@ -33,7 +33,7 @@ function report_body(array $d, callable $img): string
   ?>
   <h3 class="<?= $key === ADVANCE ? 'adv-h' : '' ?>"><?= e(CATEGORIES[$key]) ?><?= $key === ADVANCE ? ' (منفصلة عن المصروفات)' : '' ?></h3>
   <table>
-    <tr><th>التاريخ</th><th>التفصيل</th><th>البيان</th><th>المبلغ</th><th>التوقيع</th><?php if ($d['withImages']): ?><th>الفاتورة</th><?php endif; ?></tr>
+    <tr><th>التاريخ</th><th>البند</th><th>البيان</th><th>المبلغ</th><th>التوقيع</th><?php if ($d['withImages']): ?><th>الفاتورة</th><?php endif; ?></tr>
     <?php foreach ($d['groups'][$key] as $x): ?>
       <tr>
         <td><?= e($x['expense_date']) ?></td>

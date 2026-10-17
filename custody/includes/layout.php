@@ -13,7 +13,7 @@ function render_header(string $title, bool $nav = true): void
     ];
     $more = ['password.php' => 'حسابي'];
     if ($me && $me['admin']) {
-        $more = ['custodies.php' => 'العُهد', 'users.php' => 'المستخدمون'] + $more;
+        $more = ['custodies.php' => 'العُهد', 'users.php' => 'المستخدمون', 'restart.php' => 'إعادة تشغيل'] + $more;
     }
     ?><!doctype html>
 <html lang="ar" dir="rtl">
