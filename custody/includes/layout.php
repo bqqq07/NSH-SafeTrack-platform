@@ -21,7 +21,7 @@ function render_header(string $title, bool $nav = true): void
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= e($title) ?> - <?= e($config['app_name']) ?></title>
-<link rel="stylesheet" href="assets/style.css">
+<link rel="stylesheet" href="assets/style.css?v=<?= (int)@filemtime(__DIR__ . '/../assets/style.css') ?>">
 </head>
 <body>
 <?php if ($nav): ?>
@@ -51,7 +51,7 @@ function render_header(string $title, bool $nav = true): void
 function render_footer(array $scripts = ['assets/app.js']): void
 {
     foreach ($scripts as $s) {
-        echo '<script src="' . e($s) . '"></script>' . "\n";
+        echo '<script src="' . e($s) . '?v=' . (int)@filemtime(__DIR__ . '/../' . $s) . '"></script>' . "\n";
     }
     echo "</main>\n</body>\n</html>";
 }

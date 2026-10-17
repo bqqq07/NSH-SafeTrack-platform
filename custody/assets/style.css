@@ -1,8 +1,8 @@
 :root{
-  --bg:#f5f7fb;--card:#fff;--ink:#1f2a37;--muted:#6b7a90;--line:#e6ebf2;
+  --bg:#ffffff;--soft:#f3f6fa;--card:#fff;--ink:#1f2a37;--muted:#6b7a90;--line:#e6ebf2;
   --pri:#2f6bf0;--pri-soft:#e9f0ff;--pri-ink:#fff;--danger:#d64545;--danger-soft:#fdecec;
   --ok-soft:#e8f7ef;--ok:#17874f;--warn-soft:#fff3e3;--warn:#c9680a;--vio-soft:#f3edff;--vio:#7a45d8;
-  --radius:16px;--shadow:0 1px 2px rgba(20,35,60,.05),0 4px 14px rgba(20,35,60,.05);
+  --radius:16px;--shadow:0 0 0 1px var(--line),0 4px 14px rgba(20,35,60,.05);
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html{color-scheme:light}
@@ -16,11 +16,11 @@ a{color:var(--pri)}
 .brand{font-weight:700;font-size:18px;color:var(--pri)}
 .who{color:var(--muted);font-size:14px;margin-inline-start:auto}
 .menu{position:relative}
-.menu summary{list-style:none;cursor:pointer;width:40px;height:40px;display:grid;place-items:center;border-radius:12px;background:var(--bg);font-size:20px}
+.menu summary{list-style:none;cursor:pointer;width:40px;height:40px;display:grid;place-items:center;border-radius:12px;background:var(--soft);font-size:20px}
 .menu summary::-webkit-details-marker{display:none}
 .menu-list{position:absolute;inset-inline-end:0;top:48px;background:var(--card);border-radius:14px;box-shadow:0 8px 30px rgba(20,35,60,.18);padding:6px;min-width:180px}
 .menu-list a{display:block;padding:11px 14px;border-radius:10px;color:var(--ink);text-decoration:none}
-.menu-list a:hover{background:var(--bg)}
+.menu-list a:hover{background:var(--soft)}
 .menu-list a.logout{color:var(--danger)}
 
 /* ---------- التبويبات (سفلية في الجوال) ---------- */
@@ -33,7 +33,7 @@ a{color:var(--pri)}
   body{padding-bottom:0}
   .top{padding-inline:max(16px,calc((100% - 960px)/2))}
   .tabs{position:sticky;top:64px;bottom:auto;justify-content:flex-start;gap:6px;padding:8px max(16px,calc((100% - 960px)/2));box-shadow:0 1px 0 var(--line);background:var(--bg)}
-  .tabs a{flex:none;flex-direction:row;gap:6px;padding:8px 14px;font-size:15px;background:var(--card)}
+  .tabs a{flex:none;flex-direction:row;gap:6px;padding:8px 14px;font-size:15px;background:var(--soft)}
   .tabs a.active{background:var(--pri-soft)}
   .tabs i{font-size:16px}
   .tabs a.plus i{width:auto;height:auto;background:none;color:inherit;box-shadow:none;margin:0;font-size:16px;border-radius:0}
@@ -104,7 +104,7 @@ tr.total td,tr.total th{font-weight:700;background:#f3f6fb}
 @media (max-width:759px){
   .cards table,.cards tbody{display:block}
   .cards tr:first-child:has(th){display:none}
-  .cards tr{display:grid;grid-template-columns:1fr auto;gap:3px 10px;padding:13px 16px;border-bottom:8px solid var(--bg)}
+  .cards tr{display:grid;grid-template-columns:1fr auto;gap:3px 10px;padding:13px 16px;border-bottom:10px solid var(--soft)}
   .cards tr:last-child{border-bottom:0}
   .cards td{grid-column:1/-1;order:5;padding:0;border:0;background:none!important;display:flex;justify-content:space-between;gap:12px}
   .cards td[data-label]::before{content:attr(data-label);color:var(--muted);font-size:13px;flex:none}
