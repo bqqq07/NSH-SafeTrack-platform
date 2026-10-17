@@ -1,6 +1,7 @@
 <?php
 require __DIR__ . '/includes/bootstrap.php';
 require __DIR__ . '/includes/layout.php';
+require __DIR__ . '/includes/report_view.php';
 require_login();
 $pdo = db();
 
@@ -47,6 +48,16 @@ foreach ($expenses as $x) {
 }
 $opening = $prev['balance'] ?? 0;
 $closing = $opening + $recTotal - $spent;
+$data = [
+    'custodyName' => $custodyName, 'from' => $from, 'to' => $to, 'opening' => $opening, 'recTotal' => $recTotal,
+    'spent' => $spent, 'adv' => $adv, 'closing' => $closing, 'receipts' => $receipts, 'expenses' => $expenses,
+    'groups' => $groups, 'withImages' => $withImages,
+];
+
+if ($generated && ($_GET['export'] ?? '') === 'pdf') {
+    require __DIR__ . '/includes/pdf.php';
+    send_report_pdf($data, 'custody_' . $from . '_' . $to . '.pdf');
+}
 
 if ($generated && ($_GET['export'] ?? '') === 'csv') {
     header('Content-Type: text/csv; charset=utf-8');
@@ -75,55 +86,11 @@ render_header('التقارير');
 
 <?php if ($generated): ?>
 <div class="row no-print">
-  <button class="btn" onclick="window.print()">طباعة / حفظ PDF</button>
+  <a class="btn primary" href="?<?= e(http_build_query(array_merge($_GET, ['export' => 'pdf']))) ?>">تحميل PDF</a>
+  <button class="btn" onclick="window.print()">طباعة</button>
   <a class="btn" href="?<?= e(http_build_query(array_merge($_GET, ['export' => 'csv']))) ?>">تصدير Excel (CSV)</a>
 </div>
 
-<section class="report">
-  <h2 class="center">تقرير العهدة</h2>
-  <p class="center"><?= e($custodyName) ?> — من <?= e($from) ?> إلى <?= e($to) ?></p>
-
-  <table class="summary">
-    <tr><th>رصيد مرحّل قبل الفترة</th><td class="num"><?= money($opening) ?></td></tr>
-    <tr><th>المستلم خلال الفترة</th><td class="num"><?= money($recTotal) ?></td></tr>
-    <tr><th>المصروفات (بدون السلف)</th><td class="num"><?= money($spent) ?></td></tr>
-    <tr class="total"><th>رصيد العهدة بنهاية الفترة</th><td class="num"><?= money($closing) ?></td></tr>
-    <tr class="adv"><th>إجمالي السلف (منفصلة)</th><td class="num"><?= money($adv) ?></td></tr>
-  </table>
-
-  <h3>المبالغ المستلمة</h3>
-  <table>
-    <tr><th>التاريخ</th><th>العهدة</th><th>ملاحظة</th><th>المبلغ</th></tr>
-    <?php foreach ($receipts as $r): ?>
-      <tr><td><?= e($r['received_date']) ?></td><td><?= e($r['custody_name']) ?></td><td><?= e($r['note']) ?></td><td class="num"><?= money($r['amount']) ?></td></tr>
-    <?php endforeach; if (!$receipts): ?><tr><td colspan="4" class="muted">لا يوجد</td></tr><?php endif; ?>
-    <tr class="total"><td colspan="3">الإجمالي</td><td class="num"><?= money($recTotal) ?></td></tr>
-  </table>
-
-  <?php
-  $ordered = array_merge(array_diff(array_keys(CATEGORIES), [ADVANCE]), [ADVANCE]);
-  foreach ($ordered as $key):
-      if (empty($groups[$key])) continue;
-      $sub = array_sum(array_column($groups[$key], 'amount'));
-  ?>
-  <h3 class="<?= $key === ADVANCE ? 'adv-h' : '' ?>"><?= e(CATEGORIES[$key]) ?><?= $key === ADVANCE ? ' (منفصلة عن المصروفات)' : '' ?></h3>
-  <table>
-    <tr><th>التاريخ</th><th>التفصيل</th><th>البيان</th><th>المبلغ</th><th>التوقيع</th><?php if ($withImages): ?><th>الفاتورة</th><?php endif; ?></tr>
-    <?php foreach ($groups[$key] as $x): ?>
-      <tr>
-        <td><?= e($x['expense_date']) ?></td>
-        <td><?= e(category_label($x['category'], $x['sub_type'], $x['sub_note'])) ?></td>
-        <td><?= e($x['description']) ?></td>
-        <td class="num"><?= money($x['amount']) ?></td>
-        <td><?= $x['signature_id'] ? '<img class="sig" src="file.php?id=' . (int)$x['signature_id'] . '" alt="">' : '' ?></td>
-        <?php if ($withImages): ?>
-          <td><?= $x['invoice_id'] ? '<img class="inv" loading="lazy" src="file.php?id=' . (int)$x['invoice_id'] . '" alt="">' : '-' ?></td>
-        <?php endif; ?>
-      </tr>
-    <?php endforeach; ?>
-    <tr class="total"><td colspan="3">إجمالي <?= e(CATEGORIES[$key]) ?></td><td class="num"><?= money($sub) ?></td><td colspan="<?= $withImages ? 2 : 1 ?>"></td></tr>
-  </table>
-  <?php endforeach; if (!$expenses): ?><p class="muted">لا توجد مصروفات في هذه الفترة.</p><?php endif; ?>
-</section>
+<?= report_body($data, fn($id) => 'file.php?id=' . $id) ?>
 <?php endif; ?>
 <?php render_footer([]);

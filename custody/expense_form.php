@@ -11,6 +11,7 @@ if ($id) {
     $st->execute([$id]);
     $exp = $st->fetch();
     if (!$exp) { http_response_code(404); exit('غير موجود'); }
+    if (!$user['admin'] && (int)$exp['created_by'] !== $user['id']) { http_response_code(403); exit('لا يمكنك تعديل صرف سجّله غيرك.'); }
 }
 $custodies = get_custodies();
 $f = $exp ?: [

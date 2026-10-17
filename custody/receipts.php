@@ -8,6 +8,7 @@ $custodies = get_custodies();
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     if (($_POST['action'] ?? '') === 'delete') {
+        if (!$user['admin']) { http_response_code(403); exit('الحذف للمدير فقط.'); }
         $pdo->prepare('DELETE FROM receipts WHERE id = ?')->execute([(int)($_POST['id'] ?? 0)]);
         flash('تم حذف الاستلام');
     } else {
@@ -28,7 +29,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $list = $pdo->query(
-    'SELECT r.*, c.name AS custody_name FROM receipts r JOIN custodies c ON c.id = r.custody_id
+    'SELECT r.*, c.name AS custody_name, u.full_name AS by_name FROM receipts r
+     JOIN custodies c ON c.id = r.custody_id LEFT JOIN users u ON u.id = r.created_by
      ORDER BY r.received_date DESC, r.id DESC LIMIT 200'
 )->fetchAll();
 
@@ -45,15 +47,15 @@ render_header('الاستلام');
 </form>
 
 <div class="tablewrap"><table>
-  <tr><th>التاريخ</th><th>العهدة</th><th>المبلغ</th><th>ملاحظة</th><th></th></tr>
+  <tr><th>التاريخ</th><th>العهدة</th><th>المبلغ</th><th>ملاحظة</th><th>سجّله</th><th></th></tr>
   <?php foreach ($list as $r): ?>
   <tr>
     <td><?= e($r['received_date']) ?></td><td><?= e($r['custody_name']) ?></td>
-    <td class="num"><?= money($r['amount']) ?></td><td><?= e($r['note']) ?></td>
-    <td><form method="post" data-confirm="حذف هذا الاستلام؟"><?= csrf_field() ?>
+    <td class="num"><?= money($r['amount']) ?></td><td><?= e($r['note']) ?></td><td><?= e($r['by_name']) ?></td>
+    <td><?php if ($user['admin']): ?><form method="post" data-confirm="حذف هذا الاستلام؟"><?= csrf_field() ?>
       <input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-      <button class="btn small danger">حذف</button></form></td>
+      <button class="btn small danger">حذف</button></form><?php endif; ?></td>
   </tr>
-  <?php endforeach; if (!$list): ?><tr><td colspan="5" class="muted">لا توجد مبالغ مستلمة بعد</td></tr><?php endif; ?>
+  <?php endforeach; if (!$list): ?><tr><td colspan="6" class="muted">لا توجد مبالغ مستلمة بعد</td></tr><?php endif; ?>
 </table></div>
 <?php render_footer();

@@ -1,11 +1,12 @@
 <?php
 require __DIR__ . '/includes/bootstrap.php';
 require __DIR__ . '/includes/layout.php';
-require_login();
+$user = require_login();
 $pdo = db();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'delete') {
     csrf_verify();
+    if (!$user['admin']) { http_response_code(403); exit('الحذف للمدير فقط.'); }
     $id = (int)($_POST['id'] ?? 0);
     $st = $pdo->prepare('SELECT signature_id, invoice_id FROM expenses WHERE id = ?');
     $st->execute([$id]);
@@ -30,7 +31,7 @@ if (isset(CATEGORIES[$cat])) { $where[] = 'e.category = ?'; $args[] = $cat; }
 if ($from) { $where[] = 'e.expense_date >= ?'; $args[] = $from; }
 if ($to) { $where[] = 'e.expense_date <= ?'; $args[] = $to; }
 $st = $pdo->prepare(
-    'SELECT e.*, c.name AS custody_name FROM expenses e JOIN custodies c ON c.id = e.custody_id'
+    'SELECT e.*, c.name AS custody_name, u.full_name AS by_name FROM expenses e JOIN custodies c ON c.id = e.custody_id LEFT JOIN users u ON u.id = e.created_by'
     . ($where ? ' WHERE ' . implode(' AND ', $where) : '')
     . ' ORDER BY e.expense_date DESC, e.id DESC LIMIT 300'
 );
@@ -49,20 +50,24 @@ render_header('المصروفات');
 </form>
 
 <div class="tablewrap"><table>
-  <tr><th>التاريخ</th><th>العهدة</th><th>البند</th><th>البيان</th><th>المبلغ</th><th>فاتورة</th><th></th></tr>
+  <tr><th>التاريخ</th><th>العهدة</th><th>البند</th><th>البيان</th><th>المبلغ</th><th>فاتورة</th><th>سجّله</th><th></th></tr>
   <?php foreach ($list as $r): ?>
   <tr class="<?= $r['category'] === ADVANCE ? 'adv' : '' ?>">
     <td><?= e($r['expense_date']) ?></td><td><?= e($r['custody_name']) ?></td>
     <td><?= e(category_label($r['category'], $r['sub_type'], $r['sub_note'])) ?></td>
     <td><?= e($r['description']) ?></td><td class="num"><?= money($r['amount']) ?></td>
     <td><?= $r['invoice_id'] ? '<a target="_blank" href="file.php?id=' . (int)$r['invoice_id'] . '">عرض</a>' : '-' ?></td>
+    <td><?= e($r['by_name']) ?></td>
     <td class="row">
+      <?php if ($user['admin'] || (int)$r['created_by'] === $user['id']): ?>
       <a class="btn small" href="expense_form.php?id=<?= (int)$r['id'] ?>">تعديل</a>
+      <?php endif; if ($user['admin']): ?>
       <form method="post" data-confirm="حذف هذا الصرف نهائياً؟"><?= csrf_field() ?>
         <input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
         <button class="btn small danger">حذف</button></form>
+      <?php endif; ?>
     </td>
   </tr>
-  <?php endforeach; if (!$list): ?><tr><td colspan="7" class="muted">لا توجد نتائج</td></tr><?php endif; ?>
+  <?php endforeach; if (!$list): ?><tr><td colspan="8" class="muted">لا توجد نتائج</td></tr><?php endif; ?>
 </table></div>
 <?php render_footer();

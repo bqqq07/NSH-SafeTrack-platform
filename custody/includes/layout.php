@@ -10,7 +10,13 @@ function render_header(string $title, bool $nav = true): void
         'expenses.php'     => 'المصروفات',
         'report.php'       => 'التقارير',
         'custodies.php'    => 'العُهد',
+        'users.php'        => 'المستخدمون',
+        'password.php'     => 'حسابي',
     ];
+    $me = $GLOBALS['me'] ?? null;
+    if ($me && !$me['admin']) {
+        unset($links['custodies.php'], $links['users.php']);
+    }
     ?><!doctype html>
 <html lang="ar" dir="rtl">
 <head>
@@ -22,7 +28,7 @@ function render_header(string $title, bool $nav = true): void
 <body>
 <?php if ($nav): ?>
 <header class="top no-print">
-  <div class="brand"><?= e($config['app_name']) ?></div>
+  <div class="brand"><?= e($config['app_name']) ?><?php if ($me): ?> <small class="muted">— <?= e($me['name']) ?></small><?php endif; ?></div>
   <nav>
     <?php foreach ($links as $href => $label): ?>
       <a href="<?= $href ?>" class="<?= $page === $href ? 'active' : '' ?>"><?= e($label) ?></a>

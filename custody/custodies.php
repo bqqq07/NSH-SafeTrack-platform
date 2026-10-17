@@ -1,7 +1,7 @@
 <?php
 require __DIR__ . '/includes/bootstrap.php';
 require __DIR__ . '/includes/layout.php';
-require_login();
+require_admin();
 $pdo = db();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

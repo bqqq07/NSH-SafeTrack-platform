@@ -155,12 +155,41 @@ function csrf_verify(): void
     }
 }
 
+/** ترقية قواعد البيانات القديمة (قبل إضافة المستخدمين) تلقائياً. */
+function ensure_schema(): void
+{
+    $cols = db()->query("SHOW COLUMNS FROM users")->fetchAll(PDO::FETCH_COLUMN);
+    if (!in_array('role', $cols, true)) {
+        db()->exec("ALTER TABLE users ADD role ENUM('admin','user') NOT NULL DEFAULT 'user',
+                    ADD is_active TINYINT(1) NOT NULL DEFAULT 1");
+        db()->exec("UPDATE users SET role = 'admin'"); // المستخدمون الحاليون كانوا مديرين
+    }
+}
+
+/** المستخدم الحالي يُقرأ من القاعدة في كل طلب، فيسري الإيقاف وتغيير الصلاحية فوراً. */
 function require_login(): array
 {
     if (empty($_SESSION['uid'])) {
         redirect('login.php');
     }
-    return ['id' => (int)$_SESSION['uid'], 'name' => (string)($_SESSION['uname'] ?? '')];
+    $st = db()->prepare('SELECT id, full_name, role, is_active FROM users WHERE id = ?');
+    $st->execute([(int)$_SESSION['uid']]);
+    $u = $st->fetch();
+    if (!$u || !$u['is_active']) {
+        $_SESSION = [];
+        redirect('login.php');
+    }
+    return $GLOBALS['me'] = ['id' => (int)$u['id'], 'name' => $u['full_name'], 'role' => $u['role'], 'admin' => $u['role'] === 'admin'];
+}
+
+function require_admin(): array
+{
+    $u = require_login();
+    if (!$u['admin']) {
+        http_response_code(403);
+        exit('هذه الصفحة للمدير فقط.');
+    }
+    return $u;
 }
 
 /* ---------- العُهد ---------- */

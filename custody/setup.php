@@ -22,7 +22,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!preg_match('/^[A-Za-z0-9_.-]{3,50}$/', $username) || $full === '' || strlen($pass) < 8) {
         $err = 'اسم المستخدم (حروف إنجليزية/أرقام 3+) والاسم مطلوبان، وكلمة المرور 8 خانات على الأقل.';
     } else {
-        $pdo->prepare('INSERT INTO users (username, full_name, password_hash) VALUES (?,?,?)')
+        $pdo->prepare("INSERT INTO users (username, full_name, password_hash, role) VALUES (?,?,?,'admin')")
             ->execute([$username, $full, password_hash($pass, PASSWORD_DEFAULT)]);
         $pdo->prepare('INSERT INTO custodies (name) VALUES (?)')->execute([$cname]);
         flash('تم الإعداد. سجّل دخولك، ولا تنسَ حذف setup.php من السيرفر.');

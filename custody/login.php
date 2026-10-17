@@ -11,13 +11,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (($_SESSION['lock_until'] ?? 0) > time()) {
         $err = 'محاولات كثيرة، انتظر بضع دقائق.';
     } else {
-        $st = db()->prepare('SELECT * FROM users WHERE username = ?');
+        ensure_schema();
+        $st = db()->prepare('SELECT * FROM users WHERE username = ? AND is_active = 1');
         $st->execute([trim($_POST['username'] ?? '')]);
         $u = $st->fetch();
         if ($u && password_verify($_POST['password'] ?? '', $u['password_hash'])) {
             session_regenerate_id(true);
             $_SESSION['uid'] = (int)$u['id'];
-            $_SESSION['uname'] = $u['full_name'];
             $_SESSION['fails'] = 0;
             redirect('index.php');
         }
