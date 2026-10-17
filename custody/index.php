@@ -38,12 +38,12 @@ render_header('الرئيسية');
 
 <h2>آخر العمليات</h2>
 <div class="tablewrap cards"><table>
-  <tr><th>التاريخ</th><th>البند</th><th>البيان</th><th>المبلغ</th></tr>
+  <tr><th>التاريخ</th><th>البند</th><th class="desc">البيان</th><th>المبلغ</th></tr>
   <?php foreach ($recent as $r): ?>
   <tr class="<?= $r['category'] === ADVANCE ? 'adv' : '' ?>">
     <td data-label="التاريخ"><?= e($r['expense_date']) ?></td>
     <td data-label="البند"><?= category_chip($r['category'], $r['sub_type'], $r['sub_note']) ?></td>
-    <td data-label="البيان"><?= e($r['description']) ?></td>
+    <td class="desc" data-label="البيان"><?= e($r['description']) ?></td>
     <td class="num" data-label="المبلغ"><?= money($r['amount']) ?></td>
   </tr>
   <?php endforeach; if (!$recent): ?><tr><td colspan="4" class="muted">لا توجد عمليات بعد</td></tr><?php endif; ?>

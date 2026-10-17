@@ -49,8 +49,9 @@ h1{font-size:22px;margin:6px 0 14px}h2{font-size:17px;margin:22px 0 10px}h3{font
 /* ---------- الحقول والأزرار ---------- */
 label,.lbl{display:flex;flex-direction:column;gap:6px;font-size:14px;color:var(--muted)}
 label.chk{flex-direction:row;align-items:center;gap:8px}
-input,select{font:inherit;font-size:16px;color:var(--ink);padding:12px 13px;border:1.5px solid var(--line);border-radius:12px;background:#fbfcfe;width:100%;min-height:46px}
-input:focus,select:focus{outline:none;border-color:var(--pri);background:#fff;box-shadow:0 0 0 4px var(--pri-soft)}
+input,select,textarea{font:inherit;font-size:16px;color:var(--ink);padding:12px 13px;border:1.5px solid var(--line);border-radius:12px;background:#fbfcfe;width:100%;min-height:46px}
+textarea{resize:vertical;line-height:1.6;min-height:110px}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--pri);background:#fff;box-shadow:0 0 0 4px var(--pri-soft)}
 input[type=file]{padding:8px;font-size:14px}
 input[type=file]::file-selector-button{font:inherit;font-weight:600;border:0;border-radius:8px;background:var(--pri-soft);color:var(--pri);padding:7px 12px;margin-inline-end:10px}
 input[type=checkbox]{width:20px;height:20px;min-height:0;accent-color:var(--pri)}
@@ -85,6 +86,7 @@ table{width:100%;border-collapse:collapse}
 th,td{padding:12px 14px;text-align:start;border-bottom:1px solid var(--line);vertical-align:middle}
 th{font-size:13px;color:var(--muted);font-weight:600;background:#fafbfd}
 tr:last-child td{border-bottom:0}
+th.desc,td.desc{width:42%;min-width:220px}
 td.num{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:700}
 tr.adv td{background:var(--vio-soft)}
 tr.total td,tr.total th{font-weight:700;background:#f3f6fb}
@@ -113,7 +115,7 @@ tr.total td,tr.total th{font-weight:700;background:#f3f6fb}
   .cards td[data-label="التاريخ"]{grid-column:1;order:1;color:var(--muted);font-size:14px}
   .cards td.num{grid-column:2;order:2;justify-self:end;font-size:18px;color:var(--pri)}
   .cards td[data-label="البند"]{order:3}
-  .cards td[data-label="البيان"]{order:4}
+  .cards td[data-label="البيان"]{order:4;width:auto;min-width:0}
   .cards td[colspan]{display:block;text-align:center;padding:18px 0;grid-column:1/-1}
   .cards td.act{order:9;justify-content:flex-start;padding-top:8px}
   .cards tr.adv{background:var(--vio-soft)}
@@ -123,12 +125,13 @@ tr.total td,tr.total th{font-weight:700;background:#f3f6fb}
 canvas#sig{width:100%;max-width:600px;height:180px;border:2px dashed #c9d3e2;border-radius:14px;background:#fff;touch-action:none;display:block;margin:6px 0}
 img.thumb{height:50px;background:#fff;border:1px solid var(--line);border-radius:8px;margin-inline-start:8px;vertical-align:middle}
 img.sig{height:36px;background:#fff}
-img.inv{max-width:220px;max-height:260px;border-radius:8px}
+img.inv{width:90px;height:auto;border-radius:6px;border:1px solid var(--line)}
 
 /* ---------- التقرير ---------- */
 .report{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;overflow-x:auto}
 .report table{margin-bottom:8px;min-width:480px}.report .summary{max-width:480px;min-width:0;margin:0 auto 12px}
 .report th,.report td{border:1px solid var(--line)}
+.report td{overflow-wrap:anywhere}
 .adv-h{background:var(--vio-soft);color:var(--vio);padding:4px 10px;border-radius:8px}
 
 @media print{

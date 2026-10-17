@@ -50,12 +50,12 @@ render_header('المصروفات');
 </form>
 
 <div class="tablewrap cards"><table>
-  <tr><th>التاريخ</th><th>العهدة</th><th>البند</th><th>البيان</th><th>المبلغ</th><th>فاتورة</th><th>سجّله</th><th></th></tr>
+  <tr><th>التاريخ</th><th>العهدة</th><th>البند</th><th class="desc">البيان</th><th>المبلغ</th><th>فاتورة</th><th>سجّله</th><th></th></tr>
   <?php foreach ($list as $r): ?>
   <tr class="<?= $r['category'] === ADVANCE ? 'adv' : '' ?>">
     <td data-label="التاريخ"><?= e($r['expense_date']) ?></td><td data-label="العهدة"><?= e($r['custody_name']) ?></td>
     <td data-label="البند"><?= category_chip($r['category'], $r['sub_type'], $r['sub_note']) ?></td>
-    <td data-label="البيان"><?= e($r['description']) ?></td><td class="num" data-label="المبلغ"><?= money($r['amount']) ?></td>
+    <td class="desc" data-label="البيان"><?= e($r['description']) ?></td><td class="num" data-label="المبلغ"><?= money($r['amount']) ?></td>
     <td data-label="فاتورة"><?= $r['invoice_id'] ? '<a target="_blank" href="file.php?id=' . (int)$r['invoice_id'] . '">عرض</a>' : '-' ?></td>
     <td data-label="سجّله"><?= e($r['by_name']) ?></td>
     <td class="row act">

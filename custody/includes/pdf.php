@@ -1,12 +1,18 @@
 <?php
 require_once __DIR__ . '/../vendor/autoload.php';
 
-function attachment_data_uri(int $id): string
+function attachment_data_uri(int $id, bool $thumb = false): string
 {
     $st = db()->prepare('SELECT mime, data FROM attachments WHERE id = ?');
     $st->execute([$id]);
     $r = $st->fetch();
-    return $r ? 'data:' . $r['mime'] . ';base64,' . base64_encode($r['data']) : '';
+    if (!$r) {
+        return '';
+    }
+    if ($thumb && ($small = compress_image($r['data'], 'jpeg', 400))) {
+        $r = $small;
+    }
+    return 'data:' . $r['mime'] . ';base64,' . base64_encode($r['data']);
 }
 
 /** يولّد PDF عربي (A4) من جسم التقرير ويرسله للمتصفح. */
@@ -42,9 +48,9 @@ function send_report_pdf(array $d, string $filename): never
       tr.adv td,tr.adv th{background-color:#fff1d6}
       h3.adv-h{background-color:#fff1d6;padding:3px 6px}
       .muted{color:#666}
-      img.sig{height:26px}img.inv{width:200px}';
+      img.sig{height:24px}img.inv{width:80px}';
     $mpdf->WriteHTML($css, \Mpdf\HTMLParserMode::HEADER_CSS);
-    $mpdf->WriteHTML(report_body($d, 'attachment_data_uri'), \Mpdf\HTMLParserMode::HTML_BODY);
+    $mpdf->WriteHTML(report_body($d + ['pdf' => true], 'attachment_data_uri'), \Mpdf\HTMLParserMode::HTML_BODY);
     $mpdf->Output($filename, \Mpdf\Output\Destination::DOWNLOAD);
     exit;
 }

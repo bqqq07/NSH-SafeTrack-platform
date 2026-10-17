@@ -105,7 +105,7 @@ render_header($exp ? 'تعديل صرف' : 'صرف جديد');
 
   <label>المبلغ <input name="amount" inputmode="decimal" value="<?= e($f['amount']) ?>" required></label>
   <label>التاريخ <input type="date" name="expense_date" value="<?= e($f['expense_date']) ?>" required></label>
-  <label class="full">البيان <input name="description" value="<?= e($f['description']) ?>" maxlength="500" required></label>
+  <label class="full">البيان (التفاصيل) <textarea name="description" rows="4" maxlength="500" required placeholder="اكتب تفاصيل الصرف..."><?= e($f['description']) ?></textarea></label>
 
   <div class="full">
     <span class="lbl">التوقيع (ارسم بإصبعك)<?= ($exp && $exp['signature_id']) ? ' — يوجد توقيع محفوظ، وقّع من جديد فقط للاستبدال' : '' ?></span>

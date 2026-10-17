@@ -91,6 +91,6 @@ render_header('التقارير');
   <a class="btn" href="?<?= e(http_build_query(array_merge($_GET, ['export' => 'csv']))) ?>">تصدير Excel (CSV)</a>
 </div>
 
-<?= report_body($data, fn($id) => 'file.php?id=' . $id) ?>
+<?= report_body($data, fn($id, $thumb = false) => 'file.php?id=' . $id . ($thumb ? '&thumb=1' : '')) ?>
 <?php endif; ?>
 <?php render_footer([]);

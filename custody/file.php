@@ -9,6 +9,9 @@ if (!$row) {
     http_response_code(404);
     exit;
 }
+if (!empty($_GET['thumb']) && ($small = compress_image($row['data'], 'jpeg', 400))) {
+    $row = $small; // مصغّرة للتقارير؛ الأصل يُفتح بدون thumb
+}
 header('Content-Type: ' . $row['mime']);
 header('Cache-Control: private, max-age=86400');
 echo $row['data'];
