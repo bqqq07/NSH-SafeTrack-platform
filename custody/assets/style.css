@@ -1,0 +1,54 @@
+:root{--bg:#f4f6f8;--card:#fff;--ink:#1b2430;--muted:#6b7785;--line:#dde3ea;--pri:#0b6b5c;--pri-ink:#fff;--danger:#b3261e;--adv:#fff4e0;--ok:#e3f4ea}
+@media (prefers-color-scheme:dark){:root{--bg:#12171c;--card:#1b222a;--ink:#e8edf2;--muted:#93a0ad;--line:#2d3742;--pri:#2aa58f;--pri-ink:#04201b;--danger:#ff8a80;--adv:#3a2f18;--ok:#173325}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.6 "Segoe UI",Tahoma,Arial,sans-serif}
+.wrap{max-width:1000px;margin:0 auto;padding:16px}
+.top{background:var(--card);border-bottom:1px solid var(--line);padding:10px 16px;position:sticky;top:0;z-index:5}
+.brand{font-weight:700;color:var(--pri);margin-bottom:6px}
+nav{display:flex;flex-wrap:wrap;gap:6px}
+nav a{padding:6px 12px;border-radius:8px;color:var(--ink);text-decoration:none;font-size:15px}
+nav a.active{background:var(--pri);color:var(--pri-ink)}
+nav a.logout{margin-inline-start:auto;color:var(--danger)}
+h1{font-size:22px;margin:8px 0 14px}h2{font-size:18px}h3{font-size:16px;margin:20px 0 6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:16px}
+.narrow{max-width:380px;margin:40px auto}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;align-items:end}
+.full{grid-column:1/-1}
+label,.lbl{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--muted)}
+label.chk{flex-direction:row;align-items:center;gap:6px}
+input,select{font:inherit;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);width:100%}
+input[type=checkbox]{width:auto}
+.btn{display:inline-block;font:inherit;padding:10px 16px;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);text-decoration:none;cursor:pointer}
+.btn.primary{background:var(--pri);color:var(--pri-ink);border-color:var(--pri)}
+.btn.danger{color:var(--danger);border-color:var(--danger)}
+.btn.small{padding:4px 10px;font-size:14px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px}
+.row.between{justify-content:space-between}
+form.inline{display:flex;gap:6px}form.inline select{width:auto}
+.alert{padding:10px 14px;border-radius:8px;margin-bottom:12px;background:var(--ok)}
+.alert.err{background:#fde7e5;color:#8c1d18}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:16px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+.stat span{display:block;color:var(--muted);font-size:13px}.stat b{font-size:20px}
+.stat.pos b{color:var(--pri)}.stat.neg b{color:var(--danger)}.stat.sep{background:var(--adv)}
+.tablewrap{overflow-x:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}
+table{width:100%;border-collapse:collapse}
+th,td{padding:8px 10px;text-align:start;border-bottom:1px solid var(--line);vertical-align:middle}
+th{font-size:13px;color:var(--muted);background:var(--bg)}
+td.num{font-variant-numeric:tabular-nums;white-space:nowrap;font-weight:600}
+tr.adv,tr.adv td{background:var(--adv)}
+tr.total td,tr.total th{font-weight:700;background:var(--bg)}
+.muted{color:var(--muted)}.center{text-align:center}
+canvas#sig{width:100%;max-width:600px;height:200px;border:2px dashed var(--line);border-radius:10px;background:#fff;touch-action:none;display:block;margin:6px 0}
+img.thumb{height:50px;background:#fff;border:1px solid var(--line);margin-inline-start:8px;vertical-align:middle}
+img.sig{height:36px;background:#fff}
+img.inv{max-width:220px;max-height:260px}
+.report{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+.report table{margin-bottom:8px}.report .summary{max-width:480px;margin:0 auto 12px}
+.adv-h{background:var(--adv);padding:4px 8px;border-radius:6px}
+@media print{
+  :root{--bg:#fff;--card:#fff;--ink:#000;--line:#bbb;--muted:#333;--adv:#eee}
+  .no-print,.top{display:none!important}
+  .wrap{max-width:none;padding:0}.report{border:0;padding:0}
+  .tablewrap{border:0}tr{page-break-inside:avoid}h3{page-break-after:avoid}
+}

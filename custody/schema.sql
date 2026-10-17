@@ -1,0 +1,55 @@
+CREATE TABLE IF NOT EXISTS users (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(50) NOT NULL UNIQUE,
+  full_name VARCHAR(100) NOT NULL,
+  password_hash VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS custodies (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS attachments (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  kind ENUM('invoice','signature') NOT NULL,
+  mime VARCHAR(40) NOT NULL,
+  data MEDIUMBLOB NOT NULL,
+  size INT UNSIGNED NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS receipts (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  custody_id INT UNSIGNED NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  received_date DATE NOT NULL,
+  note VARCHAR(255) NULL,
+  created_by INT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_receipt_date (custody_id, received_date),
+  CONSTRAINT fk_receipt_custody FOREIGN KEY (custody_id) REFERENCES custodies(id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS expenses (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  custody_id INT UNSIGNED NOT NULL,
+  category VARCHAR(30) NOT NULL,
+  sub_type VARCHAR(20) NULL,
+  sub_note VARCHAR(255) NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  expense_date DATE NOT NULL,
+  description VARCHAR(500) NOT NULL,
+  signature_id INT UNSIGNED NULL,
+  invoice_id INT UNSIGNED NULL,
+  created_by INT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  KEY idx_expense_date (custody_id, expense_date),
+  KEY idx_expense_cat (category),
+  CONSTRAINT fk_expense_custody FOREIGN KEY (custody_id) REFERENCES custodies(id),
+  CONSTRAINT fk_expense_sig FOREIGN KEY (signature_id) REFERENCES attachments(id) ON DELETE SET NULL,
+  CONSTRAINT fk_expense_inv FOREIGN KEY (invoice_id) REFERENCES attachments(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
