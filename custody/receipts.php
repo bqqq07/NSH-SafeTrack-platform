@@ -46,13 +46,13 @@ render_header('الاستلام');
   <button class="btn primary">حفظ</button>
 </form>
 
-<div class="tablewrap"><table>
+<div class="tablewrap cards"><table>
   <tr><th>التاريخ</th><th>العهدة</th><th>المبلغ</th><th>ملاحظة</th><th>سجّله</th><th></th></tr>
   <?php foreach ($list as $r): ?>
   <tr>
-    <td><?= e($r['received_date']) ?></td><td><?= e($r['custody_name']) ?></td>
-    <td class="num"><?= money($r['amount']) ?></td><td><?= e($r['note']) ?></td><td><?= e($r['by_name']) ?></td>
-    <td><?php if ($user['admin']): ?><form method="post" data-confirm="حذف هذا الاستلام؟"><?= csrf_field() ?>
+    <td data-label="التاريخ"><?= e($r['received_date']) ?></td><td data-label="العهدة"><?= e($r['custody_name']) ?></td>
+    <td class="num" data-label="المبلغ"><?= money($r['amount']) ?></td><td data-label="ملاحظة"><?= e($r['note']) ?></td><td data-label="سجّله"><?= e($r['by_name']) ?></td>
+    <td class="act"><?php if ($user['admin']): ?><form method="post" data-confirm="حذف هذا الاستلام؟"><?= csrf_field() ?>
       <input type="hidden" name="action" value="delete"><input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
       <button class="btn small danger">حذف</button></form><?php endif; ?></td>
   </tr>

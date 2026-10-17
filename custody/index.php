@@ -24,27 +24,27 @@ render_header('الرئيسية');
 </div>
 
 <div class="stats">
-  <div class="stat"><span>إجمالي المستلم</span><b><?= money($t['received']) ?></b></div>
-  <div class="stat"><span>إجمالي المصروف</span><b><?= money($t['spent']) ?></b></div>
+  <div class="stat in"><span>إجمالي المستلم</span><b><?= money($t['received']) ?></b></div>
+  <div class="stat out"><span>إجمالي المصروف</span><b><?= money($t['spent']) ?></b></div>
   <div class="stat <?= $t['balance'] < 0 ? 'neg' : 'pos' ?>"><span>رصيد العهدة</span><b><?= money($t['balance']) ?></b></div>
   <div class="stat sep"><span>السلف (منفصلة)</span><b><?= money($t['advances']) ?></b></div>
 </div>
 
-<div class="row">
+<div class="actions">
   <a class="btn primary" href="expense_form.php">+ تسجيل صرف</a>
-  <a class="btn" href="receipts.php">+ تسجيل استلام مبلغ</a>
+  <a class="btn" href="receipts.php">+ استلام مبلغ</a>
   <a class="btn" href="report.php">تقرير</a>
 </div>
 
 <h2>آخر العمليات</h2>
-<div class="tablewrap"><table>
+<div class="tablewrap cards"><table>
   <tr><th>التاريخ</th><th>البند</th><th>البيان</th><th>المبلغ</th></tr>
   <?php foreach ($recent as $r): ?>
   <tr class="<?= $r['category'] === ADVANCE ? 'adv' : '' ?>">
-    <td><?= e($r['expense_date']) ?></td>
-    <td><?= e(category_label($r['category'], $r['sub_type'], $r['sub_note'])) ?></td>
-    <td><?= e($r['description']) ?></td>
-    <td class="num"><?= money($r['amount']) ?></td>
+    <td data-label="التاريخ"><?= e($r['expense_date']) ?></td>
+    <td data-label="البند"><?= category_chip($r['category'], $r['sub_type'], $r['sub_note']) ?></td>
+    <td data-label="البيان"><?= e($r['description']) ?></td>
+    <td class="num" data-label="المبلغ"><?= money($r['amount']) ?></td>
   </tr>
   <?php endforeach; if (!$recent): ?><tr><td colspan="4" class="muted">لا توجد عمليات بعد</td></tr><?php endif; ?>
 </table></div>

@@ -49,16 +49,16 @@ render_header('المصروفات');
   <button class="btn primary">تصفية</button>
 </form>
 
-<div class="tablewrap"><table>
+<div class="tablewrap cards"><table>
   <tr><th>التاريخ</th><th>العهدة</th><th>البند</th><th>البيان</th><th>المبلغ</th><th>فاتورة</th><th>سجّله</th><th></th></tr>
   <?php foreach ($list as $r): ?>
   <tr class="<?= $r['category'] === ADVANCE ? 'adv' : '' ?>">
-    <td><?= e($r['expense_date']) ?></td><td><?= e($r['custody_name']) ?></td>
-    <td><?= e(category_label($r['category'], $r['sub_type'], $r['sub_note'])) ?></td>
-    <td><?= e($r['description']) ?></td><td class="num"><?= money($r['amount']) ?></td>
-    <td><?= $r['invoice_id'] ? '<a target="_blank" href="file.php?id=' . (int)$r['invoice_id'] . '">عرض</a>' : '-' ?></td>
-    <td><?= e($r['by_name']) ?></td>
-    <td class="row">
+    <td data-label="التاريخ"><?= e($r['expense_date']) ?></td><td data-label="العهدة"><?= e($r['custody_name']) ?></td>
+    <td data-label="البند"><?= category_chip($r['category'], $r['sub_type'], $r['sub_note']) ?></td>
+    <td data-label="البيان"><?= e($r['description']) ?></td><td class="num" data-label="المبلغ"><?= money($r['amount']) ?></td>
+    <td data-label="فاتورة"><?= $r['invoice_id'] ? '<a target="_blank" href="file.php?id=' . (int)$r['invoice_id'] . '">عرض</a>' : '-' ?></td>
+    <td data-label="سجّله"><?= e($r['by_name']) ?></td>
+    <td class="row act">
       <?php if ($user['admin'] || (int)$r['created_by'] === $user['id']): ?>
       <a class="btn small" href="expense_form.php?id=<?= (int)$r['id'] ?>">تعديل</a>
       <?php endif; if ($user['admin']): ?>

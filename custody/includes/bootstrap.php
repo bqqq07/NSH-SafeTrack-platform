@@ -112,6 +112,11 @@ function category_label(string $cat, ?string $subType, ?string $subNote): string
     return $label;
 }
 
+function category_chip(string $cat, ?string $subType, ?string $subNote): string
+{
+    return '<span class="chip c-' . e($cat) . '">' . e(category_label($cat, $subType, $subNote)) . '</span>';
+}
+
 /* ---------- الجلسة و CSRF ---------- */
 
 function flash(?string $msg = null, string $type = 'ok'): ?array
