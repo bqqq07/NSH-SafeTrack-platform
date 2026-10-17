@@ -11,19 +11,14 @@
 
   // إظهار الحقول حسب البند
   var cat = document.getElementById('category');
-  var rentBox = document.getElementById('rentBox');
   var noteBox = document.getElementById('noteBox');
   var noteLabel = document.getElementById('noteLabel');
-  var subType = form.querySelector('[name=sub_type]');
+  var needsNote = { other: 'اذكر نوع المصروف (أخرى)', rent_other: 'اذكر نوع الإيجار (أخرى)' };
   function syncCategory() {
-    var isRent = cat.value === 'rent';
-    var rentOther = isRent && subType.value === 'other';
-    rentBox.hidden = !isRent;
-    noteBox.hidden = !(cat.value === 'other' || rentOther);
-    noteLabel.textContent = cat.value === 'other' ? 'اذكر نوع المصروف (أخرى)' : 'اذكر نوع الإيجار الآخر';
+    noteBox.hidden = !(cat.value in needsNote);
+    if (cat.value in needsNote) noteLabel.textContent = needsNote[cat.value];
   }
   cat.addEventListener('change', syncCategory);
-  subType.addEventListener('change', syncCategory);
   syncCategory();
 
   // لوحة التوقيع (إصبع أو ماوس)

@@ -30,15 +30,13 @@ const CATEGORIES = [
     'maintenance'    => 'صيانة وإصلاحات',
     'transport'      => 'مواصلات',
     'other'          => 'أخرى (تذكر)',
-    'rent'           => 'إيجارات',
+    'rent_warehouse' => 'إيجار مخازن',
+    'rent_housing'   => 'إيجار سكن',
+    'rent_other'     => 'إيجار أخرى (تذكر)',
     'shipping'       => 'شحن بضائع',
     'daily_services' => 'يومية خدمات',
 ];
-const RENT_TYPES = [
-    'warehouse' => 'مخازن',
-    'housing'   => 'سكن',
-    'other'     => 'أخرى (تذكر)',
-];
+const NOTE_CATEGORIES = ['other', 'rent_other']; // بنود يلزم فيها ذكر التفاصيل
 const ADVANCE = 'advance'; // السلفة مفصولة عن باقي المصروفات والرصيد
 
 /* ---------- أدوات عامة ---------- */
@@ -109,12 +107,7 @@ function valid_date(string $s): bool
 function category_label(string $cat, ?string $subType, ?string $subNote): string
 {
     $label = CATEGORIES[$cat] ?? $cat;
-    if ($cat === 'rent' && $subType) {
-        $label .= ' - ' . (RENT_TYPES[$subType] ?? $subType);
-        if ($subType === 'other' && $subNote) {
-            $label .= ' (' . $subNote . ')';
-        }
-    } elseif ($cat === 'other' && $subNote) {
+    if (in_array($cat, NOTE_CATEGORIES, true) && $subNote) {
         $label .= ': ' . $subNote;
     }
     return $label;
@@ -164,6 +157,9 @@ function ensure_schema(): void
                     ADD is_active TINYINT(1) NOT NULL DEFAULT 1");
         db()->exec("UPDATE users SET role = 'admin'"); // المستخدمون الحاليون كانوا مديرين
     }
+    // الإيجارات صارت بنوداً مستقلة بدل بند واحد بأنواع فرعية
+    db()->exec("UPDATE expenses SET category = CASE sub_type WHEN 'warehouse' THEN 'rent_warehouse'
+                WHEN 'housing' THEN 'rent_housing' ELSE 'rent_other' END, sub_type = NULL WHERE category = 'rent'");
 }
 
 /** المستخدم الحالي يُقرأ من القاعدة في كل طلب، فيسري الإيقاف وتغيير الصلاحية فوراً. */

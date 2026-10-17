@@ -24,7 +24,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     csrf_verify();
     $f['custody_id'] = (int)($_POST['custody'] ?? 0);
     $f['category'] = $_POST['category'] ?? '';
-    $f['sub_type'] = $_POST['sub_type'] ?? '';
     $f['sub_note'] = mb_substr(trim($_POST['sub_note'] ?? ''), 0, 255);
     $f['expense_date'] = $_POST['expense_date'] ?? '';
     $f['description'] = mb_substr(trim($_POST['description'] ?? ''), 0, 500);
@@ -39,15 +38,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!valid_date($f['expense_date'])) $errors[] = 'التاريخ غير صحيح';
     if ($f['description'] === '') $errors[] = 'البيان مطلوب';
 
-    if ($f['category'] === 'rent') {
-        if (!isset(RENT_TYPES[$f['sub_type']])) $errors[] = 'حدد نوع الإيجار';
-        if ($f['sub_type'] === 'other' && $f['sub_note'] === '') $errors[] = 'اذكر نوع الإيجار الآخر';
+    $f['sub_type'] = null;
+    if (in_array($f['category'], NOTE_CATEGORIES, true)) {
+        if ($f['sub_note'] === '') $errors[] = 'اذكر تفاصيل البند';
     } else {
-        $f['sub_type'] = null;
-        if ($f['category'] !== 'other') $f['sub_note'] = null;
-        elseif ($f['sub_note'] === '') $errors[] = 'اذكر تفاصيل البند (أخرى)';
+        $f['sub_note'] = null;
     }
-    if ($f['category'] === 'rent' && $f['sub_type'] !== 'other') $f['sub_note'] = null;
 
     $sig = null;
     if (!empty($_POST['signature'])) {
@@ -103,13 +99,6 @@ render_header($exp ? 'تعديل صرف' : 'صرف جديد');
   <label>العهدة <?= custody_select($custodies, (int)$f['custody_id']) ?></label>
   <label>البند <?= category_select((string)$f['category']) ?></label>
 
-  <label id="rentBox" hidden>نوع الإيجار
-    <select name="sub_type">
-      <?php foreach (RENT_TYPES as $k => $v): ?>
-        <option value="<?= e($k) ?>" <?= ($f['sub_type'] ?? '') === $k ? 'selected' : '' ?>><?= e($v) ?></option>
-      <?php endforeach; ?>
-    </select>
-  </label>
   <label id="noteBox" hidden><span id="noteLabel">اذكر التفاصيل</span>
     <input name="sub_note" value="<?= e($f['sub_note'] ?? '') ?>" maxlength="255">
   </label>
