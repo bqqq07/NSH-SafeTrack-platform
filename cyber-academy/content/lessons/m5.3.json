@@ -1,0 +1,18 @@
+{"title_ar":"الصلاحيات وأقل صلاحية","title_en":"Permissions & Least Privilege","duration_min":10,"slides":[
+ {"type":"intro","emoji":"🔏","goal":"تقرأ [[permissions]] الملفات في لينكس وتطبق مبدأ [[least-privilege]]."},
+ {"type":"text","emoji":"🔑","layer":"🟢 ببساطة","title":"مين يدخل وش؟","body":["في الشركة، كل موظف عنده مفاتيح أبواب معينة فقط، مو كل الأبواب.","الصلاحيات في الأنظمة نفس الشي: **أقل صلاحية** تكفي لعمل الشخص أو البرنامج."],"callout":"info","note":"لو انخترق حساب بصلاحيات قليلة، الضرر محدود."},
+ {"type":"text","emoji":"🔢","layer":"🟡 أكثر تفصيل","title":"قراءة الصلاحيات","body":["العرض `ls -l` يعطيك نص مثل `-rw-r-----`.","أول حرف: نوع (- ملف، d مجلد). ثم 3 مجموعات: **المالك**، **المجموعة**، **الآخرين**.","كل مجموعة: r قراءة، w كتابة، x تنفيذ."],"code":"-rw-r-----  alice staff  report.txt\n   │└┬┘└┬┘└┬┘\n   │ │  │  └ الآخرون: ---  (لا شي)\n   │ │  └ المجموعة: r--  (قراءة)\n   │ └ المالك: rw-  (قراءة وكتابة)","callout":"tip","note":"`chmod 600` = المالك فقط يقرأ ويكتب. `chmod 777` = الكل كل شي (خطر!)."},
+ {"type":"terminal","title":"احمِ ملف سري","intro":"ملف كلمات سر صلاحياته مفتوحة للجميع. أصلحها:","prompt":"user@server:~$","tasks":[
+  {"goal":"اعرض صلاحيات الملف: `ls -l secret.txt`.","accept":["ls -l secret.txt"],"out":"-rw-rw-rw- 1 user staff 120 Oct 19 secret.txt","hint":"ls -l secret.txt","fail":"الأمر: ls -l secret.txt","why":"rw-rw-rw- يعني أي أحد يقرأ ويعدّل الملف. خطر!"},
+  {"goal":"اجعله للمالك فقط: `chmod 600 secret.txt`.","accept":["chmod 600 secret.txt"],"out":"","hint":"chmod 600 secret.txt","fail":"الأمر: chmod 600 secret.txt","why":"600: المالك قراءة وكتابة، غيره لا شي."},
+  {"goal":"تأكد: `ls -l secret.txt`.","accept":["ls -l secret.txt"],"out":"-rw------- 1 user staff 120 Oct 19 secret.txt","hint":"ls -l secret.txt","fail":"الأمر: ls -l secret.txt","why":"الآن rw------- ، أحسنت."}]},
+ {"type":"terms","ids":["permissions","chmod","least-privilege","root","sudo"]},
+ {"type":"practice","intro":"اقرأ الصلاحيات:","questions":[
+  {"q":"ما معنى `-rwxr-xr--` للآخرين؟","options":["قراءة فقط (r--)","قراءة وكتابة وتنفيذ"],"answer":0,"why":"الجزء الأخير r-- للآخرين."},
+  {"q":"ملف إعدادات فيه باسوردات. أي صلاحية مناسبة؟","options":["600","777"],"answer":0,"why":"للمالك فقط."},
+  {"q":"موظف جديد في الدعم، وش الصلاحية المناسبة؟","options":["الدعم فقط لا إدارة النظام","مدير كامل للراحة"],"answer":0,"why":"Least Privilege."}]},
+ {"type":"quiz","questions":[
+  {"q":"وش تعني x في الصلاحيات؟","options":["تنفيذ","حذف"],"answer":0,"why":"execute."},
+  {"q":"ليش 777 خطر؟","options":["أي مستخدم أو برنامج يعدّل الملف","بطيء"],"answer":0,"why":"سماح مفتوح."},
+  {"q":"مبدأ أقل صلاحية يفيد؟","options":["يقلل الضرر لو انخترق الحساب","يزيد السرعة"],"answer":0,"why":"محدودية الأثر."}]},
+ {"type":"summary","points":["rwx = قراءة/كتابة/تنفيذ لثلاث فئات.","600 للملفات السرية، تجنب 777.","أقل صلاحية تكفي العمل."]}]}

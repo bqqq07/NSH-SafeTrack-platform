@@ -308,43 +308,43 @@
      "id": "m5.1",
      "title_ar": "لينكس للمبتدئين",
      "title_en": "Linux Basics",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m5.2",
      "title_ar": "أمن ويندوز",
      "title_en": "Windows Security",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m5.3",
      "title_ar": "الصلاحيات وأقل صلاحية",
      "title_en": "Permissions & Least Privilege",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m5.4",
      "title_ar": "التحديثات والترقيع",
      "title_en": "Patch Management",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m5.5",
      "title_ar": "تقوية النظام",
      "title_en": "Hardening",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m5.6",
      "title_ar": "مضاد الفيروسات و EDR",
      "title_en": "Antivirus & EDR",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m5.7",
      "title_ar": "الأجهزة الافتراضية",
      "title_en": "Virtual Machines",
-     "ready": false
+     "ready": true
     }
    ]
   },

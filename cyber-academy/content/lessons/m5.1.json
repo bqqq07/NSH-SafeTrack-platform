@@ -1,0 +1,17 @@
+{"title_ar":"لينكس للمبتدئين","title_en":"Linux Basics","duration_min":11,"slides":[
+ {"type":"intro","emoji":"🐧","goal":"تتعلم أساسيات [[linux]] وأهم أوامر [[terminal]]: التنقل وقراءة الملفات والبحث في السجلات."},
+ {"type":"text","emoji":"🖥️","layer":"🟢 ببساطة","title":"ليش لينكس؟","body":["أغلب السيرفرات وأدوات الأمن تشتغل على لينكس، فأي محترف أمن يحتاجه.","تتعامل معه غالباً بسطر الأوامر ([[shell]]) بدل الأيقونات."],"callout":"info","note":"لا تخاف من السطر الأسود: هو مجرد محادثة بجمل قصيرة."},
+ {"type":"text","emoji":"📖","layer":"🟡 أكثر تفصيل","title":"أهم الأوامر","body":["`pwd`: وين أنا؟ `ls`: اعرض الملفات. `cd`: تنقل.","`cat`: اقرأ ملف. `grep`: ابحث بنص داخل ملف.","`whoami`: من أنا؟ `sudo`: نفّذ بصلاحية المدير.","`man`: دليل الأمر."],"callout":"tip","note":"الأسطر الأمنية تستخدم grep بكثرة لتصفية السجلات."},
+ {"type":"terms","ids":["linux","terminal","shell","command","root","sudo","folder"]},
+ {"type":"terminal","title":"تحقيق في سجل دخول","intro":"أنت محلل أمن وتبغى تتحقق من محاولات دخول فاشلة على سيرفر.","prompt":"analyst@server:~$","tasks":[
+  {"goal":"اعرف مكانك بالأمر `pwd`.","accept":["pwd"],"out":"/home/analyst","hint":"pwd","fail":"الأمر: pwd","why":"pwd يعني Print Working Directory."},
+  {"goal":"اعرض الملفات بـ `ls`.","accept":["ls"],"out":"logs  notes.txt","hint":"ls","fail":"الأمر: ls","why":"عندنا مجلد logs."},
+  {"goal":"ادخل مجلد السجلات: `cd logs`.","accept":["cd logs"],"out":"","hint":"cd logs","fail":"الأمر: cd logs","why":"الآن أنت داخل logs."},
+  {"goal":"اقرأ ملف السجل: `cat auth.log`.","accept":["cat auth.log"],"out":"Oct 19 09:01 sshd: Accepted password for admin from 10.0.0.5\nOct 19 09:14 sshd: Failed password for root from 203.0.113.9\nOct 19 09:14 sshd: Failed password for root from 203.0.113.9\nOct 19 09:15 sshd: Failed password for root from 203.0.113.9\nOct 19 09:20 sshd: Accepted password for admin from 10.0.0.5","hint":"cat auth.log","fail":"الأمر: cat auth.log","why":"لاحظ تكرار Failed password لحساب root من نفس العنوان."},
+  {"goal":"صفّ المحاولات الفاشلة فقط: `grep Failed auth.log`.","accept":["grep Failed auth.log"],"out":"Oct 19 09:14 sshd: Failed password for root from 203.0.113.9\nOct 19 09:14 sshd: Failed password for root from 203.0.113.9\nOct 19 09:15 sshd: Failed password for root from 203.0.113.9","hint":"grep Failed auth.log","fail":"الأمر: grep Failed auth.log","why":"3 محاولات فاشلة من 203.0.113.9 في دقيقتين: هذا نمط تخمين باسورد (Brute Force)."}]},
+ {"type":"match","title":"طابق الأمر بوظيفته","pairs":[["pwd","وين أنا؟"],["ls","اعرض الملفات"],["cd","انتقل لمجلد"],["cat","اقرأ ملف"],["grep","ابحث عن نص"],["whoami","من أنا؟"]],"why":"هذي الأوامر ستستخدمها يومياً."},
+ {"type":"quiz","questions":[
+  {"q":"وش أمر البحث عن كلمة Failed داخل ملف؟","options":["grep Failed file","find Failed","look Failed"],"answer":0,"why":"grep للبحث النصي."},
+  {"q":"وش النمط المشبوه في السجل؟","options":["محاولات فاشلة متكررة على root من نفس العنوان","دخول admin ناجح من عنوان داخلي"],"answer":0,"why":"علامة تخمين الباسورد."},
+  {"q":"ليش نتجنب العمل بحساب root دائماً؟","options":["خطأ صغير قد يدمّر النظام","لأنه بطيء"],"answer":0,"why":"أقل صلاحية أفضل."}]},
+ {"type":"summary","points":["pwd وls وcd للتنقل، cat للقراءة، grep للبحث.","السجلات تكشف الهجمات.","تجنب العمل الدائم بحساب root."]}]}
