@@ -1,0 +1,15 @@
+{"title_ar":"كيف يحمي المطوّر موقعه","title_en":"Secure Coding","duration_min":9,"slides":[
+ {"type":"intro","emoji":"👨‍💻","goal":"تتعلم الممارسات اللي تحمي الكود: [[input-validation]] و[[prepared-statement]] و[[output-encoding]]."},
+ {"type":"text","emoji":"🧱","layer":"🟢 ببساطة","title":"ثلاث قواعد ذهبية","body":["**تحقق** من كل مدخل: اقبل الشكل المتوقع فقط.","**افصل** الأوامر عن البيانات: استعلامات مجهّزة.","**رمّز** المخرجات قبل عرضها في الصفحة."],"callout":"info","note":"الأمان يُبنى من التصميم، مو يُضاف في آخر المشروع."},
+ {"type":"text","emoji":"🔧","layer":"🟡 أكثر تفصيل","title":"قبل وبعد","body":["مقارنة بين كود يلصق المدخل داخل الاستعلام، وكود يستخدم متغيرات مجهّزة:"],"code":"# ❌ ثغرة\nquery = \"SELECT * FROM users WHERE name = '\" + name + \"'\"\n\n# ✅ آمن\ncursor.execute(\"SELECT * FROM users WHERE name = %s\", (name,))","callout":"tip","note":"أضف: حدّ لمحاولات الدخول، تخزين الباسورد بهاش مع salt، وإخفاء رسائل الأخطاء التفصيلية."},
+ {"type":"terms","ids":["input-validation","prepared-statement","output-encoding","hashing","salt"]},
+ {"type":"practice","intro":"أي كود آمن؟","questions":[
+  {"q":"أي من الكودين يحمي من SQL Injection؟","code":"A) db.run(\"SELECT * FROM users WHERE id = \" + req.id)\nB) db.run(\"SELECT * FROM users WHERE id = ?\", [req.id])","options":["A","B"],"answer":1,"why":"B يستخدم متغيراً مجهّزاً."},
+  {"q":"أي من الكودين يعرض تعليق المستخدم بأمان؟","code":"A) page.innerHTML = comment\nB) page.textContent = comment","options":["A","B"],"answer":1,"why":"textContent يعامله كنص فقط."},
+  {"q":"أي تحقق أنسب لحقل رقم الجوال؟","code":"A) يقبل أي نص\nB) يقبل 10 أرقام فقط ويرفض الباقي","options":["A","B"],"answer":1,"why":"السماح بالمتوقع فقط."},
+  {"q":"كود تخزين باسورد","code":"A) save(password)\nB) save(bcrypt(password))","options":["A","B"],"answer":1,"why":"الهاش بدل النص الواضح."}]},
+ {"type":"quiz","questions":[
+  {"q":"ليش التحقق في المتصفح لا يكفي؟","options":["المهاجم يتجاوز المتصفح ويرسل مباشرة","بطيء"],"answer":0,"why":"لازم تتحقق على السيرفر."},
+  {"q":"رسائل الأخطاء المفصّلة للمستخدم؟","options":["نخفيها ونسجلها داخلياً","نعرضها كاملة"],"answer":0,"why":"تكشف معلومات للمهاجم."},
+  {"q":"أفضل وقت للأمان؟","options":["من بداية التصميم","بعد الإطلاق"],"answer":0,"why":"إصلاحه لاحقاً أغلى."}]},
+ {"type":"summary","points":["تحقق، افصل، رمّز.","هاش للباسوردات وحد لمحاولات الدخول.","الأمان من بداية التصميم."]}]}

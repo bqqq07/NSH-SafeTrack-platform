@@ -359,31 +359,31 @@
      "id": "m6.1",
      "title_ar": "كيف يشتغل الموقع",
      "title_en": "How Websites Work",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m6.2",
      "title_ar": "الكوكيز والجلسات",
      "title_en": "Cookies, Sessions & Tokens",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m6.3",
      "title_ar": "ثغرات OWASP الأشهر",
      "title_en": "OWASP Top 10",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m6.4",
      "title_ar": "كيف يحمي المطوّر موقعه",
      "title_en": "Secure Coding",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m6.5",
      "title_ar": "Bug Bounty",
      "title_en": "Bug Bounty",
-     "ready": false
+     "ready": true
     }
    ]
   },
