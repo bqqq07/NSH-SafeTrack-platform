@@ -10,6 +10,11 @@ let curriculum;
 
 const lessonsOf = () => curriculum.levels.flatMap((l) => l.modules.map((m) => ({ ...m, level: l })));
 const isDone = (id) => !!store.get().lessons[id]?.done;
+// القفل المتسلسل: الدرس يفتح بعد إنهاء اللي قبله (بترتيب المنهج عبر المستويات).
+// الدرس اللي انتهى سابقاً يبقى مفتوحاً للمراجعة.
+const readyList = () => lessonsOf().filter((m) => m.ready);
+const prevOf = (id) => { const l = readyList(); const i = l.findIndex((m) => m.id === id); return i > 0 ? l[i - 1] : null; };
+const isUnlocked = (id) => { const p = prevOf(id); return !p || isDone(id) || isDone(p.id); };
 // الدرس التالي = أول درس جاهز ما انحل
 const nextLesson = () => lessonsOf().find((m) => m.ready && !isDone(m.id));
 
@@ -61,13 +66,15 @@ function path() {
         <small>المستوى ${l.id}</small>
         <h2 style="margin:0">${l.icon} ${esc(l.title_ar)}</h2>
         <small class="en">${esc(l.title_en)}</small>
+        <small style="float:left">${l.modules.filter((m) => isDone(m.id)).length}/${l.modules.length}</small>
       </div>
       ${l.modules.map((m) => {
-        const cls = isDone(m.id) ? 'done' : !m.ready ? 'locked' : next?.id === m.id ? 'next' : '';
-        const icon = isDone(m.id) ? '✓' : m.ready ? '▶' : '🔒';
+        if (!m.ready) return `<div class="mod locked"><span class="dot">⏳</span><span><b>${esc(m.title_ar)}</b><br><small class="muted en">${esc(m.title_en)}</small><br><small class="muted">قريباً</small></span></div>`;
+        if (!isUnlocked(m.id)) return `<div class="mod locked"><span class="dot">🔒</span><span><b>${esc(m.title_ar)}</b><br><small class="muted en">${esc(m.title_en)}</small><br><small class="muted">أكمل الدرس السابق لفتحه</small></span></div>`;
+        const cls = isDone(m.id) ? 'done' : next?.id === m.id ? 'next' : '';
         return `<a class="mod ${cls}" href="#/lesson/${m.id}">
-          <span class="dot">${icon}</span>
-          <span><b>${esc(m.title_ar)}</b><br><small class="muted en">${esc(m.title_en)}</small>${m.ready ? '' : '<br><small class="muted">قريباً</small>'}</span>
+          <span class="dot">${isDone(m.id) ? '✓' : '▶'}</span>
+          <span><b>${esc(m.title_ar)}</b><br><small class="muted en">${esc(m.title_en)}</small></span>
         </a>`;
       }).join('')}
     </section>`).join('');
@@ -77,9 +84,17 @@ async function lesson(id, query) {
   const startAt = query && /s=(\d+)/.test(query) ? +query.match(/s=(\d+)/)[1] : null;
   const meta = lessonsOf().find((m) => m.id === id);
   if (!meta?.ready) return (location.hash = '#/path');
+  if (!isUnlocked(id)) {
+    const p = prevOf(id), nx = nextLesson();
+    view.innerHTML = `<div class="card result"><div class="big">🔒</div><h2>هذا الدرس مقفل</h2>
+      <p>أكمل أول <b>${esc(p.title_ar)}</b> عشان ينفتح.</p>
+      <a class="btn" href="#/lesson/${nx ? nx.id : p.id}">${nx ? 'كمّل من وين وقفت' : 'ارجع للدرس السابق'}</a><br><a class="btn ghost" href="#/path">المسار</a></div>`;
+    return;
+  }
   try {
     const data = await (await fetch(`content/lessons/${id}.json`)).json();
-    playLesson(view, { id, ...data }, () => (location.hash = '#/path'), startAt);
+    const list = readyList(), i = list.findIndex((m) => m.id === id);
+    playLesson(view, { id, ...data }, (go) => { location.hash = go || '#/path'; }, startAt, list[i + 1]?.id || null);
   } catch {
     view.innerHTML = `<div class="card"><h2>ما قدرنا نحمّل الدرس 😕</h2><p>تأكد من الاتصال وجرّب مرة ثانية.</p><a class="btn" href="#/path">رجوع</a></div>`;
   }
@@ -123,7 +138,7 @@ async function labs() {
       <details class="card" ${k === 'terminal' ? 'open' : ''}>
         <summary><b>${ic} ${name}</b> <span class="muted">(${data[k].length})</span><br><small class="muted">${desc}</small></summary>
         ${data[k].map((l) => {
-          const m = lessonsOf().find((x) => x.id === l.id);
+          if (!isUnlocked(l.id)) return `<div class="mod locked" style="margin:8px 0 0"><span class="dot">🔒</span><span><b>${esc(l.title)}</b><br><small class="muted">${esc(l.lesson)} · يفتح بعد إكمال الدرس السابق</small></span></div>`;
           return `<a class="mod" href="#/lesson/${l.id}?s=${l.slide}" style="margin:8px 0 0"><span class="dot">${ic}</span><span><b>${esc(l.title)}</b><br><small class="muted">${esc(l.lesson)}</small></span></a>`;
         }).join('')}
       </details>`).join('');

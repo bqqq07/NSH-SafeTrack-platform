@@ -456,7 +456,7 @@ function questionRunner(s, box, done, ctx) {
   // الزر السفلي للدرس يبقى مقفل لين يخلص كل الأسئلة
 }
 
-export function playLesson(view, lesson, onExit, startAt = null) {
+export function playLesson(view, lesson, onExit, startAt = null, nextId = null) {
   const saved = store.get().lessons[lesson.id];
   const ctx = { lesson, results: {}, correct: 0, total: 0, i: startAt !== null ? Math.min(startAt, lesson.slides.length - 1) : saved && !saved.done ? Math.min(saved.slide, lesson.slides.length - 1) : 0, next: () => go(1) };
 
@@ -519,9 +519,11 @@ export function playLesson(view, lesson, onExit, startAt = null) {
           <span class="chip">🔥 ${store.get().streak} يوم</span>
         </div>
         ${pct < 80 ? '<p class="muted">تقدر تعيد الدرس بدون حد، التكرار يثبّت المعلومة.</p>' : ''}
-        <button class="btn" id="out">كمّل المسار</button>
+        ${nextId ? '<p class="muted">🔓 انفتح لك الدرس التالي</p><button class="btn" id="nxt">الدرس التالي</button><br>' : ''}
+        <button class="btn ${nextId ? 'ghost' : ''}" id="out">${nextId ? 'المسار' : 'كمّل المسار'}</button>
       </div>`;
-    view.querySelector('#out').addEventListener('click', onExit);
+    view.querySelector('#out').addEventListener('click', () => onExit());
+    view.querySelector('#nxt')?.addEventListener('click', () => onExit(`#/lesson/${nextId}`));
   }
 
   fwd.addEventListener('click', () => go(1));
