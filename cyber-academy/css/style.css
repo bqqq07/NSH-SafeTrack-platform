@@ -165,3 +165,5 @@ code { background: var(--soft); border-radius: 6px; padding: 1px 6px; font: 600 
 .opt.sel { border-color: var(--blue); background: var(--blue-bg); box-shadow: 0 3px 0 var(--blue-d); }
 .msg-b.mono { font: 500 .8rem/1.7 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; text-align: left; word-break: break-all; }
 input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--green); }
+details.card summary { cursor: pointer; list-style: none; } details.card[open] summary { margin-bottom: 6px; }
+#nav a { min-width: 0; }

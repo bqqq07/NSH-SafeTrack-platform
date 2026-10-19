@@ -447,9 +447,9 @@ function questionRunner(s, box, done, ctx) {
   // الزر السفلي للدرس يبقى مقفل لين يخلص كل الأسئلة
 }
 
-export function playLesson(view, lesson, onExit) {
+export function playLesson(view, lesson, onExit, startAt = null) {
   const saved = store.get().lessons[lesson.id];
-  const ctx = { lesson, results: {}, correct: 0, total: 0, i: saved && !saved.done ? Math.min(saved.slide, lesson.slides.length - 1) : 0, next: () => go(1) };
+  const ctx = { lesson, results: {}, correct: 0, total: 0, i: startAt !== null ? Math.min(startAt, lesson.slides.length - 1) : saved && !saved.done ? Math.min(saved.slide, lesson.slides.length - 1) : 0, next: () => go(1) };
 
   view.classList.add('in-lesson');
   view.innerHTML = `

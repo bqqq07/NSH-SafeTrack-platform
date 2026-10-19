@@ -1,6 +1,6 @@
 // نقطة البداية: الراوتر البسيط (hash) + الشاشات الرئيسية.
 import * as store from './store.js';
-import { loadGlossary, initTermEvents, allTerms, openTerm, esc, closeSheet } from './glossary.js';
+import { loadGlossary, initTermEvents, allTerms, getTerm, speak, esc, closeSheet } from './glossary.js';
 import { playLesson } from './player.js';
 import * as sync from './sync.js';
 
@@ -44,6 +44,7 @@ function home() {
       <div class="row between"><b>تقدمك</b><span class="muted">${done}/${ready.length} دروس</span></div>
       <div class="bar" style="margin-top:8px"><i style="width:${ready.length ? (done / ready.length) * 100 : 0}%"></i></div>
     </div>
+    <a class="card" style="display:block;text-decoration:none;color:inherit" href="#/review"><b>🔁 مراجعة المصطلحات</b><p class="muted" style="margin:0">ثبّت اللي تعلمته بتكرار متباعد.</p></a>
     <div class="card">
       <span class="badge">🔤 مصطلح اليوم</span>
       <h2 class="en">${esc(wod.en)}</h2>
@@ -72,12 +73,13 @@ function path() {
     </section>`).join('');
 }
 
-async function lesson(id) {
+async function lesson(id, query) {
+  const startAt = query && /s=(\d+)/.test(query) ? +query.match(/s=(\d+)/)[1] : null;
   const meta = lessonsOf().find((m) => m.id === id);
   if (!meta?.ready) return (location.hash = '#/path');
   try {
     const data = await (await fetch(`content/lessons/${id}.json`)).json();
-    playLesson(view, { id, ...data }, () => (location.hash = '#/path'));
+    playLesson(view, { id, ...data }, () => (location.hash = '#/path'), startAt);
   } catch {
     view.innerHTML = `<div class="card"><h2>ما قدرنا نحمّل الدرس 😕</h2><p>تأكد من الاتصال وجرّب مرة ثانية.</p><a class="btn" href="#/path">رجوع</a></div>`;
   }
@@ -98,6 +100,61 @@ function glossary() {
   };
   view.querySelector('#q').addEventListener('input', (e) => draw(e.target.value));
   draw();
+}
+
+// ---- المختبر: كل التمارين العملية في مكان واحد ----
+const LAB_NAMES = {
+  terminal: ['⌨️', 'سطر الأوامر', 'تدرّب على أوامر حقيقية في محاكي آمن'],
+  phish: ['🎣', 'اكتشف المشبوه', 'رسائل تصيّد وسجلات وحزم شبكة'],
+  passlab: ['🔐', 'مختبر الباسورد', 'قِس قوة الباسورد'],
+  firewall: ['🧱', 'الجدار الناري', 'طبّق قواعد السماح والمنع'],
+  webvuln: ['💉', 'ثغرات الويب', 'محاكاة SQLi وXSS والإصلاح'],
+  cipher: ['🔑', 'أدوات التشفير', 'Caesar وBase64 وSHA-256'],
+  ctf: ['🚩', 'تحديات CTF', 'ابحث عن الـ Flag'],
+  scenario: ['🎭', 'سيناريوهات', 'قرارات متفرعة ونتائجها'],
+  order: ['🔢', 'رتّب الخطوات', 'مراحل وطبقات وإجراءات'],
+  match: ['🧩', 'طابق', 'ربط المفاهيم بتعريفاتها']
+};
+async function labs() {
+  view.innerHTML = '<h1>🧪 المختبر</h1><p class="muted">كل التطبيقات العملية في المنصة. اضغط أي تمرين وتنقلك له مباشرة.</p><div id="lb"></div>';
+  try {
+    const data = await (await fetch('content/labs.json')).json();
+    view.querySelector('#lb').innerHTML = Object.entries(LAB_NAMES).filter(([k]) => data[k]).map(([k, [ic, name, desc]]) => `
+      <details class="card" ${k === 'terminal' ? 'open' : ''}>
+        <summary><b>${ic} ${name}</b> <span class="muted">(${data[k].length})</span><br><small class="muted">${desc}</small></summary>
+        ${data[k].map((l) => {
+          const m = lessonsOf().find((x) => x.id === l.id);
+          return `<a class="mod" href="#/lesson/${l.id}?s=${l.slide}" style="margin:8px 0 0"><span class="dot">${ic}</span><span><b>${esc(l.title)}</b><br><small class="muted">${esc(l.lesson)}</small></span></a>`;
+        }).join('')}
+      </details>`).join('');
+  } catch { view.querySelector('#lb').innerHTML = '<p class="muted">تعذّر تحميل قائمة المختبرات.</p>'; }
+}
+
+// ---- المراجعة: بطاقات المصطلحات بالتكرار المتباعد ----
+async function review() {
+  let tl = {};
+  try { tl = await (await fetch('content/term_lessons.json')).json(); } catch { /* نكمل بدون ربط */ }
+  const learned = new Set(Object.entries(store.get().lessons).filter(([, l]) => l.done).map(([id]) => id));
+  const pool = Object.keys(tl).filter((t) => getTerm(t) && tl[t].some((l) => learned.has(l)));
+  const due = pool.filter(store.isDue).sort(() => Math.random() - 0.5).slice(0, 10);
+  if (!pool.length) { view.innerHTML = '<h1>🔁 المراجعة</h1><div class="card"><p>ما عندك مصطلحات للمراجعة بعد. أنهِ درساً وارجع هنا.</p><a class="btn" href="#/path">ابدأ درس</a></div>'; return; }
+  if (!due.length) { view.innerHTML = '<h1>🔁 المراجعة</h1><div class="card"><div class="emoji" style="font-size:3rem;text-align:center">🎉</div><h2>خلصت مراجعة اليوم</h2><p class="muted">ارجع بكرة، أو تعلّم درساً جديداً لتزيد مصطلحاتك.</p><a class="btn" href="#/path">المسار</a></div>'; return; }
+  let n = 0, known = 0;
+  const show = () => {
+    if (n >= due.length) { view.innerHTML = `<h1>🔁 المراجعة</h1><div class="card result"><div class="big">💪</div><h2>عرفت ${known} من ${due.length}</h2><p class="muted">اللي ما عرفته بيرجع لك قريباً.</p><a class="btn" href="#/">الرئيسية</a></div>`; return; }
+    const id = due[n], t = getTerm(id);
+    view.innerHTML = `<h1>🔁 المراجعة <small class="muted">${n + 1}/${due.length}</small></h1>
+      <div class="card" style="text-align:center;padding:28px 16px"><div class="en" style="font-size:1.8rem;font-weight:800">${esc(t.en)}</div><p class="muted">النطق: ${esc(t.say)}</p>
+      <button class="speak" data-say="${esc(t.en)}" aria-label="نطق">🔊</button>
+      <div id="ans" hidden><hr><b>${esc(t.ar)}</b><p>${esc(t.simple)}</p></div></div>
+      <button class="btn blue" id="flip">اعرض المعنى</button>
+      <div id="g" class="row" hidden><button class="btn ghost" id="no">ما عرفتها</button><button class="btn" id="yes">عرفتها ✓</button></div>`;
+    view.querySelector('#flip').addEventListener('click', (e) => { e.target.hidden = true; view.querySelector('#ans').hidden = false; view.querySelector('#g').hidden = false; });
+    const grade = (ok) => { store.gradeTerm(id, ok); if (ok) known++; n++; show(); };
+    view.querySelector('#yes').addEventListener('click', () => grade(true));
+    view.querySelector('#no').addEventListener('click', () => grade(false));
+  };
+  show();
 }
 
 function profile() {
@@ -166,7 +223,9 @@ function login() {
 const routes = [
   [/^#?\/?$/, 'home', home],
   [/^#\/path$/, 'path', path],
-  [/^#\/lesson\/([\w.-]+)$/, null, lesson],
+  [/^#\/lesson\/([\w.-]+)(?:\?(.*))?$/, null, lesson],
+  [/^#\/labs$/, 'labs', labs],
+  [/^#\/review$/, 'review', review],
   [/^#\/glossary$/, 'glossary', glossary],
   [/^#\/profile$/, 'profile', profile],
   [/^#\/login$/, 'profile', login]
@@ -182,7 +241,7 @@ function route() {
     nav.classList.toggle('hidden', !tab);
     nav.querySelectorAll('a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
     window.scrollTo(0, 0);
-    return fn(m[1]);
+    return fn(m[1], m[2]);
   }
   location.hash = '#/';
 }

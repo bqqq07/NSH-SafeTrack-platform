@@ -6,6 +6,7 @@ const DEFAULTS = {
   streak: 0,
   lastDay: null,           // آخر يوم تعلّم فيه (YYYY-MM-DD)
   lessons: {},             // { 'm0.1': { done, score, slide } }
+  review: {},              // { 'phishing': { box, due } } للتكرار المتباعد
   settings: { theme: 'auto', font: 1 }
 };
 
@@ -45,7 +46,7 @@ export const onChange = (fn) => { listener = fn; };
 const notify = () => listener();
 
 // نسخة التقدم اللي تنرسل للسيرفر (بدون الإعدادات: المظهر والخط محلية لكل جهاز)
-export const snapshot = () => ({ streak: state.streak, lastDay: state.lastDay, lessons: state.lessons });
+export const snapshot = () => ({ streak: state.streak, lastDay: state.lastDay, lessons: state.lessons, review: state.review });
 
 // دمج تقدم السيرفر مع المحلي: الدرس المكتمل يكسب، أعلى نتيجة تكسب، وأحدث يوم تعلّم يحدد السلسلة
 export function mergeRemote(remote) {
@@ -57,6 +58,9 @@ export function mergeRemote(remote) {
     l.score = Math.max(l.score || 0, r.score || 0);
     l.xp = Math.max(l.xp || 0, r.xp || 0);
     if (!l.done) l.slide = Math.max(l.slide || 0, r.slide || 0);
+  }
+  for (const [id, r] of Object.entries(remote.review || {})) {
+    if (!state.review[id] || (r.last || '') > (state.review[id].last || '')) state.review[id] = r;
   }
   if ((remote.lastDay || '') > (state.lastDay || '')) { state.lastDay = remote.lastDay; state.streak = remote.streak || 0; }
   else if (remote.lastDay === state.lastDay) state.streak = Math.max(state.streak, remote.streak || 0);
@@ -98,6 +102,19 @@ export function completeLesson(id, correct, total) {
   notify();
   return { gained, first };
 }
+
+// التكرار المتباعد (نظام Leitner مبسط): الإجابة الصحيحة ترفع الصندوق وتؤجل المراجعة، والخطأ يرجّعها للأول
+const BOX_DAYS = [0, 1, 3, 7, 14, 30];
+export function gradeTerm(id, known) {
+  const r = (state.review[id] ||= { box: 0, due: dayStr(new Date()) });
+  r.box = known ? Math.min(r.box + 1, BOX_DAYS.length - 1) : 0;
+  const d = new Date(); d.setDate(d.getDate() + BOX_DAYS[r.box]);
+  r.due = dayStr(d); r.last = new Date().toISOString();
+  touchDay();
+  save();
+  notify();
+}
+export const isDue = (id) => !state.review[id] || state.review[id].due <= dayStr(new Date());
 
 export function setSetting(key, value) {
   state.settings[key] = value;

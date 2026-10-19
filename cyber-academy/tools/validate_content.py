@@ -51,6 +51,23 @@ for f in sorted(glob.glob('content/lessons/*.json')):
                     if c['next'] not in s['nodes']: errs.append((f, i, 'scenario bad next', nid))
             if s['start'] not in s['nodes']: errs.append((f, i, 'scenario bad start'))
         if ty == 'ctf' and not all(c.get('flag') for c in s['challenges']): errs.append((f, i, 'ctf no flag'))
+# فهارس مولَّدة: المختبرات (تمارين تفاعلية) وربط المصطلحات بالدروس
+LAB = {'terminal', 'passlab', 'phish', 'order', 'match', 'cipher', 'webvuln', 'scenario', 'ctf', 'firewall'}
+labs, term_lessons = {}, {}
+for f in sorted(glob.glob('content/lessons/*.json'), key=lambda x: [int(p) if p.isdigit() else p for p in re.split(r'(\d+)', x)]):
+    d = json.load(open(f)); lid = os.path.basename(f)[:-5]
+    for t in set(re.findall(r'\[\[([a-z0-9-]+)\]\]', open(f).read())):
+        term_lessons.setdefault(t, []).append(lid)
+    for s in d['slides']:
+        for t in s.get('ids', []): term_lessons.setdefault(t, [])
+        if s.get('ids'):
+            for t in s['ids']:
+                if lid not in term_lessons[t]: term_lessons[t].append(lid)
+    for i, s in enumerate(d['slides']):
+        if s['type'] in LAB:
+            labs.setdefault(s['type'], []).append({'id': lid, 'slide': i, 'title': s.get('title') or d['title_ar'], 'lesson': d['title_ar']})
+json.dump(labs, open('content/labs.json', 'w'), ensure_ascii=False, indent=1)
+json.dump(term_lessons, open('content/term_lessons.json', 'w'), ensure_ascii=False)
 n = len(glob.glob('content/lessons/*.json'))
 ready = sum(m['ready'] for l in cur['levels'] for m in l['modules'])
 total = sum(len(l['modules']) for l in cur['levels'])

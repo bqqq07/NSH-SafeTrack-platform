@@ -359,31 +359,31 @@
      "id": "m6.1",
      "title_ar": "كيف يشتغل الموقع",
      "title_en": "How Websites Work",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m6.2",
      "title_ar": "الكوكيز والجلسات",
      "title_en": "Cookies, Sessions & Tokens",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m6.3",
      "title_ar": "ثغرات OWASP الأشهر",
      "title_en": "OWASP Top 10",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m6.4",
      "title_ar": "كيف يحمي المطوّر موقعه",
      "title_en": "Secure Coding",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m6.5",
      "title_ar": "Bug Bounty",
      "title_en": "Bug Bounty",
-     "ready": true
+     "ready": false
     }
    ]
   },
@@ -398,43 +398,43 @@
      "id": "m7.1",
      "title_ar": "مركز العمليات الأمنية",
      "title_en": "SOC",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m7.2",
      "title_ar": "السجلات",
      "title_en": "Logs",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m7.3",
      "title_ar": "SIEM",
      "title_en": "SIEM",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m7.4",
      "title_ar": "مؤشرات الاختراق",
      "title_en": "IOC",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m7.5",
      "title_ar": "الاستجابة للحوادث",
      "title_en": "Incident Response",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m7.6",
      "title_ar": "التحقيق الرقمي",
      "title_en": "Digital Forensics",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m7.7",
      "title_ar": "إطار MITRE ATT&CK",
      "title_en": "MITRE ATT&CK",
-     "ready": true
+     "ready": false
     }
    ]
   },
@@ -449,37 +449,37 @@
      "id": "m8.1",
      "title_ar": "مراحل الاختراق الأخلاقي",
      "title_en": "Ethical Hacking Phases",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m8.2",
      "title_ar": "جمع المعلومات OSINT",
      "title_en": "OSINT",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m8.3",
      "title_ar": "فحص الشبكات",
      "title_en": "Network Scanning",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m8.4",
      "title_ar": "تقييم الثغرات",
      "title_en": "Vulnerability Assessment",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m8.5",
      "title_ar": "القانون والأخلاقيات",
      "title_en": "Law & Ethics",
-     "ready": true
+     "ready": false
     },
     {
      "id": "m8.6",
      "title_ar": "كتابة تقرير أمني",
      "title_en": "Security Report",
-     "ready": true
+     "ready": false
     }
    ]
   },
