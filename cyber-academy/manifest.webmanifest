@@ -1,0 +1,15 @@
+{
+  "name": "أكاديمية الأمن السيبراني",
+  "short_name": "سايبر",
+  "description": "تعلّم الأمن السيبراني من الصفر بالعربي",
+  "lang": "ar",
+  "dir": "rtl",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#58cc02",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

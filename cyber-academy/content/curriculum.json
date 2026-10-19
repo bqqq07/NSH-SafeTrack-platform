@@ -1,0 +1,47 @@
+{
+  "levels": [
+    {
+      "id": 0, "icon": "🔰", "color": "#58cc02",
+      "title_ar": "أساسيات الكمبيوتر والإنترنت", "title_en": "Foundations",
+      "modules": [
+        { "id": "m0.1", "title_ar": "وش هو الكمبيوتر؟", "title_en": "What is a Computer?", "ready": true },
+        { "id": "m0.2", "title_ar": "أنظمة التشغيل", "title_en": "Operating Systems", "ready": false },
+        { "id": "m0.3", "title_ar": "وش هو الإنترنت؟", "title_en": "What is the Internet?", "ready": false },
+        { "id": "m0.4", "title_ar": "عنوان الجهاز: IP و DNS", "title_en": "IP Address & DNS", "ready": false },
+        { "id": "m0.5", "title_ar": "الشبكات المنزلية", "title_en": "Home Networks", "ready": false },
+        { "id": "m0.6", "title_ar": "الملفات والامتدادات", "title_en": "Files & Extensions", "ready": false },
+        { "id": "m0.7", "title_ar": "الحسابات والباسوردات", "title_en": "Accounts & Passwords", "ready": false }
+      ]
+    },
+    {
+      "id": 1, "icon": "🛡️", "color": "#1cb0f6",
+      "title_ar": "مقدمة في الأمن السيبراني", "title_en": "Cyber Security 101",
+      "modules": [
+        { "id": "m1.1", "title_ar": "وش هو الأمن السيبراني؟", "title_en": "What is Cyber Security?", "ready": false },
+        { "id": "m1.2", "title_ar": "مثلث الأمن", "title_en": "CIA Triad", "ready": false },
+        { "id": "m1.3", "title_ar": "المصطلحات الأساسية", "title_en": "Threat, Vulnerability, Risk", "ready": false },
+        { "id": "m1.4", "title_ar": "من هم المهاجمون؟", "title_en": "Types of Hackers", "ready": false },
+        { "id": "m1.5", "title_ar": "دوافع الهجمات", "title_en": "Attack Motives", "ready": false },
+        { "id": "m1.6", "title_ar": "أشهر حوادث الاختراق", "title_en": "Famous Breaches", "ready": false },
+        { "id": "m1.7", "title_ar": "المجالات والوظائف", "title_en": "Careers in Cyber", "ready": false }
+      ]
+    },
+    {
+      "id": 2, "icon": "🔐", "color": "#ff9600",
+      "title_ar": "الأمن الشخصي والوعي", "title_en": "Personal Security & Awareness",
+      "modules": [
+        { "id": "m2.1", "title_ar": "الباسوردات القوية", "title_en": "Strong Passwords", "ready": false },
+        { "id": "m2.2", "title_ar": "التحقق الثنائي", "title_en": "2FA / MFA", "ready": false },
+        { "id": "m2.3", "title_ar": "التصيّد الاحتيالي", "title_en": "Phishing", "ready": false },
+        { "id": "m2.4", "title_ar": "الهندسة الاجتماعية", "title_en": "Social Engineering", "ready": false },
+        { "id": "m2.5", "title_ar": "البرمجيات الخبيثة", "title_en": "Malware", "ready": false },
+        { "id": "m2.6", "title_ar": "أمان الجوال", "title_en": "Mobile Security", "ready": false },
+        { "id": "m2.7", "title_ar": "أمان الواي فاي العام", "title_en": "Public Wi-Fi", "ready": false },
+        { "id": "m2.8", "title_ar": "السوشل ميديا والخصوصية", "title_en": "Social Media & Privacy", "ready": false },
+        { "id": "m2.9", "title_ar": "الاحتيال المالي", "title_en": "Online Fraud", "ready": false },
+        { "id": "m2.10", "title_ar": "النسخ الاحتياطي", "title_en": "Backup", "ready": false },
+        { "id": "m2.11", "title_ar": "وش تسوي لو انخترقت؟", "title_en": "If You Get Hacked", "ready": false }
+      ]
+    }
+  ]
+}
