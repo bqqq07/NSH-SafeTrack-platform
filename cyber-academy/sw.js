@@ -1,6 +1,6 @@
 // Service Worker: يخلي المنصة تشتغل بدون نت.
 // الاستراتيجية: نجرّب النت أولاً (عشان التحديثات توصل)، وإذا فشل نرجع للنسخة المحفوظة.
-const CACHE = 'cyber-academy-v3';
+const CACHE = 'cyber-academy-v4';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest', 'icons/icon.svg',
   'css/style.css',
@@ -8,8 +8,19 @@ const CORE = [
   'content/curriculum.json', 'content/glossary.json', 'content/labs.json', 'content/term_lessons.json'
 ];
 
+// عند التثبيت نحفظ الملفات الأساسية وكل الدروس (حوالي 150KB) عشان تشتغل المنصة كاملة بدون نت
+async function precache() {
+  const c = await caches.open(CACHE);
+  await c.addAll(CORE);
+  try {
+    const cur = await (await fetch('content/curriculum.json')).json();
+    const lessons = cur.levels.flatMap((l) => l.modules.filter((m) => m.ready).map((m) => `content/lessons/${m.id}.json`));
+    await Promise.allSettled(lessons.map((u) => c.add(u)));
+  } catch { /* بدون نت وقت التثبيت: نكمل بالأساسي */ }
+}
+
 self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(CORE)).then(() => self.skipWaiting()));
+  e.waitUntil(precache().then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', (e) => {

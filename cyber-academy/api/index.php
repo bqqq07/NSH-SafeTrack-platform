@@ -49,11 +49,19 @@ try {
             if (!preg_match('/^[a-z0-9_]{3,30}$/', $u)) out(['error' => 'اسم المستخدم: 3 إلى 30 حرف إنجليزي صغير أو أرقام أو _'], 422);
             if (strlen($p) < 8 || strlen($p) > 128) out(['error' => 'كلمة المرور لازم تكون 8 أحرف على الأقل'], 422);
             $pdo = db();
+            // حد للتسجيل من نفس العنوان (ضد إنشاء حسابات وهمية بالجملة): 5 كل 15 دقيقة
+            $ip = substr($_SERVER['REMOTE_ADDR'] ?? '', 0, 45);
+            $since = gmdate('Y-m-d H:i:s', time() - 900);
+            $pdo->prepare("DELETE FROM ca_login_attempts WHERE at < ?")->execute([$since]);
+            $c = $pdo->prepare("SELECT COUNT(*) FROM ca_login_attempts WHERE username = '#reg' AND ip = ?");
+            $c->execute([$ip]);
+            if ((int)$c->fetchColumn() >= 5) out(['error' => 'محاولات تسجيل كثيرة، جرّب بعد قليل'], 429);
             $st = $pdo->prepare('SELECT 1 FROM ca_users WHERE username = ?');
             $st->execute([$u]);
             if ($st->fetch()) out(['error' => 'اسم المستخدم محجوز، جرّب غيره'], 409);
             $pdo->prepare('INSERT INTO ca_users (username, pass_hash, created_at) VALUES (?, ?, ?)')
                 ->execute([$u, password_hash($p, PASSWORD_DEFAULT), now()]);
+            $pdo->prepare("INSERT INTO ca_login_attempts (ip, username, at) VALUES (?, '#reg', ?)")->execute([$ip, now()]);
             session_regenerate_id(true);
             $_SESSION['uid'] = (int)$pdo->lastInsertId();
             out(['user' => ['username' => $u]], 201);
@@ -68,7 +76,7 @@ try {
             // تحديد المحاولات الفاشلة (ضد تخمين الباسورد) خلال آخر 15 دقيقة
             $since = gmdate('Y-m-d H:i:s', time() - 900);
             $pdo->prepare('DELETE FROM ca_login_attempts WHERE at < ?')->execute([$since]);
-            $c = $pdo->prepare('SELECT COUNT(*) FROM ca_login_attempts WHERE username = ? OR ip = ?');
+            $c = $pdo->prepare("SELECT COUNT(*) FROM ca_login_attempts WHERE (username = ? OR ip = ?) AND username <> '#reg'");
             $c->execute([$u, $ip]);
             if ((int)$c->fetchColumn() >= 10) out(['error' => 'محاولات كثيرة، انتظر 15 دقيقة وجرّب'], 429);
             $st = $pdo->prepare('SELECT id, pass_hash FROM ca_users WHERE username = ?');

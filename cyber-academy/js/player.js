@@ -359,10 +359,11 @@ const renderers = {
         box.innerHTML = `<span class="badge lab">🧪 سيناريو</span><h2>${esc(s.title)}</h2><div class="callout ${n.good === false ? 'stop' : 'tip'}"><span class="label">${n.good === false ? '💥' : '🏁'} النهاية</span>${rich(n.text)}</div>`;
         return done();
       }
+      const choices = [...n.choices].sort(() => Math.random() - 0.5);
       box.innerHTML = `<span class="badge lab">🧪 سيناريو</span><h2>${esc(s.title)}</h2><p>${rich(n.text)}</p>
-        <div class="opts">${n.choices.map((c, i) => `<button class="opt" data-i="${i}">${rich(c.t, true)}</button>`).join('')}</div><div id="fb"></div>`;
+        <div class="opts">${choices.map((c, i) => `<button class="opt" data-i="${i}">${rich(c.t, true)}</button>`).join('')}</div><div id="fb"></div>`;
       box.querySelectorAll('.opt').forEach((b) => b.addEventListener('click', () => {
-        const c = n.choices[+b.dataset.i];
+        const c = choices[+b.dataset.i];
         box.querySelectorAll('.opt').forEach((x) => (x.disabled = true));
         b.classList.add(c.good ? 'right' : 'wrong');
         ctx.results[`${ctx.i}:sc:${id}`] = !!c.good;
@@ -400,7 +401,7 @@ const renderers = {
     const rules = s.rules.join('\n');
     questionRunner({
       type: 'practice', intro: s.intro,
-      questions: s.packets.map((p) => ({ q: 'وش قرار الجدار الناري لهذا الطلب؟', code: `${rules}\n\n▶ ${p.line}`, options: ['✅ سماح (Allow)', '⛔ منع (Block)'], answer: p.allow ? 0 : 1, why: p.why }))
+      questions: s.packets.map((p) => ({ q: 'وش قرار الجدار الناري لهذا الطلب؟', code: `${rules}\n\n▶ ${p.line}`, options: ['✅ سماح (Allow)', '⛔ منع (Block)'], answer: p.allow ? 0 : 1, why: p.why, fixed: true }))
     }, box, done, ctx);
   },
 
@@ -413,12 +414,20 @@ const renderers = {
   }
 };
 
+// نخلط ترتيب الخيارات عند العرض عشان ما تكون الإجابة الصحيحة دايماً في نفس المكان.
+// ما نخلط إذا الأسئلة تشير لحروف (A/B) في الكود، أو إذا ترتيب الخيارات ثابت بطبيعته (fixed).
+function shuffled(q) {
+  if (q.fixed || (q.code && /^[A-D]\)/m.test(q.code))) return q;
+  const idx = q.options.map((_, i) => i).sort(() => Math.random() - 0.5);
+  return { ...q, options: idx.map((i) => q.options[i]), answer: idx.indexOf(q.answer) };
+}
+
 function questionRunner(s, box, done, ctx) {
   const lab = s.type === 'practice';
   let n = 0;
 
   const show = () => {
-    const q = s.questions[n];
+    const q = shuffled(s.questions[n]);
     box.innerHTML = `
       <span class="badge ${lab ? 'lab' : ''}">${lab ? '🧪 تطبيق عملي' : '✅ اختبار سريع'} · ${n + 1}/${s.questions.length}</span>
       ${n === 0 && s.intro ? `<p class="muted">${rich(s.intro)}</p>` : ''}
