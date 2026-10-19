@@ -1,10 +1,10 @@
 // Service Worker: يخلي المنصة تشتغل بدون نت.
 // الاستراتيجية: نجرّب النت أولاً (عشان التحديثات توصل)، وإذا فشل نرجع للنسخة المحفوظة.
-const CACHE = 'cyber-academy-v1';
+const CACHE = 'cyber-academy-v2';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest', 'icons/icon.svg',
   'css/style.css',
-  'js/app.js', 'js/store.js', 'js/glossary.js', 'js/player.js',
+  'js/app.js', 'js/store.js', 'js/glossary.js', 'js/player.js', 'js/api.js', 'js/sync.js',
   'content/curriculum.json', 'content/glossary.json'
 ];
 
@@ -22,7 +22,8 @@ self.addEventListener('activate', (e) => {
 
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET') return;
+  // طلبات الحسابات ما تنحفظ أبداً (بيانات خاصة ومتغيرة)
+  if (req.method !== 'GET' || new URL(req.url).pathname.includes('/api/')) return;
   e.respondWith(
     fetch(req)
       .then((res) => {

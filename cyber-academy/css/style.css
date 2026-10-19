@@ -139,3 +139,21 @@ ul.points { padding-inline-start: 1.2em; margin: 0; } ul.points li { margin-bott
 .seg { display: flex; gap: 6px; } .seg button { font: inherit; border: 2px solid var(--line); background: var(--card); color: var(--text); border-radius: 10px; padding: 4px 12px; cursor: pointer; font-weight: 700; }
 .seg button.on { background: var(--green); border-color: var(--green-d); color: #fff; }
 [hidden]{display:none!important}
+
+/* ---------- أكواد وسطر أوامر ---------- */
+pre.code { direction: ltr; text-align: left; background: #0f1b20; color: #e6f1f5; border-radius: 14px; padding: 12px 14px; overflow-x: auto; font: 500 .85rem/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin: 12px 0; white-space: pre; }
+.shell { background: #0f1b20; color: #cdeccd; border-radius: 14px; padding: 12px; font: 500 .85rem/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin: 12px 0; text-align: left; }
+.shell #log { max-height: 38vh; overflow: auto; }
+.shell pre { margin: 0 0 6px; white-space: pre-wrap; color: #e6f1f5; font: inherit; }
+.shell pre.err { color: #ff8f8f; }
+.shell .ps { color: #58cc02; }
+.shell form { display: flex; gap: 6px; align-items: center; }
+.shell input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: #fff; font: inherit; }
+.goal { background: var(--yellow-bg); border-radius: 14px; padding: 10px 14px; }
+/* ---------- رسالة التصيّد ---------- */
+.msg { border: 2px solid var(--line); border-radius: 16px; overflow: hidden; margin: 12px 0; }
+.msg-h { background: var(--soft); padding: 8px 14px; display: flex; justify-content: space-between; gap: 8px; font-size: .85rem; flex-wrap: wrap; }
+.msg-b { padding: 14px; white-space: pre-line; }
+.flag { cursor: pointer; border-bottom: 2px dotted var(--muted); border-radius: 4px; }
+.flag.sel { background: var(--yellow-bg); border-bottom-color: var(--orange); }
+.flag.hit { background: var(--green-bg); } .flag.miss { background: var(--yellow-bg); outline: 2px dashed var(--orange); } .flag.fp { background: var(--red-bg); }

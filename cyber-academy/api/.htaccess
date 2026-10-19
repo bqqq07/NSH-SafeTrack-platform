@@ -1,0 +1,4 @@
+# حماية ملفات الإعدادات والمساعدة من الفتح المباشر
+<FilesMatch "^(config(\.sample)?|db|schema)\.(php|sql)$">
+  Require all denied
+</FilesMatch>

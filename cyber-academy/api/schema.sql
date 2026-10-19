@@ -1,0 +1,18 @@
+-- للمرجع فقط: الجداول تنشأ تلقائياً أول طلب (api/db.php). تقدر تنفذه يدوياً من phpMyAdmin إذا حبيت.
+CREATE TABLE IF NOT EXISTS ca_users (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  username VARCHAR(30) NOT NULL UNIQUE,
+  pass_hash VARCHAR(255) NOT NULL,
+  created_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS ca_progress (
+  user_id INT UNSIGNED NOT NULL PRIMARY KEY,
+  data TEXT NOT NULL,
+  updated_at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+CREATE TABLE IF NOT EXISTS ca_login_attempts (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  ip VARCHAR(45) NOT NULL,
+  username VARCHAR(30) NOT NULL,
+  at DATETIME NOT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -37,6 +37,33 @@ const dayStr = (d) => d.toLocaleDateString('en-CA'); // 2026-10-19
 
 export const get = () => state;
 
+const totalXp = () => Object.values(state.lessons).reduce((n, l) => n + (l.xp || 0), 0);
+
+// المزامنة مع السيرفر: نبلّغ المستمعين كل ما تغيّر التقدم
+let listener = () => {};
+export const onChange = (fn) => { listener = fn; };
+const notify = () => listener();
+
+// نسخة التقدم اللي تنرسل للسيرفر (بدون الإعدادات: المظهر والخط محلية لكل جهاز)
+export const snapshot = () => ({ streak: state.streak, lastDay: state.lastDay, lessons: state.lessons });
+
+// دمج تقدم السيرفر مع المحلي: الدرس المكتمل يكسب، أعلى نتيجة تكسب، وأحدث يوم تعلّم يحدد السلسلة
+export function mergeRemote(remote) {
+  if (!remote || typeof remote !== 'object') return;
+  for (const [id, r] of Object.entries(remote.lessons || {})) {
+    const l = state.lessons[id];
+    if (!l) { state.lessons[id] = r; continue; }
+    l.done = l.done || !!r.done;
+    l.score = Math.max(l.score || 0, r.score || 0);
+    l.xp = Math.max(l.xp || 0, r.xp || 0);
+    if (!l.done) l.slide = Math.max(l.slide || 0, r.slide || 0);
+  }
+  if ((remote.lastDay || '') > (state.lastDay || '')) { state.lastDay = remote.lastDay; state.streak = remote.streak || 0; }
+  else if (remote.lastDay === state.lastDay) state.streak = Math.max(state.streak, remote.streak || 0);
+  state.xp = totalXp();
+  save();
+}
+
 export function rank() {
   return [...RANKS].reverse().find((r) => state.xp >= r.min);
 }
@@ -63,10 +90,12 @@ export function completeLesson(id, correct, total) {
   const gained = first ? 20 + correct * 5 : 0;
   l.done = true;
   l.slide = 0;
+  if (first) l.xp = gained;
   l.score = Math.max(l.score, total ? Math.round((correct / total) * 100) : 100);
-  state.xp += gained;
+  state.xp = totalXp();
   touchDay();
   save();
+  notify();
   return { gained, first };
 }
 

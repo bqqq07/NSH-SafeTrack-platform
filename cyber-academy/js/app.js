@@ -2,6 +2,7 @@
 import * as store from './store.js';
 import { loadGlossary, initTermEvents, allTerms, openTerm, esc, closeSheet } from './glossary.js';
 import { playLesson } from './player.js';
+import * as sync from './sync.js';
 
 const view = document.getElementById('view');
 const nav = document.getElementById('nav');
@@ -114,8 +115,11 @@ function profile() {
       <div class="setting"><span>المظهر</span>${seg('theme', [['auto', 'تلقائي'], ['light', '☀️'], ['dark', '🌙']])}</div>
       <div class="setting"><span>حجم الخط</span>${seg('font', [[0.9, 'أ-'], [1, 'أ'], [1.15, 'أ+']])}</div>
     </div>
-    <p class="muted">تقدمك محفوظ على هذا الجهاز فقط. لو مسحت بيانات المتصفح بيضيع.</p>
-    <button class="btn ghost" id="reset">مسح التقدم</button>`;
+    ${sync.currentUser()
+      ? `<div class="card"><b>👋 ${esc(sync.currentUser().username)}</b><p class="muted">تقدمك محفوظ في حسابك ويتزامن بين أجهزتك.</p><button class="btn ghost small" id="out">تسجيل الخروج</button></div>`
+      : `<div class="card"><b>احفظ تقدمك</b><p class="muted">سجّل حساب عشان ما يضيع تقدمك وتكمل من أي جهاز.</p><a class="btn blue small" href="#/login">دخول / حساب جديد</a></div>`}
+    <button class="btn ghost" id="reset">مسح التقدم من هذا الجهاز</button>`;
+  view.querySelector('#out')?.addEventListener('click', async () => { await sync.signOut(); profile(); });
   view.querySelectorAll('[data-set]').forEach((b) => b.addEventListener('click', () => {
     const v = b.dataset.val;
     store.setSetting(b.dataset.set, b.dataset.set === 'font' ? +v : v);
@@ -126,6 +130,37 @@ function profile() {
   });
 }
 
+function login() {
+  let mode = 'login';
+  const draw = (msg = '') => {
+    view.innerHTML = `
+      <h1>${mode === 'login' ? '🔑 تسجيل الدخول' : '✨ حساب جديد'}</h1>
+      <div class="seg" style="margin-bottom:14px">
+        <button data-m="login" class="${mode === 'login' ? 'on' : ''}">دخول</button>
+        <button data-m="register" class="${mode === 'register' ? 'on' : ''}">حساب جديد</button>
+      </div>
+      <form class="card" id="af">
+        <label>اسم المستخدم <small class="muted">(إنجليزي، 3-30)</small></label>
+        <input class="search en" name="u" dir="ltr" autocomplete="username" autocapitalize="off" required minlength="3" maxlength="30" pattern="[A-Za-z0-9_]+">
+        <label>كلمة المرور <small class="muted">(8 أحرف على الأقل)</small></label>
+        <input class="search en" name="p" type="password" dir="ltr" autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}" required minlength="8" maxlength="128">
+        <div id="msg" class="feedback no" ${msg ? '' : 'hidden'}>${esc(msg)}</div>
+        <button class="btn" type="submit">${mode === 'login' ? 'دخول' : 'إنشاء الحساب'}</button>
+      </form>
+      <p class="muted">بدون حساب تقدر تتعلم عادي، لكن تقدمك بيبقى على هذا الجهاز فقط.</p>`;
+    view.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => { mode = b.dataset.m; draw(); }));
+    view.querySelector('#af').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      const btn = e.target.querySelector('button[type=submit]'); btn.disabled = true;
+      const r = await sync.signIn(mode, f.get('u'), f.get('p'));
+      if (r.user) return (location.hash = '#/profile');
+      draw(r.unavailable ? 'الحسابات غير متاحة حالياً (تحتاج الاستضافة تدعم PHP).' : r.error || 'صار خطأ، جرّب مرة ثانية.');
+    });
+  };
+  draw();
+}
+
 /* ---------------- الراوتر ---------------- */
 
 const routes = [
@@ -133,7 +168,8 @@ const routes = [
   [/^#\/path$/, 'path', path],
   [/^#\/lesson\/([\w.-]+)$/, null, lesson],
   [/^#\/glossary$/, 'glossary', glossary],
-  [/^#\/profile$/, 'profile', profile]
+  [/^#\/profile$/, 'profile', profile],
+  [/^#\/login$/, 'profile', login]
 ];
 
 function route() {
@@ -157,6 +193,7 @@ async function start() {
   [curriculum] = await Promise.all([fetch('content/curriculum.json').then((r) => r.json()), loadGlossary()]);
   window.addEventListener('hashchange', route);
   route();
+  sync.init().then(() => route()); // بعد المزامنة نحدّث الشاشة بالتقدم المدموج
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
