@@ -176,6 +176,357 @@
      "ready": true
     }
    ]
+  },
+  {
+   "id": 3,
+   "icon": "🌐",
+   "color": "#ce82ff",
+   "title_ar": "الشبكات",
+   "title_en": "Networking for Security",
+   "modules": [
+    {
+     "id": "m3.1",
+     "title_ar": "نموذج OSI و TCP/IP",
+     "title_en": "OSI & TCP/IP",
+     "ready": true
+    },
+    {
+     "id": "m3.2",
+     "title_ar": "البروتوكولات",
+     "title_en": "Protocols",
+     "ready": true
+    },
+    {
+     "id": "m3.3",
+     "title_ar": "المنافذ",
+     "title_en": "Ports",
+     "ready": true
+    },
+    {
+     "id": "m3.4",
+     "title_ar": "عناوين IP والشبكات الفرعية",
+     "title_en": "IP Types & Subnets",
+     "ready": true
+    },
+    {
+     "id": "m3.5",
+     "title_ar": "أجهزة الشبكة",
+     "title_en": "Network Devices",
+     "ready": true
+    },
+    {
+     "id": "m3.6",
+     "title_ar": "الجدار الناري",
+     "title_en": "Firewall",
+     "ready": true
+    },
+    {
+     "id": "m3.7",
+     "title_ar": "VPN و Proxy و Tor",
+     "title_en": "VPN, Proxy & Tor",
+     "ready": true
+    },
+    {
+     "id": "m3.8",
+     "title_ar": "هجمات الشبكة",
+     "title_en": "Network Attacks",
+     "ready": true
+    },
+    {
+     "id": "m3.9",
+     "title_ar": "تأمين الشبكة المنزلية",
+     "title_en": "Securing Home Network",
+     "ready": true
+    },
+    {
+     "id": "m3.10",
+     "title_ar": "تحليل الحزم",
+     "title_en": "Packet Analysis",
+     "ready": true
+    }
+   ]
+  },
+  {
+   "id": 4,
+   "icon": "🔑",
+   "color": "#2b70c9",
+   "title_ar": "التشفير",
+   "title_en": "Cryptography",
+   "modules": [
+    {
+     "id": "m4.1",
+     "title_ar": "تشفير أم ترميز أم هاش؟",
+     "title_en": "Encryption vs Encoding vs Hashing",
+     "ready": false
+    },
+    {
+     "id": "m4.2",
+     "title_ar": "التشفير المتماثل وغير المتماثل",
+     "title_en": "Symmetric vs Asymmetric",
+     "ready": false
+    },
+    {
+     "id": "m4.3",
+     "title_ar": "الهاش وتخزين الباسوردات",
+     "title_en": "Hashing & Salt",
+     "ready": false
+    },
+    {
+     "id": "m4.4",
+     "title_ar": "التواقيع والشهادات الرقمية",
+     "title_en": "Signatures & Certificates",
+     "ready": false
+    },
+    {
+     "id": "m4.5",
+     "title_ar": "كيف يشتغل HTTPS",
+     "title_en": "How HTTPS Works",
+     "ready": false
+    },
+    {
+     "id": "m4.6",
+     "title_ar": "تشفير الجهاز والملفات",
+     "title_en": "Disk & File Encryption",
+     "ready": false
+    },
+    {
+     "id": "m4.7",
+     "title_ar": "ألعاب التشفير",
+     "title_en": "Crypto Playground",
+     "ready": false
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "icon": "🖥️",
+   "color": "#a560e8",
+   "title_ar": "أمن الأنظمة",
+   "title_en": "System Security",
+   "modules": [
+    {
+     "id": "m5.1",
+     "title_ar": "لينكس للمبتدئين",
+     "title_en": "Linux Basics",
+     "ready": false
+    },
+    {
+     "id": "m5.2",
+     "title_ar": "أمن ويندوز",
+     "title_en": "Windows Security",
+     "ready": false
+    },
+    {
+     "id": "m5.3",
+     "title_ar": "الصلاحيات وأقل صلاحية",
+     "title_en": "Permissions & Least Privilege",
+     "ready": false
+    },
+    {
+     "id": "m5.4",
+     "title_ar": "التحديثات والترقيع",
+     "title_en": "Patch Management",
+     "ready": false
+    },
+    {
+     "id": "m5.5",
+     "title_ar": "تقوية النظام",
+     "title_en": "Hardening",
+     "ready": false
+    },
+    {
+     "id": "m5.6",
+     "title_ar": "مضاد الفيروسات و EDR",
+     "title_en": "Antivirus & EDR",
+     "ready": false
+    },
+    {
+     "id": "m5.7",
+     "title_ar": "الأجهزة الافتراضية",
+     "title_en": "Virtual Machines",
+     "ready": false
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "icon": "🕸️",
+   "color": "#ff4b4b",
+   "title_ar": "أمن تطبيقات الويب",
+   "title_en": "Web Security",
+   "modules": [
+    {
+     "id": "m6.1",
+     "title_ar": "كيف يشتغل الموقع",
+     "title_en": "How Websites Work",
+     "ready": false
+    },
+    {
+     "id": "m6.2",
+     "title_ar": "الكوكيز والجلسات",
+     "title_en": "Cookies, Sessions & Tokens",
+     "ready": false
+    },
+    {
+     "id": "m6.3",
+     "title_ar": "ثغرات OWASP الأشهر",
+     "title_en": "OWASP Top 10",
+     "ready": false
+    },
+    {
+     "id": "m6.4",
+     "title_ar": "كيف يحمي المطوّر موقعه",
+     "title_en": "Secure Coding",
+     "ready": false
+    },
+    {
+     "id": "m6.5",
+     "title_ar": "Bug Bounty",
+     "title_en": "Bug Bounty",
+     "ready": false
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "icon": "🔎",
+   "color": "#4b4b4b",
+   "title_ar": "العمل الدفاعي",
+   "title_en": "Blue Team / SOC",
+   "modules": [
+    {
+     "id": "m7.1",
+     "title_ar": "مركز العمليات الأمنية",
+     "title_en": "SOC",
+     "ready": false
+    },
+    {
+     "id": "m7.2",
+     "title_ar": "السجلات",
+     "title_en": "Logs",
+     "ready": false
+    },
+    {
+     "id": "m7.3",
+     "title_ar": "SIEM",
+     "title_en": "SIEM",
+     "ready": false
+    },
+    {
+     "id": "m7.4",
+     "title_ar": "مؤشرات الاختراق",
+     "title_en": "IOC",
+     "ready": false
+    },
+    {
+     "id": "m7.5",
+     "title_ar": "الاستجابة للحوادث",
+     "title_en": "Incident Response",
+     "ready": false
+    },
+    {
+     "id": "m7.6",
+     "title_ar": "التحقيق الرقمي",
+     "title_en": "Digital Forensics",
+     "ready": false
+    },
+    {
+     "id": "m7.7",
+     "title_ar": "إطار MITRE ATT&CK",
+     "title_en": "MITRE ATT&CK",
+     "ready": false
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "icon": "🧪",
+   "color": "#00cd9c",
+   "title_ar": "الاختراق الأخلاقي",
+   "title_en": "Ethical Hacking Intro",
+   "modules": [
+    {
+     "id": "m8.1",
+     "title_ar": "مراحل الاختراق الأخلاقي",
+     "title_en": "Ethical Hacking Phases",
+     "ready": false
+    },
+    {
+     "id": "m8.2",
+     "title_ar": "جمع المعلومات OSINT",
+     "title_en": "OSINT",
+     "ready": false
+    },
+    {
+     "id": "m8.3",
+     "title_ar": "فحص الشبكات",
+     "title_en": "Network Scanning",
+     "ready": false
+    },
+    {
+     "id": "m8.4",
+     "title_ar": "تقييم الثغرات",
+     "title_en": "Vulnerability Assessment",
+     "ready": false
+    },
+    {
+     "id": "m8.5",
+     "title_ar": "القانون والأخلاقيات",
+     "title_en": "Law & Ethics",
+     "ready": false
+    },
+    {
+     "id": "m8.6",
+     "title_ar": "كتابة تقرير أمني",
+     "title_en": "Security Report",
+     "ready": false
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "icon": "🏛️",
+   "color": "#ffc800",
+   "title_ar": "الحوكمة والمسار المهني",
+   "title_en": "GRC & Career",
+   "modules": [
+    {
+     "id": "m9.1",
+     "title_ar": "السياسات والإجراءات",
+     "title_en": "Policies & Procedures",
+     "ready": false
+    },
+    {
+     "id": "m9.2",
+     "title_ar": "إدارة المخاطر",
+     "title_en": "Risk Management",
+     "ready": false
+    },
+    {
+     "id": "m9.3",
+     "title_ar": "المعايير العالمية",
+     "title_en": "ISO 27001, NIST, PCI-DSS",
+     "ready": false
+    },
+    {
+     "id": "m9.4",
+     "title_ar": "الأمن السيبراني في السعودية",
+     "title_en": "Cyber Security in Saudi Arabia",
+     "ready": false
+    },
+    {
+     "id": "m9.5",
+     "title_ar": "المسارات والشهادات",
+     "title_en": "Careers & Certifications",
+     "ready": false
+    },
+    {
+     "id": "m9.6",
+     "title_ar": "السيرة الذاتية وأول وظيفة",
+     "title_en": "CV & First Job",
+     "ready": false
+    }
+   ]
   }
  ]
 }

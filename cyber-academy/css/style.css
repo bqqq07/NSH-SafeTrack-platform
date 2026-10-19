@@ -158,3 +158,10 @@ pre.code { direction: ltr; text-align: left; background: #0f1b20; color: #e6f1f5
 .flag.sel { background: var(--yellow-bg); border-bottom-color: var(--orange); }
 .flag.hit { background: var(--green-bg); } .flag.miss { background: var(--yellow-bg); outline: 2px dashed var(--orange); } .flag.fp { background: var(--red-bg); }
 code { background: var(--soft); border-radius: 6px; padding: 1px 6px; font: 600 .85em ui-monospace, Menlo, Consolas, monospace; }
+
+/* ---------- تمارين الترتيب والمطابقة ---------- */
+.seq { padding-inline-start: 1.4em; } .seq li { background: var(--green-bg); border-radius: 10px; padding: 6px 12px; margin-bottom: 6px; }
+.match { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 12px 0; } .match .opt { font-size: .9rem; padding: 10px; margin-bottom: 8px; width: 100%; }
+.opt.sel { border-color: var(--blue); background: var(--blue-bg); box-shadow: 0 3px 0 var(--blue-d); }
+.msg-b.mono { font: 500 .8rem/1.7 ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; text-align: left; word-break: break-all; }
+input[type=checkbox] { width: 20px; height: 20px; accent-color: var(--green); }

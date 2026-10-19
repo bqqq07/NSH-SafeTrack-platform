@@ -157,7 +157,7 @@ const renderers = {
       <p>${rich(s.intro || 'اضغط على كل جزء تحس إنه مشبوه، وبعدين اضغط «تحقق».')}</p>
       <div class="msg">
         <div class="msg-h"><b>${esc(s.channel || 'رسالة')}</b><span class="en">${esc(s.from)}</span></div>
-        <div class="msg-b">${s.parts.map((p, i) => p.bad !== undefined
+        <div class="msg-b${s.mono ? ' mono' : ''}" ${s.mono ? 'dir="ltr"' : ''}>${s.parts.map((p, i) => p.bad !== undefined
           ? `<span class="flag" data-i="${i}" role="button" tabindex="0">${esc(p.t)}</span>` : esc(p.t)).join('')}</div>
       </div>
       <div id="fb"></div>
@@ -179,11 +179,229 @@ const renderers = {
       });
       const ok = !missed && !wrong;
       ctx.results[`${ctx.i}:phish`] = ok;
-      box.querySelector('#fb').innerHTML = `<div class="feedback ${ok ? 'ok' : 'no'}"><b>${ok ? '🎉 ممتاز! لقطتها كلها' : `لقيت ${found} من ${found + missed}${wrong ? ` وعلّمت ${wrong} سليم بالغلط` : ''}`}</b><ul class="points">${why.join('')}</ul></div>
+      box.querySelector('#fb').innerHTML = `<div class="feedback ${ok ? 'ok' : 'no'}"><b>${ok ? (found ? '🎉 ممتاز! لقطتها كلها' : '👌 صح، ما فيه شي مكشوف هنا') : `لقيت ${found} من ${found + missed}${wrong ? ` وعلّمت ${wrong} سليم بالغلط` : ''}`}</b><ul class="points">${why.join('')}</ul></div>
         <button class="btn" id="nx">تمام</button>`;
       box.querySelector('#chk').style.display = 'none';
       box.querySelector('#nx').addEventListener('click', () => { done(); ctx.next(); });
     });
+  },
+
+  // ترتيب خطوات: يضغط العناصر بالترتيب الصحيح (مثل طبقات OSI أو مراحل الاستجابة)
+  order(s, box, done, ctx) {
+    const shuffled = [...s.items].map((t, i) => ({ t, i }));
+    do { shuffled.sort(() => Math.random() - 0.5); } while (shuffled.every((x, k) => x.i === k) && shuffled.length > 1);
+    let next = 0, mistakes = 0;
+    box.innerHTML = `
+      <span class="badge lab">🧪 تطبيق عملي · رتّب الخطوات</span>
+      <h2>${esc(s.title)}</h2>
+      <p>${rich(s.intro || 'اضغط العناصر بالترتيب الصحيح من الأول للآخر.')}</p>
+      <ol class="seq" id="seq"></ol>
+      <div class="opts" id="pool">${shuffled.map((x) => `<button class="opt" data-i="${x.i}">${rich(x.t, true)}</button>`).join('')}</div>
+      <div id="fb"></div>`;
+    const seq = box.querySelector('#seq');
+    box.querySelectorAll('#pool .opt').forEach((btn) => btn.addEventListener('click', () => {
+      if (+btn.dataset.i !== next) {
+        mistakes++;
+        btn.classList.add('wrong');
+        setTimeout(() => btn.classList.remove('wrong'), 500);
+        return;
+      }
+      seq.insertAdjacentHTML('beforeend', `<li>${rich(s.items[next], true)}</li>`);
+      btn.remove();
+      if (++next === s.items.length) {
+        ctx.results[`${ctx.i}:order`] = mistakes === 0;
+        box.querySelector('#fb').innerHTML = `<div class="feedback ${mistakes ? 'no' : 'ok'}"><b>${mistakes ? `🤔 رتبتها بعد ${mistakes} محاولات خاطئة` : '🎉 ترتيب ممتاز!'}</b>${s.why ? rich(s.why) : ''}</div>`;
+        done();
+      }
+    }));
+  },
+
+  // مطابقة: اضغط عنصر من اليمين ثم ما يقابله من اليسار
+  match(s, box, done, ctx) {
+    const left = s.pairs.map(([l], i) => ({ t: l, i }));
+    const right = s.pairs.map(([, r], i) => ({ t: r, i })).sort(() => Math.random() - 0.5);
+    let pick = null, left_ = s.pairs.length, mistakes = 0;
+    box.innerHTML = `
+      <span class="badge lab">🧪 تطبيق عملي · طابق</span>
+      <h2>${esc(s.title)}</h2>
+      <p>${rich(s.intro || 'اضغط عنصر ثم اضغط اللي يناسبه.')}</p>
+      <div class="match"><div>${left.map((x) => `<button class="opt" data-side="l" data-i="${x.i}">${rich(x.t, true)}</button>`).join('')}</div>
+      <div>${right.map((x) => `<button class="opt" data-side="r" data-i="${x.i}">${rich(x.t, true)}</button>`).join('')}</div></div>
+      <div id="fb"></div>`;
+    box.querySelectorAll('.opt').forEach((btn) => btn.addEventListener('click', () => {
+      if (btn.disabled) return;
+      if (btn.dataset.side === 'l') {
+        box.querySelectorAll('[data-side=l]').forEach((b) => b.classList.remove('sel'));
+        pick = btn; btn.classList.add('sel'); return;
+      }
+      if (!pick) return;
+      if (pick.dataset.i === btn.dataset.i) {
+        [pick, btn].forEach((b) => { b.classList.remove('sel'); b.classList.add('right'); b.disabled = true; });
+        pick = null;
+        if (--left_ === 0) {
+          ctx.results[`${ctx.i}:match`] = mistakes === 0;
+          box.querySelector('#fb').innerHTML = `<div class="feedback ${mistakes ? 'no' : 'ok'}"><b>${mistakes ? `خلصتها بعد ${mistakes} محاولات خاطئة` : '🎉 كلها صح!'}</b>${s.why ? rich(s.why) : ''}</div>`;
+          done();
+        }
+      } else {
+        mistakes++;
+        btn.classList.add('wrong'); setTimeout(() => btn.classList.remove('wrong'), 500);
+      }
+    }));
+  },
+
+  // أدوات التشفير: Caesar وBase64 وSHA-256 مع تحدي اختياري لفك رسالة
+  cipher(s, box, done, ctx) {
+    const tools = s.tools || ['caesar', 'base64', 'sha256'];
+    const names = { caesar: 'Caesar', base64: 'Base64', sha256: 'SHA-256' };
+    box.innerHTML = `
+      <span class="badge lab">🧪 تطبيق عملي · Crypto Playground</span>
+      <h2>${esc(s.title || 'جرّب التشفير بنفسك')}</h2>
+      <p>${rich(s.intro || '')}</p>
+      <div class="seg" id="tabs">${tools.map((t, k) => `<button data-t="${t}" class="${k ? '' : 'on'}">${names[t]}</button>`).join('')}</div>
+      <div class="card" id="tool" style="margin-top:12px"></div>
+      ${s.challenge ? `<div class="card soft"><b>🎯 التحدي</b><p>${rich(s.challenge.prompt)}</p><pre class="code" dir="ltr">${esc(s.challenge.cipher)}</pre>
+        <input class="search en" id="ans" dir="ltr" autocomplete="off" placeholder="اكتب الجواب..."><div id="cfb"></div>
+        <button class="btn ghost small" id="chint" type="button">💡 تلميح</button></div>` : ''}`;
+    const tool = box.querySelector('#tool');
+    const caesar = (str, k) => str.replace(/[a-z]/gi, (c) => { const b = c <= 'Z' ? 65 : 97; return String.fromCharCode(((c.charCodeAt(0) - b + k + 26 * 10) % 26) + b); });
+    const b64enc = (x) => btoa(String.fromCharCode(...new TextEncoder().encode(x)));
+    const b64dec = (x) => { try { return new TextDecoder().decode(Uint8Array.from(atob(x.trim()), (c) => c.charCodeAt(0))); } catch { return '⚠️ نص Base64 غير صالح'; } };
+    const sha = async (x) => {
+      if (!crypto.subtle) return 'المتصفح ما يدعم SHA-256 هنا (يحتاج اتصال آمن HTTPS)';
+      const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(x));
+      return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('');
+    };
+    const draw = (t) => {
+      const body = {
+        caesar: `<input class="search en" id="in" dir="ltr" placeholder="Hello" autocomplete="off"><label>الإزاحة (Shift): <b id="kv">3</b></label><input type="range" id="k" min="1" max="25" value="3" style="width:100%">
+          <div class="row"><button class="btn small" id="a">تشفير</button><button class="btn blue small" id="b">فك</button></div>`,
+        base64: `<input class="search en" id="in" dir="ltr" placeholder="Hello" autocomplete="off"><div class="row"><button class="btn small" id="a">Encode</button><button class="btn blue small" id="b">Decode</button></div>`,
+        sha256: `<input class="search en" id="in" dir="ltr" placeholder="Hello" autocomplete="off"><p class="muted">غيّر حرف واحد وشوف كيف تتغير البصمة بالكامل.</p>`
+      }[t];
+      tool.innerHTML = `${body}<pre class="code" dir="ltr" id="out" style="white-space:pre-wrap;word-break:break-all">—</pre>`;
+      const inp = tool.querySelector('#in'), out = tool.querySelector('#out');
+      if (t === 'caesar') {
+        const k = tool.querySelector('#k'); k.addEventListener('input', () => (tool.querySelector('#kv').textContent = k.value));
+        tool.querySelector('#a').addEventListener('click', () => (out.textContent = caesar(inp.value, +k.value)));
+        tool.querySelector('#b').addEventListener('click', () => (out.textContent = caesar(inp.value, -k.value)));
+      } else if (t === 'base64') {
+        tool.querySelector('#a').addEventListener('click', () => (out.textContent = b64enc(inp.value)));
+        tool.querySelector('#b').addEventListener('click', () => (out.textContent = b64dec(inp.value)));
+      } else inp.addEventListener('input', async () => (out.textContent = inp.value ? await sha(inp.value) : '—'));
+    };
+    box.querySelectorAll('#tabs button').forEach((b) => b.addEventListener('click', () => {
+      box.querySelectorAll('#tabs button').forEach((x) => x.classList.toggle('on', x === b)); draw(b.dataset.t);
+    }));
+    draw(tools[0]);
+    if (!s.challenge) return done();
+    box.querySelector('#chint').addEventListener('click', () => (box.querySelector('#cfb').innerHTML = `<div class="feedback no"><b>💡 تلميح</b>${rich(s.challenge.hint)}</div>`));
+    const ans = box.querySelector('#ans');
+    ans.addEventListener('input', () => {
+      if (ans.value.trim().toLowerCase() === s.challenge.answer.toLowerCase()) {
+        ctx.results[`${ctx.i}:cipher`] = true;
+        box.querySelector('#cfb').innerHTML = `<div class="feedback ok"><b>🎉 فككتها!</b>${rich(s.challenge.why || '')}</div>`;
+        ans.disabled = true; done();
+      }
+    });
+  },
+
+  // محاكاة ثغرات الويب داخل الصفحة فقط: ما فيه أي طلب أو تنفيذ حقيقي. يشوف الثغرة ثم الإصلاح.
+  webvuln(s, box, done, ctx) {
+    const sqli = s.mode === 'sqli';
+    box.innerHTML = `
+      <span class="badge lab">🧪 تطبيق عملي · محاكاة ثغرة ${sqli ? 'SQL Injection' : 'XSS'}</span>
+      <h2>${esc(s.title)}</h2>
+      <p>${rich(s.intro)}</p>
+      <div class="callout info"><span class="label">🧪 بيئة محاكاة</span>كل شي هنا تمثيل داخل الصفحة، ما ينفَّذ على أي موقع أو سيرفر حقيقي.</div>
+      <div class="card">
+        ${sqli
+          ? `<input class="search en" id="u" dir="ltr" placeholder="username" autocomplete="off"><input class="search en" id="p" dir="ltr" placeholder="password" autocomplete="off">`
+          : `<input class="search en" id="u" dir="ltr" placeholder="اكتب تعليق..." autocomplete="off">`}
+        <div class="row"><button class="btn small" id="go">${sqli ? 'دخول' : 'نشر التعليق'}</button><button class="btn ghost small" id="try" type="button">✍️ جرّب هذا</button></div>
+        <label class="row" style="margin-top:10px"><input type="checkbox" id="sec"> 🛡️ فعّل الحماية (${sqli ? 'Prepared Statement' : 'Output Encoding'})</label>
+      </div>
+      <pre class="code" dir="ltr" id="q">—</pre><div id="res"></div>`;
+    const $ = (x) => box.querySelector(x);
+    let broke = false, blocked = false;
+    $('#try').addEventListener('click', () => { $('#u').value = sqli ? "admin' --" : '<script>alert(1)</script>'; if (sqli) $('#p').value = 'x'; });
+    $('#go').addEventListener('click', () => {
+      const u = $('#u').value, pw = sqli ? $('#p').value : '';
+      const evil = sqli ? /'/.test(u + pw) && /(--|#|\bor\b|\bunion\b)/i.test(u + pw) : /<\s*script|on\w+\s*=|<\s*img/i.test(u);
+      const secure = $('#sec').checked;
+      if (sqli) {
+        $('#q').textContent = secure
+          ? `SELECT * FROM users WHERE username = ? AND password = ?\nparams: [${JSON.stringify(u)}, ${JSON.stringify(pw)}]`
+          : `SELECT * FROM users WHERE username = '${u}' AND password = '${pw}'`;
+      } else {
+        $('#q').textContent = secure ? `<p>${u.replace(/</g, '&lt;').replace(/>/g, '&gt;')}</p>   <- الحرف < صار &lt;` : `<p>${u}</p>   <- الصفحة تحط النص كما هو`;
+      }
+      if (evil && !secure) {
+        broke = true;
+        $('#res').innerHTML = `<div class="feedback no"><b>🚨 ${sqli ? 'تجاوز تسجيل الدخول بدون باسورد!' : 'السكربت تنفّذ في متصفح كل زائر!'} (محاكاة)</b>${sqli
+          ? 'الإدخال صار جزءاً من أمر SQL فغيّر معناه: علامة -- تلغي شرط الباسورد.' : 'المتصفح شاف الكود كأنه جزء من الصفحة فنفّذه. المهاجم يقدر يسرق الجلسات.'}</div>`;
+      } else if (evil && secure) {
+        blocked = true;
+        $('#res').innerHTML = `<div class="feedback ok"><b>🛡️ فشل الهجوم</b>${sqli ? 'الاستعلام الجاهز يعامل الإدخال كبيانات فقط، مو كأمر.' : 'النص انعرض كحروف عادية بدون ما يتنفّذ.'}</div>`;
+      } else {
+        $('#res').innerHTML = `<div class="feedback">${sqli ? 'بيانات غير صحيحة. جرّب «جرّب هذا».' : 'تم نشر التعليق. جرّب «جرّب هذا».'}</div>`;
+      }
+      if (broke && blocked) { ctx.results[`${ctx.i}:vuln`] = true; done(); }
+      else if (broke) $('#res').insertAdjacentHTML('beforeend', '<p class="muted">الآن فعّل خانة الحماية وأعد نفس المحاولة.</p>');
+    });
+  },
+
+  // سيناريو متفرّع: قرارات ونتائج (مثل الاستجابة للحوادث)
+  scenario(s, box, done, ctx) {
+    const show = (id) => {
+      const n = s.nodes[id];
+      if (n.end) {
+        box.innerHTML = `<span class="badge lab">🧪 سيناريو</span><h2>${esc(s.title)}</h2><div class="callout ${n.good === false ? 'stop' : 'tip'}"><span class="label">${n.good === false ? '💥' : '🏁'} النهاية</span>${rich(n.text)}</div>`;
+        return done();
+      }
+      box.innerHTML = `<span class="badge lab">🧪 سيناريو</span><h2>${esc(s.title)}</h2><p>${rich(n.text)}</p>
+        <div class="opts">${n.choices.map((c, i) => `<button class="opt" data-i="${i}">${rich(c.t, true)}</button>`).join('')}</div><div id="fb"></div>`;
+      box.querySelectorAll('.opt').forEach((b) => b.addEventListener('click', () => {
+        const c = n.choices[+b.dataset.i];
+        box.querySelectorAll('.opt').forEach((x) => (x.disabled = true));
+        b.classList.add(c.good ? 'right' : 'wrong');
+        ctx.results[`${ctx.i}:sc:${id}`] = !!c.good;
+        box.querySelector('#fb').innerHTML = `<div class="feedback ${c.good ? 'ok' : 'no'}"><b>${c.good ? '👍 قرار سليم' : '⚠️ قرار خطر'}</b>${rich(c.why)}</div><button class="btn" id="nx">كمّل</button>`;
+        box.querySelector('#nx').addEventListener('click', () => show(c.next));
+      }));
+    };
+    show(s.start);
+  },
+
+  // تحديات CTF: أدخل الـ Flag بعد ما تحل اللغز
+  ctf(s, box, done, ctx) {
+    let n = 0;
+    const show = () => {
+      const c = s.challenges[n];
+      box.innerHTML = `<span class="badge lab">🏁 Mini CTF · ${n + 1}/${s.challenges.length}</span><h2>${esc(c.title)}</h2><p>${rich(c.desc)}</p>
+        ${c.code ? `<pre class="code" dir="ltr" style="white-space:pre-wrap;word-break:break-all">${esc(c.code)}</pre>` : ''}
+        <input class="search en" id="flag" dir="ltr" autocomplete="off" placeholder="FLAG{...}"><div id="fb"></div>
+        <div class="row"><button class="btn small" id="sub">تحقق</button><button class="btn ghost small" id="hint" type="button">💡 تلميح</button></div>`;
+      box.querySelector('#hint').addEventListener('click', () => (box.querySelector('#fb').innerHTML = `<div class="feedback no"><b>💡 تلميح</b>${rich(c.hint)}</div>`));
+      box.querySelector('#sub').addEventListener('click', () => {
+        const v = box.querySelector('#flag').value.trim();
+        if (v.toLowerCase() === c.flag.toLowerCase()) {
+          ctx.results[`${ctx.i}:ctf${n}`] = true;
+          box.querySelector('#fb').innerHTML = `<div class="feedback ok"><b>🚩 صح!</b>${rich(c.why || '')}</div><button class="btn" id="nx">${n + 1 < s.challenges.length ? 'التحدي التالي' : 'تمام'}</button>`;
+          box.querySelector('#nx').addEventListener('click', () => { if (++n < s.challenges.length) show(); else done(); });
+        } else box.querySelector('#fb').innerHTML = '<div class="feedback no"><b>مو صحيح</b>جرّب مرة ثانية أو استخدم التلميح.</div>';
+      });
+    };
+    show();
+  },
+
+  // لعبة الجدار الناري: لكل طلب قرر سماح أو منع حسب القواعد
+  firewall(s, box, done, ctx) {
+    const rules = s.rules.join('\n');
+    questionRunner({
+      type: 'practice', intro: s.intro,
+      questions: s.packets.map((p) => ({ q: 'وش قرار الجدار الناري لهذا الطلب؟', code: `${rules}\n\n▶ ${p.line}`, options: ['✅ سماح (Allow)', '⛔ منع (Block)'], answer: p.allow ? 0 : 1, why: p.why }))
+    }, box, done, ctx);
   },
 
   summary(s, box, done) {
@@ -263,7 +481,7 @@ export function playLesson(view, lesson, onExit) {
     // الأسئلة تحسب النتيجة من جديد في كل مرة يمر عليها
     renderers[s.type](s, box, () => { fwd.disabled = false; }, ctx);
     // زر التالي داخل التمارين يخفي الزر السفلي لأنه عنده زره
-    fwd.style.display = ['practice', 'quiz', 'terminal', 'phish'].includes(s.type) ? 'none' : '';
+    fwd.style.display = ['practice', 'quiz', 'terminal', 'phish', 'firewall'].includes(s.type) ? 'none' : '';
   }
 
   function go(d) {
