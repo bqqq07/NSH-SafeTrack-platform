@@ -1,0 +1,12 @@
+{"title_ar":"إطار MITRE ATT&CK","title_en":"MITRE ATT&CK","duration_min":9,"slides":[
+ {"type":"intro","emoji":"🗺️","goal":"تفهم [[mitre-attack]] وكيف يصنّف سلوك المهاجمين إلى [[tactic]] و[[technique]]."},
+ {"type":"text","emoji":"📚","layer":"🟢 ببساطة","title":"خريطة لعقل المهاجم","body":["MITRE ATT&CK مرجع عالمي يجمع كيف يعمل المهاجمون فعلاً، مصنّفاً بمراحل.","يتيح لفرق الدفاع لغة مشتركة: وين كشفنا؟ وين عندنا ثغرة؟"],"callout":"info","note":"مجاني ومتاح للجميع."},
+ {"type":"text","emoji":"🧭","layer":"🟡 أكثر تفصيل","title":"التكتيكات (لماذا) والتقنيات (كيف)","body":["**Initial Access**: الدخول الأولي (مثل التصيّد).","**Execution**: تشغيل الكود.","**[[persistence]]**: البقاء بعد إعادة التشغيل.","**Privilege Escalation**: رفع الصلاحيات.","**Credential Access**: سرقة بيانات الدخول.","**Discovery**: استكشاف الشبكة.","**[[lateral-movement]]**: التنقل بين الأجهزة.","**Collection / [[exfiltration]]**: جمع البيانات وإخراجها.","**Impact**: التأثير (تشفير، تخريب)."],"callout":"tip","note":"كل تكتيك فيه عدة تقنيات مرقمة مثل T1566 للتصيّد."},
+ {"type":"terms","ids":["mitre-attack","tactic","technique","persistence","lateral-movement","exfiltration","apt"]},
+ {"type":"match","title":"طابق الحدث بتكتيكه","pairs":[["رسالة تصيّد فتحها موظف","Initial Access"],["مهمة مجدولة تشغّل برنامج المهاجم كل ساعة","Persistence"],["انتقال من جهاز موظف لسيرفر الملفات","Lateral Movement"],["رفع 5 جيجا لسيرفر خارجي","Exfiltration"],["تشفير ملفات الشركة","Impact"]],"why":"ربط الأحداث بالتكتيكات يوضح مرحلة الهجوم."},
+ {"type":"order","title":"رتّب مراحل هجوم نموذجي","items":["Initial Access","Execution","Persistence","Credential Access","Lateral Movement","Exfiltration","Impact"],"why":"ليس دائماً بنفس الترتيب، لكن هذا المسار الشائع."},
+ {"type":"quiz","questions":[
+  {"q":"التكتيك هو؟","options":["هدف المهاجم (لماذا)","الأداة"],"answer":0,"why":"والتقنية هي الكيف."},
+  {"q":"فائدة ATT&CK للدفاع؟","options":["معرفة أي مراحل نكشفها وأيها لا","شراء أجهزة"],"answer":0,"why":"تحليل الفجوات."},
+  {"q":"Lateral Movement؟","options":["التنقل بين الأجهزة داخل الشبكة","الدخول الأولي"],"answer":0,"why":"بعد اختراق أول جهاز."}]},
+ {"type":"summary","points":["ATT&CK يصنف سلوك المهاجم إلى تكتيكات وتقنيات.","يوحّد لغة الفرق ويكشف الفجوات.","كل مرحلة فرصة للكشف."]}]}

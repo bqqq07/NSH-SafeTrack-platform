@@ -1,0 +1,24 @@
+{"title_ar":"السجلات","title_en":"Logs","duration_min":9,"slides":[
+ {"type":"intro","emoji":"📜","goal":"تتعلم قراءة [[log]] وتكتشف الهجمات من الأنماط."},
+ {"type":"text","emoji":"📓","layer":"🟢 ببساطة","title":"دفتر يوميات النظام","body":["كل نظام يكتب سجلاً: من دخل؟ وش طلب؟ متى؟ وهل نجح؟","هذا الدفتر هو أهم أداة للمحلل: يعيد قصة الهجوم."],"callout":"info","note":"بدون سجلات ما تعرف حصل شي أو لا."},
+ {"type":"text","emoji":"🧩","layer":"🟡 أكثر تفصيل","title":"وش نبحث عنه","body":["**التوقيت**: هل الحدث في وقت غريب (الثالثة فجراً)؟","**المصدر**: عنوان IP غير معروف؟","**التكرار**: عشرات المحاولات الفاشلة؟","**التحول**: فشل متكرر ثم نجاح فجأة = تخمين نجح.","**الحساسية**: وصول لملفات أو حسابات حساسة."],"callout":"tip","note":"ابدأ بالمشاهدة العامة ثم ضيّق بالفلترة."},
+ {"type":"terms","ids":["log","alert","ioc","triage"]},
+ {"type":"phish","title":"سجل 1: دخول SSH","channel":"auth.log","from":"server-01","mono":true,"intro":"اضغط على الأسطر المشبوهة ثم تحقق:","parts":[
+  {"t":"09:01 Accepted password for admin from 10.0.0.5\n","bad":false,"why":"دخول من عنوان داخلي معروف."},
+  {"t":"03:12 Failed password for root from 203.0.113.9\n","bad":true,"why":"محاولة على root من عنوان خارجي في وقت غريب."},
+  {"t":"03:12 Failed password for root from 203.0.113.9\n","bad":true,"why":"تكرار من نفس العنوان."},
+  {"t":"03:13 Failed password for root from 203.0.113.9\n","bad":true,"why":"نمط تخمين باسورد."},
+  {"t":"03:14 Accepted password for root from 203.0.113.9\n","bad":true,"why":"نجح الدخول بعد سلسلة فشل! احتمال اختراق فعلي، تصعيد فوري."},
+  {"t":"09:20 Accepted password for admin from 10.0.0.5\n","bad":false,"why":"دخول عادي."}]},
+ {"type":"phish","title":"سجل 2: موقع ويب","channel":"access.log","from":"web-01","mono":true,"intro":"أي الطلبات تبدو كمحاولة هجوم؟","parts":[
+  {"t":"GET /index.html 200\n","bad":false,"why":"طلب عادي."},
+  {"t":"GET /products?id=5 200\n","bad":false,"why":"طلب عادي."},
+  {"t":"GET /products?id=5' OR '1'='1 500\n","bad":true,"why":"محاولة SQL Injection."},
+  {"t":"GET /search?q=<script>alert(1)</script> 200\n","bad":true,"why":"محاولة XSS."},
+  {"t":"GET /../../etc/passwd 403\n","bad":true,"why":"محاولة قراءة ملفات النظام (Path Traversal)، والسيرفر رفضها."},
+  {"t":"GET /about.html 200\n","bad":false,"why":"طلب عادي."}]},
+ {"type":"quiz","questions":[
+  {"q":"فشل دخول متكرر ثم نجاح فجأة؟","options":["احتمال نجاح تخمين الباسورد","شي طبيعي"],"answer":0,"why":"يستوجب التصعيد."},
+  {"q":"وين نبدأ التحقيق؟","options":["في السجلات","في تغيير كل الباسوردات فقط"],"answer":0,"why":"نحدد وش حصل أول."},
+  {"q":"لماذا حماية السجلات مهمة؟","options":["المهاجم قد يمسحها لإخفاء أثره","ما تهم"],"answer":0,"why":"تُرسل لنسخة مركزية."}]},
+ {"type":"summary","points":["السجلات قصة ما حدث.","ابحث عن التوقيت والمصدر والتكرار والتحول.","احمِ السجلات وأرسلها لمنصة مركزية."]}]}

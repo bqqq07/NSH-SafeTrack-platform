@@ -398,43 +398,43 @@
      "id": "m7.1",
      "title_ar": "مركز العمليات الأمنية",
      "title_en": "SOC",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m7.2",
      "title_ar": "السجلات",
      "title_en": "Logs",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m7.3",
      "title_ar": "SIEM",
      "title_en": "SIEM",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m7.4",
      "title_ar": "مؤشرات الاختراق",
      "title_en": "IOC",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m7.5",
      "title_ar": "الاستجابة للحوادث",
      "title_en": "Incident Response",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m7.6",
      "title_ar": "التحقيق الرقمي",
      "title_en": "Digital Forensics",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m7.7",
      "title_ar": "إطار MITRE ATT&CK",
      "title_en": "MITRE ATT&CK",
-     "ready": false
+     "ready": true
     }
    ]
   },
