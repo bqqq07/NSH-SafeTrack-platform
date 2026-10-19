@@ -257,43 +257,43 @@
      "id": "m4.1",
      "title_ar": "تشفير أم ترميز أم هاش؟",
      "title_en": "Encryption vs Encoding vs Hashing",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m4.2",
      "title_ar": "التشفير المتماثل وغير المتماثل",
      "title_en": "Symmetric vs Asymmetric",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m4.3",
      "title_ar": "الهاش وتخزين الباسوردات",
      "title_en": "Hashing & Salt",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m4.4",
      "title_ar": "التواقيع والشهادات الرقمية",
      "title_en": "Signatures & Certificates",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m4.5",
      "title_ar": "كيف يشتغل HTTPS",
      "title_en": "How HTTPS Works",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m4.6",
      "title_ar": "تشفير الجهاز والملفات",
      "title_en": "Disk & File Encryption",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m4.7",
      "title_ar": "ألعاب التشفير",
      "title_en": "Crypto Playground",
-     "ready": false
+     "ready": true
     }
    ]
   },
