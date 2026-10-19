@@ -1,0 +1,17 @@
+{"title_ar":"فحص الشبكات","title_en":"Network Scanning","duration_min":10,"slides":[
+ {"type":"intro","emoji":"📡","goal":"تتعلم فكرة [[nmap]] وتقرأ نتائجه داخل مختبر محاكاة آمن."},
+ {"type":"text","emoji":"⚖️","title":"تذكير قانوني","body":["أداة Nmap قانونية، لكن فحص شبكات الآخرين بدون إذن قد يعتبر مخالفة. المحاكي هنا وهمي بالكامل، ولا يرسل أي حزم."],"callout":"stop","note":"افحص فقط شبكتك أو بيئة تدريب مصرّح بها أو بعقد مكتوب."},
+ {"type":"text","emoji":"🚪","layer":"🟢 ببساطة","title":"يطرق الأبواب","body":["Nmap يرسل طلبات صغيرة للمنافذ ويشوف أيها يرد.","النتيجة: قائمة بالمنافذ المفتوحة والخدمات، وأحياناً أرقام إصداراتها."],"callout":"info","note":"المنفذ المفتوح لخدمة قديمة هو غالباً الثغرة."},
+ {"type":"terminal","title":"مختبر آمن: lab.local","intro":"الهدف جهاز تدريب وهمي عنوانه 192.168.56.10.","prompt":"tester@kali:~$","tasks":[
+  {"goal":"افحص المنافذ الشائعة: `nmap lab.local`.","accept":["nmap lab.local","nmap 192.168.56.10"],"out":"Starting Nmap (simulation)\nNmap scan report for lab.local (192.168.56.10)\nPORT     STATE SERVICE\n21/tcp   open  ftp\n22/tcp   open  ssh\n80/tcp   open  http\n3306/tcp open  mysql","hint":"nmap lab.local","fail":"الصيغة: nmap lab.local","why":"4 منافذ مفتوحة. FTP وMySQL تحديداً تستحق الانتباه."},
+  {"goal":"اعرف إصدارات الخدمات: `nmap -sV lab.local`.","accept":["nmap -sV lab.local","nmap -sV 192.168.56.10"],"out":"PORT     STATE SERVICE VERSION\n21/tcp   open  ftp     vsftpd 2.3.4\n22/tcp   open  ssh     OpenSSH 8.9\n80/tcp   open  http    Apache 2.4.7\n3306/tcp open  mysql   MySQL 5.5.20","hint":"nmap -sV lab.local","fail":"الصيغة: nmap -sV lab.local","why":"الإصدارات القديمة (vsftpd 2.3.4 وApache 2.4.7) غالباً لها ثغرات معروفة. الخطوة التالية: تقييم الثغرات وليس استغلالها بدون إذن."}]},
+ {"type":"terms","ids":["nmap","port-scan","port","enumeration","vuln-assessment"]},
+ {"type":"practice","intro":"حلّل نتيجة الفحص:","questions":[
+  {"q":"أي منفذ يثير القلق في النتيجة السابقة؟","code":"21/tcp   open  ftp   vsftpd 2.3.4\n22/tcp   open  ssh   OpenSSH 8.9\n80/tcp   open  http  Apache 2.4.7\n3306/tcp open  mysql MySQL 5.5.20","options":["MySQL مكشوف للشبكة وإصدارات قديمة","SSH لوحده"],"answer":0,"why":"قاعدة البيانات يجب ألا تكون مكشوفة، والإصدارات القديمة فيها ثغرات."},
+  {"q":"وش توصيتك الأولى كمختبِر؟","options":["إغلاق المنافذ غير الضرورية وتحديث الخدمات","تجاهل"],"answer":0,"why":"تقليل سطح الهجوم والترقيع."},
+  {"q":"هل يحق لك فحص سيرفر موقع تعجبك شركته؟","options":["لا بدون إذن","نعم"],"answer":0,"why":"الإذن شرط."}]},
+ {"type":"quiz","questions":[
+  {"q":"ماذا يفيد -sV في Nmap؟","options":["كشف إصدارات الخدمات","سرعة أعلى"],"answer":0,"why":"الإصدار يحدد الثغرات المحتملة."},
+  {"q":"المنفذ المفتوح يعني؟","options":["خدمة تستمع للاتصالات","اختراق"],"answer":0,"why":"قد يكون مقصوداً وقد يكون خطراً."},
+  {"q":"فحص المنافذ ضمن أي مرحلة؟","options":["الفحص (Scanning)","التقرير"],"answer":0,"why":"بعد الاستطلاع."}]},
+ {"type":"summary","points":["Nmap يكشف المنافذ والخدمات وإصداراتها.","الإصدارات القديمة غالباً مثقوبة.","لا تفحص بدون إذن مكتوب."]}]}

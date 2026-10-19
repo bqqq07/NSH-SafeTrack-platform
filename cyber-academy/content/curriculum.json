@@ -449,37 +449,37 @@
      "id": "m8.1",
      "title_ar": "مراحل الاختراق الأخلاقي",
      "title_en": "Ethical Hacking Phases",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m8.2",
      "title_ar": "جمع المعلومات OSINT",
      "title_en": "OSINT",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m8.3",
      "title_ar": "فحص الشبكات",
      "title_en": "Network Scanning",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m8.4",
      "title_ar": "تقييم الثغرات",
      "title_en": "Vulnerability Assessment",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m8.5",
      "title_ar": "القانون والأخلاقيات",
      "title_en": "Law & Ethics",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m8.6",
      "title_ar": "كتابة تقرير أمني",
      "title_en": "Security Report",
-     "ready": false
+     "ready": true
     }
    ]
   },
