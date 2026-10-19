@@ -1,0 +1,16 @@
+{
+ "title_ar":"عنوان الجهاز: IP و DNS","title_en":"IP Address & DNS","duration_min":8,
+ "slides":[
+  {"type":"intro","emoji":"📍","goal":"تفهم عنوان الـ IP ([[ip-address]]) والدومين ([[domain-name]]) والـ DNS، وتجرّب أوامر حقيقية في محاكي سطر الأوامر."},
+  {"type":"text","emoji":"🏠","layer":"🟢 ببساطة","title":"كل جهاز له عنوان","body":["مثل البيت عنده رقم وحي، كل جهاز على الشبكة له **عنوان IP**، عشان البيانات تعرف وين تروح.","مثال لعنوان: **192.168.1.5**"],"callout":"info","note":"عنوان الـ IP ممكن يكشف تقريباً مدينتك ومزود الإنترنت. لهذا نستخدم VPN أحياناً، وبنشرحه لاحقاً."},
+  {"type":"text","emoji":"📖","layer":"🟢 ببساطة","title":"الـ DNS دليل الهاتف","body":["أنت تحفظ الاسم **google.com** ومو الرقم. جوالك يسأل الـ [[dns]]: وش رقم هذا الاسم؟ والـ DNS يجاوب بالرقم.","مثل ما تدور اسم صديقك في جوالك وتتصل على رقمه."],"callout":"warn","note":"لو تلاعب المهاجم بالـ DNS ممكن يوديك لموقع مزيف شكله مثل الأصلي، وهذا يسمى DNS Spoofing."},
+  {"type":"terms","ids":["ip-address","domain-name","dns","command","terminal","ping"]},
+  {"type":"terminal","title":"جرّب أوامر الشبكة","intro":"هذا محاكي آمن. ما ينفّذ أي شي حقيقي، تجرّب فيه بدون خوف.","prompt":"user@pc:~$","tasks":[
+   {"goal":"اكتب `ping google.com` للتأكد إن الموقع يرد.","accept":["ping google.com"],"out":"PING google.com (142.250.0.1): 56 data bytes\n64 bytes from 142.250.0.1: time=18 ms\n64 bytes from 142.250.0.1: time=17 ms","hint":"ping google.com","fail":"ping: الأمر غير صحيح. الصيغة: ping اسم_الموقع","why":"[[ping]] يرسل إشارة صغيرة ويقيس زمن الرد. إذا رد فالجهاز شغال ومتصل."},
+   {"goal":"اكتب `nslookup google.com` تسأل الـ DNS عن رقم الموقع.","accept":["nslookup google.com"],"out":"Server:  dns.local\nName:    google.com\nAddress: 142.250.0.1","hint":"nslookup google.com","fail":"الصيغة: nslookup اسم_الموقع","why":"شفت كيف حوّل الـ [[dns]] الاسم إلى رقم IP: 142.250.0.1"}]},
+  {"type":"quiz","questions":[
+   {"q":"وش وظيفة الـ DNS؟","options":["يشفّر الاتصال","يحوّل اسم الموقع إلى رقم IP","يسرّع الجهاز"],"answer":1,"why":"هو دليل الهاتف حق الإنترنت."},
+   {"q":"أي هذي عنوان IP؟","options":["google.com","192.168.1.5","user@mail.com"],"answer":1,"why":"عنوان IP مكوّن من أرقام تفصلها نقاط."},
+   {"q":"وش أمر فحص الاتصال بجهاز؟","options":["ping","hello","check"],"answer":0,"why":"ping هو الأمر القياسي لهذا الغرض."}]},
+  {"type":"summary","points":["**IP** عنوان رقمي للجهاز على الشبكة.","**Domain** الاسم السهل للموقع.","**DNS** يحوّل الاسم إلى IP.","`ping` و`nslookup` من أوامر الفحص الأساسية."]}
+ ]}

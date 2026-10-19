@@ -157,3 +157,4 @@ pre.code { direction: ltr; text-align: left; background: #0f1b20; color: #e6f1f5
 .flag { cursor: pointer; border-bottom: 2px dotted var(--muted); border-radius: 4px; }
 .flag.sel { background: var(--yellow-bg); border-bottom-color: var(--orange); }
 .flag.hit { background: var(--green-bg); } .flag.miss { background: var(--yellow-bg); outline: 2px dashed var(--orange); } .flag.fp { background: var(--red-bg); }
+code { background: var(--soft); border-radius: 6px; padding: 1px 6px; font: 600 .85em ui-monospace, Menlo, Consolas, monospace; }

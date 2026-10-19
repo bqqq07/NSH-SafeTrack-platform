@@ -14,6 +14,7 @@ export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
 // نحوّل نص الدرس إلى HTML آمن:
 //   [[id]]   ← زر مصطلح يفتح التفاصيل
 //   **نص**   ← خط عريض
+//   `أمر`    ← كود داخل السطر
 // plain=true: بدون أزرار (للاستخدام داخل أزرار ثانية مثل خيارات الأسئلة)
 export function rich(text, plain = false) {
   return esc(text)
@@ -22,7 +23,8 @@ export function rich(text, plain = false) {
       if (plain) return t ? `<span class="en">${esc(t.en)}</span>` : id;
       return t ? `<button class="term en" data-term="${id}">${esc(t.en)}</button>` : id;
     })
-    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
+    .replace(/`(.+?)`/g, '<code class="en">$1</code>');
 }
 
 // نطق المصطلح بالإنجليزي (Web Speech API) — يعتمد على دعم الجهاز
