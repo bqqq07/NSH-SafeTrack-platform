@@ -1,0 +1,239 @@
+{
+ "title_ar": "معالجة الأسطر",
+ "title_en": "Processing Lines",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "✂️",
+   "goal": "تنظف سطور الملف وتقسمها لحقول قابلة للاستخدام: هذا أساس [[parsing]] (التحليل)."
+  },
+  {
+   "type": "text",
+   "title": "أدوات النص",
+   "body": [
+    "`strip()` تزيل المسافات والأسطر الجديدة من الطرفين، و`split()` تقسم لكلمات، و`split(\",\")` تقسم عند فاصل محدد.",
+    "`line.startswith(\"ERROR\")` و`\"x\" in line` تفحص شكل السطر.",
+    "نتجاهل الأسطر الفاضية: `if not line: continue`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "كل حقل يطلع نصاً؛ حوّل الأرقام بـ `int()`.",
+   "code": "line = \"  sara,25,riyadh \\n\"\nparts = line.strip().split(\",\")\nprint(parts)\nprint(parts[1])"
+  },
+  {
+   "type": "text",
+   "title": "تحليل سطر سجل",
+   "body": [
+    "سجل نموذجي: `2025-01-05 10:22 ERROR login failed`.",
+    "`parts = line.split()` ثم `parts[2]` المستوى. أو `line.split(\" \", 3)` تقسم أول 3 فواصل فقط وتبقي الرسالة كاملة.",
+    "اجمع الإحصاءات بقاموس: `counts[level] = counts.get(level, 0) + 1`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "فك المجموعة (unpacking) يجعل الحقول بأسماء واضحة.",
+   "code": "line = \"2025-01-05 10:22 ERROR login failed\"\ndate, time, level, msg = line.split(\" \", 3)\nprint(level, \"|\", msg)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "parsing",
+    "log"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "line = \"  a,b,c\\n\"\nprint(line.strip().split(\",\"))\n",
+   "options": [
+    "['a', 'b', 'c']",
+    "['  a', 'b', 'c\\n']",
+    "['a,b,c']"
+   ],
+   "answer": 0,
+   "why": "strip تنظف الطرفين ثم split تقسم عند الفاصلة."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): split مع حد",
+   "code": "line = \"x y z w\"\nprint(line.split(\" \", 2))\n",
+   "options": [
+    "['x', 'y', 'z w']",
+    "['x', 'y']",
+    "['x', 'y', 'z', 'w']"
+   ],
+   "answer": 0,
+   "why": "الحد 2 يعني قسمين فقط، والباقي يبقى معاً."
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: عدّ الأخطاء",
+   "lines": [
+    "errors = 0",
+    "for line in [\"ok\", \"ERROR a\", \"ok\", \"ERROR b\"]:",
+    "    if line.startswith(\"ERROR\"):",
+    "        errors = errors + 1",
+    "print(errors)"
+   ],
+   "expect_stdout": "2",
+   "intro": "رتّب الأسطر لتعدّ الأسطر التي تبدأ بـ ERROR.",
+   "explain": "نعدّ كل سطر يبدأ بـ ERROR."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: التقسيم",
+   "code": "line = \"ali,30\"\nname, age = line.____(\",\")\nprint(name)\n",
+   "blanks": [
+    {
+     "answer": "split"
+    }
+   ],
+   "expect_stdout": "ali",
+   "show_output": true,
+   "bank": [
+    "split",
+    "strip",
+    "join",
+    "find"
+   ],
+   "intro": "وش الأسلوب اللي يقسم النص عند الفاصلة؟",
+   "explain": "`split(\",\")`."
+  },
+  {
+   "type": "code",
+   "title": "عدّ الأخطاء",
+   "instructions": [
+    "الملف `app.log` فيه سجلات. اطبع **عدد الأسطر** اللي تحتوي على كلمة `ERROR`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "2"
+    }
+   ],
+   "solution": "count = 0\nwith open(\"app.log\", encoding=\"utf-8\") as f:\n    for line in f:\n        if \"ERROR\" in line:\n            count = count + 1\nprint(count)\n",
+   "hints": [
+    "مرّ على الأسطر.",
+    "`\"ERROR\" in line`"
+   ],
+   "files": {
+    "app.log": "INFO start\nERROR disk\nINFO ok\nERROR net\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "تجاهل الأسطر الفاضية",
+   "instructions": [
+    "اطبع عدد الأسطر **غير الفاضية** في `data.txt`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "3"
+    }
+   ],
+   "solution": "count = 0\nwith open(\"data.txt\", encoding=\"utf-8\") as f:\n    for line in f:\n        if line.strip():\n            count = count + 1\nprint(count)\n",
+   "hints": [
+    "السطر الفاضي بعد strip يصير نصاً فاضياً (False)."
+   ],
+   "files": {
+    "data.txt": "a\n\nb\n\n\nc\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "الأعمار",
+   "instructions": [
+    "`people.txt` كل سطر `اسم,عمر`. اطبع **مجموع الأعمار**."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "90"
+    }
+   ],
+   "solution": "total = 0\nwith open(\"people.txt\", encoding=\"utf-8\") as f:\n    for line in f:\n        name, age = line.strip().split(\",\")\n        total = total + int(age)\nprint(total)\n",
+   "hints": [
+    "قسّم عند الفاصلة.",
+    "حوّل العمر بـ `int`."
+   ],
+   "files": {
+    "people.txt": "sara,25\nkhalid,40\nnora,25\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "أصلح: السطر الأخير",
+   "instructions": [
+    "الكود يعطي `ValueError` عند الأسطر الفاضية. تجاهلها ليطبع `2`."
+   ],
+   "starter": "count = 0\nwith open(\"d.txt\", encoding=\"utf-8\") as f:\n    for line in f:\n        a, b = line.strip().split(\",\")\n        count = count + 1\nprint(count)\n",
+   "tests": [
+    {
+     "expect_stdout": "2"
+    }
+   ],
+   "solution": "count = 0\nwith open(\"d.txt\", encoding=\"utf-8\") as f:\n    for line in f:\n        if not line.strip():\n            continue\n        a, b = line.strip().split(\",\")\n        count = count + 1\nprint(count)\n",
+   "hints": [
+    "أضف `if not line.strip(): continue`."
+   ],
+   "variant": "bugfix",
+   "files": {
+    "d.txt": "1,2\n\n3,4\n"
+   }
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش تسوي strip؟",
+     "options": [
+      "تزيل المسافات والأسطر الجديدة من الطرفين",
+      "تقسم النص",
+      "تحذف كل الحروف"
+     ],
+     "answer": 0,
+     "why": "تنظيف الطرفين."
+    },
+    {
+     "q": "وش يعطي `\"a,b\".split(\",\")`؟",
+     "options": [
+      "['a', 'b']",
+      "'ab'",
+      "2"
+     ],
+     "answer": 0,
+     "why": "قائمة حقول."
+    },
+    {
+     "q": "كيف نتجاهل سطراً فاضياً؟",
+     "options": [
+      "if not line.strip(): continue",
+      "break",
+      "pass فقط"
+     ],
+     "answer": 0,
+     "why": "continue يقفز للسطر التالي."
+    },
+    {
+     "q": "وش حقل الأرقام بعد split؟",
+     "options": [
+      "نص، نحوله بـ int",
+      "رقم تلقائياً",
+      "قائمة"
+     ],
+     "answer": 0,
+     "why": "كل شيء نص."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`strip` و`split` أدوات تحليل الأسطر.",
+    "تجاهل الفاضي بـ `continue`.",
+    "اجمع الإحصاءات بقاموس."
+   ]
+  }
+ ]
+}

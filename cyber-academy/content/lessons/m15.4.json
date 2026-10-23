@@ -1,0 +1,237 @@
+{
+ "title_ar": "الترميز UTF-8 والعربي",
+ "title_en": "Encoding & Arabic",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔤",
+   "goal": "تفهم ليش النص العربي يتخرب أحياناً، وكيف تحفظه وتقرأه صح بـ [[utf-8]]."
+  },
+  {
+   "type": "text",
+   "title": "النص والبايتات",
+   "body": [
+    "الملف يخزّن **بايتات** مو حروفاً. الترميز ([[encoding]]) هو القاعدة اللي تحوّل الحرف لبايتات والعكس.",
+    "[[utf-8]] ترميز يدعم كل اللغات، والعربية تأخذ فيه **بايتين** غالباً للحرف.",
+    "لو قرأت ملفاً بترميز غير اللي كُتب به تطلع رموز غريبة أو `UnicodeDecodeError`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "الطول بالحروف 4 لكن بالبايتات 8 لأن كل حرف عربي بايتان.",
+   "code": "s = \"سلام\"\nb = s.encode(\"utf-8\")\nprint(len(s), len(b))\nprint(b.decode(\"utf-8\"))"
+  },
+  {
+   "type": "text",
+   "title": "القاعدة الذهبية",
+   "body": [
+    "حدد دائماً `encoding=\"utf-8\"` عند `open()`، ولا تعتمد على الافتراضي لأنه يختلف من نظام لآخر.",
+    "في الأمن: السجلات قد تحتوي رموزاً غريبة أو محاولات تشويش. الترميز الخاطئ يخفي أو يشوّه الأدلة.",
+    "لتجنب الانهيار عند ملف تالف: `open(..., errors=\"replace\")` تستبدل الرموز التالفة بعلامة."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "لا تستخدم errors=\"ignore\" في التحليل الجنائي لأنه يخفي البيانات بصمت.",
+   "code": "data = b\"ok \\xff end\"\nprint(data.decode(\"utf-8\", errors=\"replace\"))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "encoding",
+    "utf-8"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "print(len(\"abc\"), len(\"abc\".encode(\"utf-8\")))\n",
+   "options": [
+    "3 3",
+    "3 6",
+    "6 3"
+   ],
+   "answer": 0,
+   "why": "الحروف اللاتينية بايت واحد لكل حرف."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): العربية",
+   "code": "s = \"أ\"\nprint(len(s), len(s.encode(\"utf-8\")))\n",
+   "options": [
+    "1 2",
+    "1 1",
+    "2 2"
+   ],
+   "answer": 0,
+   "why": "حرف عربي واحد يشغل بايتين في utf-8."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الترميز",
+   "code": "with open(\"a.txt\", \"w\", ____=\"utf-8\") as f:\n    f.write(\"سلام\")\nwith open(\"a.txt\", encoding=\"utf-8\") as f:\n    print(f.read())\n",
+   "blanks": [
+    {
+     "answer": "encoding"
+    }
+   ],
+   "expect_stdout": "سلام",
+   "show_output": true,
+   "bank": [
+    "encoding",
+    "mode",
+    "charset",
+    "format"
+   ],
+   "intro": "وش اسم الوسيط اللي يحدد الترميز؟",
+   "explain": "`encoding=\"utf-8\"`."
+  },
+  {
+   "type": "code",
+   "title": "طول بالبايتات",
+   "instructions": [
+    "اقرأ كلمة من المدخلات واطبع عدد بايتاتها في utf-8."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "4",
+     "stdin": [
+      "abcd"
+     ]
+    },
+    {
+     "expect_stdout": "8",
+     "stdin": [
+      "سلام"
+     ]
+    },
+    {
+     "expect_stdout": "5",
+     "stdin": [
+      "ab-ع"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "word = input()\nprint(len(word.encode(\"utf-8\")))\n",
+   "hints": [
+    "`encode(\"utf-8\")` تعطي bytes.",
+    "`len` على النتيجة."
+   ],
+   "stdin": [
+    "سلام"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "احفظ واقرأ العربي",
+   "instructions": [
+    "اكتب `مرحباً بالعالم` في ملف `ar.txt` بترميز utf-8 ثم اقرأه بنفس الترميز واطبعه."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "مرحباً بالعالم"
+    }
+   ],
+   "solution": "with open(\"ar.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"مرحباً بالعالم\")\nwith open(\"ar.txt\", encoding=\"utf-8\") as f:\n    print(f.read())\n",
+   "hints": [
+    "حدد encoding في الكتابة والقراءة."
+   ],
+   "checks": [
+    {
+     "regex": "encoding\\s*=\\s*[\"\\']utf-8[\"\\']",
+     "msg": "حدد encoding=\"utf-8\""
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "فك بايتات",
+   "instructions": [
+    "`data` بايتات مشفرة بـ utf-8. فكّها واطبع النص."
+   ],
+   "starter": "data = \"تم\".encode(\"utf-8\")\n",
+   "tests": [
+    {
+     "expect_stdout": "تم"
+    }
+   ],
+   "solution": "data = \"تم\".encode(\"utf-8\")\nprint(data.decode(\"utf-8\"))\n",
+   "hints": [
+    "`decode(\"utf-8\")`"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: بايتات تالفة",
+   "instructions": [
+    "الكود يفك بايتات تالفة فيعطي `UnicodeDecodeError`. اجعله يستبدل التالف ليطبع `ok � end` (الرمز � ناتج الاستبدال)."
+   ],
+   "starter": "data = b\"ok \\xff end\"\nprint(data.decode(\"utf-8\"))\n",
+   "tests": [
+    {
+     "expect_stdout": "ok � end"
+    }
+   ],
+   "solution": "data = b\"ok \\xff end\"\nprint(data.decode(\"utf-8\", errors=\"replace\"))\n",
+   "hints": [
+    "أضف `errors=\"replace\"`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يخزّن الملف فعلياً؟",
+     "options": [
+      "بايتات",
+      "حروفاً",
+      "صوراً"
+     ],
+     "answer": 0,
+     "why": "والترميز يحول بينهما."
+    },
+    {
+     "q": "كم بايتاً يشغل حرف عربي في utf-8 غالباً؟",
+     "options": [
+      "2",
+      "1",
+      "8"
+     ],
+     "answer": 0,
+     "why": "بايتان."
+    },
+    {
+     "q": "ليش نحدد encoding دائماً؟",
+     "options": [
+      "لأن الافتراضي يختلف بين الأنظمة",
+      "لتسريع القراءة",
+      "لا حاجة"
+     ],
+     "answer": 0,
+     "why": "لتجنب الرموز الغريبة."
+    },
+    {
+     "q": "وش سبب UnicodeDecodeError؟",
+     "options": [
+      "فك بايتات بترميز غير الذي كتبت به",
+      "ملف فاضي",
+      "مسافات زائدة"
+     ],
+     "answer": 0,
+     "why": "ترميز غير مطابق."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "الملف بايتات، والترميز يحولها لحروف.",
+    "`utf-8` يدعم العربية، وحدده دائماً.",
+    "`errors=\"replace\"` تمنع الانهيار بدون إخفاء المشكلة."
+   ]
+  }
+ ]
+}

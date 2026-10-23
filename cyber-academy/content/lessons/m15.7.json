@@ -1,0 +1,291 @@
+{
+ "title_ar": "التعابير النمطية Regex",
+ "title_en": "Regular Expressions",
+ "duration_min": 11,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔎",
+   "goal": "تبحث عن أنماط في النصوص (IP، إيميل، تاريخ) بـ [[regex]] ووحدة `re`."
+  },
+  {
+   "type": "text",
+   "title": "وصف شكل النص",
+   "body": [
+    "[[regex]] نمط يصف شكل النص. أهم الرموز: `\\d` رقم، `\\w` حرف/رقم، `\\s` مسافة، `.` أي حرف، `+` مرة أو أكثر، `*` صفر أو أكثر، `?` اختياري.",
+    "نستورد `import re`. `re.search(pattern, text)` تبحث عن أول تطابق وترجع كائناً أو `None`. `re.findall(pattern, text)` ترجع قائمة بكل التطابقات.",
+    "اكتب النمط كنص خام `r\"...\"` حتى لا تتداخل الشرطة المائلة."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "`\\d+` معناها رقم واحد أو أكثر متتالية.",
+   "code": "import re\n\ntext = \"ports 22 and 443 open\"\nprint(re.findall(r\"\\d+\", text))\nprint(bool(re.search(r\"open\", text)))"
+  },
+  {
+   "type": "text",
+   "title": "مجموعات وتحقق",
+   "body": [
+    "الأقواس `( )` تلتقط جزءاً: `re.search(r\"(\\w+)@(\\w+)\", s).group(1)`.",
+    "`^` بداية النص و`$` نهايته، و`re.fullmatch` تتطلب أن النمط يطابق **كل** النص (مفيدة للتحقق).",
+    "`{n}` عدد محدد: `\\d{3}` ثلاثة أرقام. و`[abc]` أحد الحروف. و`[0-9]` نطاق.",
+    "نمط IP مبسط: `\\d{1,3}(\\.\\d{1,3}){3}` (لا يتحقق من أن الرقم ≤ 255)."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "تحقق من أن `search` لم ترجع None قبل `group`.",
+   "code": "import re\n\nlog = \"failed from 10.0.0.5 at 10:22\"\nm = re.search(r\"(\\d+\\.\\d+\\.\\d+\\.\\d+)\", log)\nprint(m.group(1))\nprint(bool(re.fullmatch(r\"\\d{4}\", \"1234\")))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "regex",
+    "ip-address"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "import re\nprint(re.findall(r\"\\d+\", \"a1b22c333\"))\n",
+   "options": [
+    "['1', '22', '333']",
+    "['1', '2', '3']",
+    "['122333']"
+   ],
+   "answer": 0,
+   "why": "كل مجموعة أرقام متتالية تُلتقط على حدة."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): fullmatch",
+   "code": "import re\nprint(bool(re.fullmatch(r\"\\d{3}\", \"1234\")), bool(re.search(r\"\\d{3}\", \"1234\")))\n",
+   "options": [
+    "False True",
+    "True True",
+    "True False"
+   ],
+   "answer": 0,
+   "why": "fullmatch تتطلب طابقة كل النص (4 أرقام ≠ 3)، أما search فتجد 3 أرقام داخله."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): group",
+   "code": "import re\nm = re.search(r\"(\\w+)@(\\w+)\\.com\", \"me ali@site.com\")\nprint(m.group(2))\n",
+   "options": [
+    "site",
+    "ali",
+    "ali@site.com"
+   ],
+   "answer": 0,
+   "why": "المجموعة 2 هي اللي بعد @."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الأرقام",
+   "code": "import re\nprint(re.findall(r\"____+\", \"p22 p80\"))\n",
+   "blanks": [
+    {
+     "answer": "\\d"
+    }
+   ],
+   "expect_stdout": "['22', '80']",
+   "show_output": true,
+   "bank": [
+    "\\d",
+    "\\w",
+    "\\s",
+    "."
+   ],
+   "intro": "وش الرمز اللي يطابق رقماً؟",
+   "explain": "`\\d` رقم، و`+` تكررها."
+  },
+  {
+   "type": "code",
+   "title": "استخرج الأرقام",
+   "instructions": [
+    "اقرأ سطراً واطبع **مجموع** كل الأرقام الموجودة فيه (كل مجموعة أرقام متتالية رقم واحد). مثال: `a1b22` ← `23`"
+   ],
+   "starter": "# اكتب كودك هنا\nimport re\n",
+   "tests": [
+    {
+     "expect_stdout": "23",
+     "stdin": [
+      "a1b22"
+     ]
+    },
+    {
+     "expect_stdout": "0",
+     "stdin": [
+      "abc"
+     ]
+    },
+    {
+     "expect_stdout": "545",
+     "stdin": [
+      "p80 p443 22 x"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import re\ntext = input()\nnums = re.findall(r\"\\d+\", text)\nprint(sum(int(n) for n in nums))\n",
+   "hints": [
+    "`findall(r\"\\d+\", text)`",
+    "حوّل لأرقام واجمع."
+   ],
+   "stdin": [
+    "a1b22"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "استخرج IP",
+   "instructions": [
+    "اقرأ سطر سجل واطبع أول عنوان IP فيه، أو `none` لو ما وجد."
+   ],
+   "starter": "# اكتب كودك هنا\nimport re\n",
+   "tests": [
+    {
+     "expect_stdout": "10.0.0.5",
+     "stdin": [
+      "failed login from 10.0.0.5 at 10:22"
+     ]
+    },
+    {
+     "expect_stdout": "none",
+     "stdin": [
+      "nothing here"
+     ]
+    },
+    {
+     "expect_stdout": "192.168.1.20",
+     "stdin": [
+      "a 192.168.1.20 b 8.8.8.8"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import re\nline = input()\nm = re.search(r\"\\d{1,3}(\\.\\d{1,3}){3}\", line)\nprint(m.group(0) if m else \"none\")\n",
+   "hints": [
+    "نمط IP: أربع مجموعات أرقام تفصلها نقاط.",
+    "تأكد أن النتيجة ليست None."
+   ],
+   "stdin": [
+    "failed login from 10.0.0.5 at 10:22"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تحقق من الإيميل",
+   "instructions": [
+    "اقرأ نصاً واطبع `valid` لو يشبه إيميل بسيط `حروف@حروف.حروف` (حروف وأرقام فقط)، وإلا `invalid`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport re\n",
+   "tests": [
+    {
+     "expect_stdout": "valid",
+     "stdin": [
+      "ali@site.com"
+     ]
+    },
+    {
+     "expect_stdout": "invalid",
+     "stdin": [
+      "ali@site"
+     ]
+    },
+    {
+     "expect_stdout": "invalid",
+     "stdin": [
+      "@site.com"
+     ],
+     "hidden": true
+    },
+    {
+     "expect_stdout": "valid",
+     "stdin": [
+      "a1@b2.org"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import re\nemail = input()\nok = re.fullmatch(r\"\\w+@\\w+\\.\\w+\", email)\nprint(\"valid\" if ok else \"invalid\")\n",
+   "hints": [
+    "استخدم `re.fullmatch`.",
+    "`\\w+@\\w+\\.\\w+`"
+   ],
+   "stdin": [
+    "ali@site.com"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: النمط",
+   "instructions": [
+    "النمط يبحث عن حرف `d` بدل الأرقام. أصلحه ليطبع `['22', '80']`."
+   ],
+   "starter": "import re\nprint(re.findall(r\"d+\", \"p22 p80\"))\n",
+   "tests": [
+    {
+     "expect_stdout": "['22', '80']"
+    }
+   ],
+   "solution": "import re\nprint(re.findall(r\"\\d+\", \"p22 p80\"))\n",
+   "hints": [
+    "الرقم هو `\\d` بشرطة مائلة."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يطابق `\\d+`؟",
+     "options": [
+      "رقم أو أكثر متتالية",
+      "حرف واحد",
+      "مسافة"
+     ],
+     "answer": 0,
+     "why": "مجموعة أرقام."
+    },
+    {
+     "q": "وش الفرق بين search و fullmatch؟",
+     "options": [
+      "fullmatch تطابق كل النص",
+      "ما فيه فرق",
+      "search أبطأ"
+     ],
+     "answer": 0,
+     "why": "الأخيرة للتحقق."
+    },
+    {
+     "q": "وش ترجع search لو ما وجدت؟",
+     "options": [
+      "None",
+      "نص فاضي",
+      "False"
+     ],
+     "answer": 0,
+     "why": "تحقق قبل group."
+    },
+    {
+     "q": "ليش r\"...\" قبل النمط؟",
+     "options": [
+      "حتى لا تتداخل الشرطة المائلة",
+      "لتسريعه",
+      "للعربية"
+     ],
+     "answer": 0,
+     "why": "نص خام."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`\\d \\w \\s + * ?` أساس الأنماط.",
+    "`search` أول تطابق، `findall` كل التطابقات، `fullmatch` تحقق كامل.",
+    "افحص None قبل `group`."
+   ]
+  }
+ ]
+}

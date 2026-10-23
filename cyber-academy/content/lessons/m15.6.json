@@ -1,0 +1,229 @@
+{
+ "title_ar": "ملفات JSON",
+ "title_en": "JSON",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🧾",
+   "goal": "تتبادل بيانات منظمة مع المواقع والتطبيقات عبر [[json]]."
+  },
+  {
+   "type": "text",
+   "title": "قواميس وقوائم كنص",
+   "body": [
+    "[[json]] صيغة نصية تمثل نفس ما نعرفه: قواميس وقوائم ونصوص وأرقام و`true/false/null`.",
+    "نستورد `import json`. `json.loads(text)` تحوّل نص JSON إلى بيانات Python، و`json.dumps(data)` تحوّل البيانات إلى نص.",
+    "الفرق: `true` في JSON تصير `True` في Python، و`null` تصير `None`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "الأقواس المزدوجة فقط في JSON؛ الاقتباس المفرد غير صالح.",
+   "code": "import json\n\ntext = '{\"name\": \"sara\", \"ports\": [22, 80], \"admin\": true}'\ndata = json.loads(text)\nprint(data[\"name\"], data[\"ports\"][1], data[\"admin\"])"
+  },
+  {
+   "type": "text",
+   "title": "الملفات والتنسيق",
+   "body": [
+    "`json.load(f)` تقرأ من ملف، و`json.dump(data, f)` تكتب في ملف (بدون s في الآخر).",
+    "للتنسيق الجميل: `json.dumps(data, indent=2, ensure_ascii=False)`، و`ensure_ascii=False` تحافظ على العربية بدل `\\u0627`.",
+    "نص JSON غير صالح يطلع `json.JSONDecodeError`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "لا تثق بـ JSON قادم من الإنترنت قبل التحقق من شكله وحقوله.",
+   "code": "import json\n\ndata = {\"اسم\": \"سارة\", \"ports\": [22, 80]}\nprint(json.dumps(data, ensure_ascii=False, sort_keys=True))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "json",
+    "dict"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "import json\nd = json.loads('{\"a\": [1, 2, 3]}')\nprint(sum(d[\"a\"]))\n",
+   "options": [
+    "6",
+    "3",
+    "[1, 2, 3]"
+   ],
+   "answer": 0,
+   "why": "نحوّل النص إلى بيانات ونجمع القائمة."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): true",
+   "code": "import json\nprint(json.loads(\"true\"), json.loads(\"null\"))\n",
+   "options": [
+    "True None",
+    "true null",
+    "True False"
+   ],
+   "answer": 0,
+   "why": "true تصير True وnull تصير None."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): dumps",
+   "code": "import json\nprint(json.dumps({\"a\": 1, \"b\": [1, 2]}))\n",
+   "options": [
+    "{\"a\": 1, \"b\": [1, 2]}",
+    "{'a': 1, 'b': [1, 2]}",
+    "{\"a\":1,\"b\":[1,2]}"
+   ],
+   "answer": 0,
+   "why": "dumps تكتب نص JSON باقتباس مزدوج."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: التحويل",
+   "code": "import json\ndata = json.____('{\"x\": 5}')\nprint(data[\"x\"])\n",
+   "blanks": [
+    {
+     "answer": "loads"
+    }
+   ],
+   "expect_stdout": "5",
+   "show_output": true,
+   "bank": [
+    "loads",
+    "dumps",
+    "load",
+    "dump"
+   ],
+   "intro": "وش الدالة اللي تحوّل نص JSON إلى بيانات؟",
+   "explain": "`loads` (s من string)."
+  },
+  {
+   "type": "code",
+   "title": "اقرأ حقل",
+   "instructions": [
+    "`config.json` فيه إعدادات. اطبع قيمة المفتاح `host`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport json\n",
+   "tests": [
+    {
+     "expect_stdout": "example.com"
+    }
+   ],
+   "solution": "import json\nwith open(\"config.json\", encoding=\"utf-8\") as f:\n    cfg = json.load(f)\nprint(cfg[\"host\"])\n",
+   "hints": [
+    "`json.load(f)` تقرأ من ملف."
+   ],
+   "files": {
+    "config.json": "{\"host\": \"example.com\", \"port\": 443}"
+   }
+  },
+  {
+   "type": "code",
+   "title": "عدد المنافذ",
+   "instructions": [
+    "من `hosts.json` (قاموس اسم ← قائمة منافذ) اطبع **عدد المنافذ الكلي**."
+   ],
+   "starter": "# اكتب كودك هنا\nimport json\n",
+   "tests": [
+    {
+     "expect_stdout": "5"
+    }
+   ],
+   "solution": "import json\nwith open(\"hosts.json\", encoding=\"utf-8\") as f:\n    hosts = json.load(f)\ntotal = 0\nfor ports in hosts.values():\n    total = total + len(ports)\nprint(total)\n",
+   "hints": [
+    "مرّ على `hosts.values()`."
+   ],
+   "files": {
+    "hosts.json": "{\"web\": [80, 443], \"ssh\": [22], \"db\": [3306, 5432]}"
+   }
+  },
+  {
+   "type": "code",
+   "title": "احفظ JSON",
+   "instructions": [
+    "اكتب القاموس `user` في ملف `user.json` ثم اقرأه واطبع `user[\"name\"]`."
+   ],
+   "starter": "user = {\"name\": \"سارة\", \"level\": 3}\nimport json\n",
+   "tests": [
+    {
+     "expect_stdout": "سارة"
+    }
+   ],
+   "solution": "import json\nuser = {\"name\": \"سارة\", \"level\": 3}\nwith open(\"user.json\", \"w\", encoding=\"utf-8\") as f:\n    json.dump(user, f, ensure_ascii=False)\nwith open(\"user.json\", encoding=\"utf-8\") as f:\n    print(json.load(f)[\"name\"])\n",
+   "hints": [
+    "`json.dump(data, f)` للكتابة."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: JSON غير صالح",
+   "instructions": [
+    "النص يستخدم اقتباساً مفرداً فيعطي `JSONDecodeError`. أصلحه ليطبع `5`."
+   ],
+   "starter": "import json\ndata = json.loads(\"{'x': 5}\")\nprint(data[\"x\"])\n",
+   "tests": [
+    {
+     "expect_stdout": "5"
+    }
+   ],
+   "solution": "import json\ndata = json.loads('{\"x\": 5}')\nprint(data[\"x\"])\n",
+   "hints": [
+    "JSON يشترط اقتباساً مزدوجاً."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش تسوي json.loads؟",
+     "options": [
+      "تحوّل نص JSON إلى بيانات",
+      "تقرأ ملفاً",
+      "تحذف JSON"
+     ],
+     "answer": 0,
+     "why": "s = string."
+    },
+    {
+     "q": "وش يقابل null في Python؟",
+     "options": [
+      "None",
+      "0",
+      "False"
+     ],
+     "answer": 0,
+     "why": "None."
+    },
+    {
+     "q": "وش تسوي ensure_ascii=False؟",
+     "options": [
+      "تحافظ على الحروف العربية في الناتج",
+      "تحذف الرموز",
+      "تشفّر النص"
+     ],
+     "answer": 0,
+     "why": "بدون \\u escapes."
+    },
+    {
+     "q": "الاقتباس الصحيح في JSON؟",
+     "options": [
+      "مزدوج",
+      "مفرد",
+      "أي نوع"
+     ],
+     "answer": 0,
+     "why": "مزدوج فقط."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`json.loads/dumps` للنص و`json.load/dump` للملفات.",
+    "true/null تصير True/None.",
+    "تحقق من البيانات الخارجية قبل الاعتماد عليها."
+   ]
+  }
+ ]
+}

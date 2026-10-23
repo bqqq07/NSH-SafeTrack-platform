@@ -1,0 +1,240 @@
+{
+ "title_ar": "ملفات CSV",
+ "title_en": "CSV",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "📊",
+   "goal": "تقرأ وتكتب جداول [[csv]] بوحدة `csv` بدل تقسيم الأسطر يدوياً."
+  },
+  {
+   "type": "text",
+   "title": "جدول في ملف نصي",
+   "body": [
+    "ملف [[csv]] كل سطر فيه صف، والقيم مفصولة بفاصلة، والسطر الأول غالباً أسماء الأعمدة.",
+    "نستورد الوحدة: `import csv` ثم `csv.reader(f)` يعطي كل صف كقائمة.",
+    "ليش لا نكتفي بـ `split(\",\")`؟ لأن القيمة قد تحتوي فاصلة داخل علامات اقتباس: `\"الرياض, السعودية\"`، والوحدة تعرف تتعامل معها."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "افتح ملفات csv بـ `newline=\"\"` كما توصي الوثائق.",
+   "code": "import csv\n\nwith open(\"users.csv\", \"w\", encoding=\"utf-8\", newline=\"\") as f:\n    f.write(\"name,age\\nsara,25\\n\")\nwith open(\"users.csv\", encoding=\"utf-8\", newline=\"\") as f:\n    for row in csv.reader(f):\n        print(row)"
+  },
+  {
+   "type": "text",
+   "title": "DictReader والكتابة",
+   "body": [
+    "`csv.DictReader(f)` يستخدم السطر الأول كأسماء حقول فيعطي كل صف **قاموساً**: `row[\"name\"]`.",
+    "للكتابة: `w = csv.writer(f)` ثم `w.writerow([...])`.",
+    "القيم كلها تأتي نصوصاً، فحوّل الأرقام بـ `int()`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "DictReader يخلي الكود يقرأ كأنه جدول بأسماء أعمدة.",
+   "code": "import csv\n\nwith open(\"u.csv\", \"w\", encoding=\"utf-8\", newline=\"\") as f:\n    w = csv.writer(f)\n    w.writerow([\"name\", \"age\"])\n    w.writerow([\"ali\", 30])\nwith open(\"u.csv\", encoding=\"utf-8\", newline=\"\") as f:\n    for row in csv.DictReader(f):\n        print(row[\"name\"], row[\"age\"])"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "csv",
+    "parsing"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "import csv\nimport io\nrows = list(csv.reader(io.StringIO(\"a,b\\n1,2\\n\")))\nprint(rows[1])\n",
+   "options": [
+    "['1', '2']",
+    "[1, 2]",
+    "['a', 'b']"
+   ],
+   "answer": 0,
+   "why": "الصف الثاني قائمة نصوص (القيم دائماً نصوص)."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): اقتباس",
+   "code": "import csv\nimport io\nrow = next(csv.reader(io.StringIO('x,\"y,z\"\\n')))\nprint(len(row))\n",
+   "options": [
+    "2",
+    "3",
+    "1"
+   ],
+   "answer": 0,
+   "why": "الفاصلة داخل الاقتباس جزء من القيمة، فالصف قيمتان."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: DictReader",
+   "code": "import csv\nimport io\ndata = io.StringIO(\"name,age\\nali,30\\n\")\nfor row in csv.____(data):\n    print(row[\"name\"])\n",
+   "blanks": [
+    {
+     "answer": "DictReader"
+    }
+   ],
+   "expect_stdout": "ali",
+   "show_output": true,
+   "bank": [
+    "DictReader",
+    "reader",
+    "writer",
+    "DictWriter"
+   ],
+   "intro": "وش الكلاس اللي يعطي كل صف قاموساً؟",
+   "explain": "`DictReader` يستخدم الصف الأول أسماء حقول."
+  },
+  {
+   "type": "code",
+   "title": "عدد الصفوف",
+   "instructions": [
+    "`users.csv` فيه جدول (مع صف العناوين). اطبع **عدد المستخدمين** (بدون صف العناوين)."
+   ],
+   "starter": "# اكتب كودك هنا\nimport csv\n",
+   "tests": [
+    {
+     "expect_stdout": "3"
+    }
+   ],
+   "solution": "import csv\nwith open(\"users.csv\", encoding=\"utf-8\", newline=\"\") as f:\n    rows = list(csv.DictReader(f))\nprint(len(rows))\n",
+   "hints": [
+    "`DictReader` يتخطى صف العناوين."
+   ],
+   "files": {
+    "users.csv": "name,role\nsara,admin\nali,user\nnora,user\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "مجموع عمود",
+   "instructions": [
+    "`sales.csv` فيه الأعمدة `item,price`. اطبع **مجموع الأسعار**."
+   ],
+   "starter": "# اكتب كودك هنا\nimport csv\n",
+   "tests": [
+    {
+     "expect_stdout": "60"
+    }
+   ],
+   "solution": "import csv\ntotal = 0\nwith open(\"sales.csv\", encoding=\"utf-8\", newline=\"\") as f:\n    for row in csv.DictReader(f):\n        total = total + int(row[\"price\"])\nprint(total)\n",
+   "hints": [
+    "حوّل `row[\"price\"]` بـ `int`."
+   ],
+   "files": {
+    "sales.csv": "item,price\ntea,10\ncake,30\njuice,20\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "المشرفون فقط",
+   "instructions": [
+    "من `users.csv` اطبع أسماء من دورهم `admin` (كل اسم في سطر)."
+   ],
+   "starter": "# اكتب كودك هنا\nimport csv\n",
+   "tests": [
+    {
+     "expect_stdout": "sara\nnora"
+    }
+   ],
+   "solution": "import csv\nwith open(\"users.csv\", encoding=\"utf-8\", newline=\"\") as f:\n    for row in csv.DictReader(f):\n        if row[\"role\"] == \"admin\":\n            print(row[\"name\"])\n",
+   "hints": [
+    "افحص `row[\"role\"]`."
+   ],
+   "files": {
+    "users.csv": "name,role\nsara,admin\nali,user\nnora,admin\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "اكتب CSV",
+   "instructions": [
+    "اكتب في `out.csv` الصفوف: `[\"ip\",\"hits\"]` ثم `[\"1.1.1.1\", 5]`، ثم اقرأ الملف كنص واطبعه."
+   ],
+   "starter": "# اكتب كودك هنا\nimport csv\n",
+   "tests": [
+    {
+     "expect_stdout": "ip,hits\n1.1.1.1,5"
+    }
+   ],
+   "solution": "import csv\nwith open(\"out.csv\", \"w\", encoding=\"utf-8\", newline=\"\") as f:\n    w = csv.writer(f)\n    w.writerow([\"ip\", \"hits\"])\n    w.writerow([\"1.1.1.1\", 5])\nwith open(\"out.csv\", encoding=\"utf-8\", newline=\"\") as f:\n    print(f.read().strip())\n",
+   "hints": [
+    "`csv.writer(f)` ثم `writerow`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: النص مو رقم",
+   "instructions": [
+    "الكود يجمع نصوصاً بدل أرقام فيعطي `TypeError`. أصلحه ليطبع `30`."
+   ],
+   "starter": "import csv\ntotal = 0\nwith open(\"n.csv\", encoding=\"utf-8\", newline=\"\") as f:\n    for row in csv.DictReader(f):\n        total = total + row[\"v\"]\nprint(total)\n",
+   "tests": [
+    {
+     "expect_stdout": "30"
+    }
+   ],
+   "solution": "import csv\ntotal = 0\nwith open(\"n.csv\", encoding=\"utf-8\", newline=\"\") as f:\n    for row in csv.DictReader(f):\n        total = total + int(row[\"v\"])\nprint(total)\n",
+   "hints": [
+    "حوّل بـ `int(...)`."
+   ],
+   "variant": "bugfix",
+   "files": {
+    "n.csv": "v\n10\n20\n"
+   }
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نستخدم وحدة csv؟",
+     "options": [
+      "تتعامل مع الفواصل داخل الاقتباس",
+      "تسرع الإنترنت",
+      "تشفّر الملف"
+     ],
+     "answer": 0,
+     "why": "split يفشل مع الاقتباس."
+    },
+    {
+     "q": "وش يعطي DictReader لكل صف؟",
+     "options": [
+      "قاموساً بأسماء الأعمدة",
+      "قائمة فقط",
+      "رقماً"
+     ],
+     "answer": 0,
+     "why": "مفاتيحه من الصف الأول."
+    },
+    {
+     "q": "ما نوع القيم المقروءة من csv؟",
+     "options": [
+      "نصوص",
+      "أرقام",
+      "منطقية"
+     ],
+     "answer": 0,
+     "why": "نحول يدوياً."
+    },
+    {
+     "q": "وش تكتب `csv.writer(f).writerow(...)`؟",
+     "options": [
+      "صفاً واحداً",
+      "الملف كله",
+      "عموداً"
+     ],
+     "answer": 0,
+     "why": "صف واحد في كل نداء."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`csv.reader` لقوائم، و`DictReader` لقواميس.",
+    "القيم نصوص دائماً؛ حوّلها.",
+    "`csv.writer` + `writerow` للكتابة."
+   ]
+  }
+ ]
+}

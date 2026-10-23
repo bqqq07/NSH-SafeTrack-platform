@@ -834,49 +834,49 @@
      "id": "m15.1",
      "title_ar": "قراءة الملفات",
      "title_en": "Reading Files",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m15.2",
      "title_ar": "الكتابة في الملفات",
      "title_en": "Writing Files",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m15.3",
      "title_ar": "معالجة الأسطر",
      "title_en": "Processing Lines",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m15.4",
      "title_ar": "الترميز UTF-8 والعربي",
      "title_en": "Encoding & Arabic",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m15.5",
      "title_ar": "ملفات CSV",
      "title_en": "CSV",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m15.6",
      "title_ar": "ملفات JSON",
      "title_en": "JSON",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m15.7",
      "title_ar": "التعابير النمطية Regex",
      "title_en": "Regular Expressions",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m15.8",
      "title_ar": "مشروع: محلل سجلات",
      "title_en": "Project: Log Parser",
-     "ready": false
+     "ready": true
     }
    ]
   },

@@ -1,0 +1,235 @@
+{
+ "title_ar": "الكتابة في الملفات",
+ "title_en": "Writing Files",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "💾",
+   "goal": "تحفظ نتائج برنامجك في ملف بأوضاع الكتابة `w` و`a`."
+  },
+  {
+   "type": "text",
+   "title": "أوضاع الفتح",
+   "body": [
+    "`\"r\"` قراءة (الافتراضي)، `\"w\"` كتابة وتمسح المحتوى القديم، `\"a\"` إضافة في آخر الملف.",
+    "`f.write(text)` تكتب نصاً ولا تضيف سطراً جديداً تلقائياً؛ أضف `\\n` بنفسك.",
+    "الوضع `\"w\"` ينشئ الملف لو ما كان موجوداً."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "warn",
+   "note": "`\"w\"` تمسح الملف الموجود! استخدم `\"a\"` لو تبغى تحافظ على القديم.",
+   "code": "with open(\"out.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"سطر 1\\n\")\n    f.write(\"سطر 2\\n\")\nwith open(\"out.txt\", encoding=\"utf-8\") as f:\n    print(f.read())"
+  },
+  {
+   "type": "text",
+   "title": "كتابة قائمة",
+   "body": [
+    "نكتب عدة أسطر بحلقة: `for item in items: f.write(item + \"\\n\")`.",
+    "`print(x, file=f)` تكتب في الملف وتضيف السطر الجديد تلقائياً.",
+    "اقرأ الملف بعد الكتابة لتتأكد من النتيجة."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "الأفضل دائماً حدد encoding=\"utf-8\" عند الكتابة والقراءة.",
+   "code": "ips = [\"1.1.1.1\", \"2.2.2.2\"]\nwith open(\"ips.txt\", \"w\", encoding=\"utf-8\") as f:\n    for ip in ips:\n        print(ip, file=f)\nwith open(\"ips.txt\", encoding=\"utf-8\") as f:\n    print(f.read().split())"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "file",
+    "encoding"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): w تمسح",
+   "code": "with open(\"a.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"one\")\nwith open(\"a.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"two\")\nwith open(\"a.txt\", encoding=\"utf-8\") as f:\n    print(f.read())\n",
+   "options": [
+    "two",
+    "one",
+    "onetwo",
+    "two\none"
+   ],
+   "answer": 0,
+   "why": "الوضع w مسح المحتوى القديم فبقي two."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): a تضيف",
+   "code": "with open(\"a.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"one\")\nwith open(\"a.txt\", \"a\", encoding=\"utf-8\") as f:\n    f.write(\"two\")\nwith open(\"a.txt\", encoding=\"utf-8\") as f:\n    print(f.read())\n",
+   "options": [
+    "onetwo",
+    "two",
+    "one",
+    "one two"
+   ],
+   "answer": 0,
+   "why": "الوضع a أضاف في الآخر بدون مسح."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الوضع",
+   "code": "with open(\"log.txt\", \"____\", encoding=\"utf-8\") as f:\n    f.write(\"x\\n\")\nwith open(\"log.txt\", encoding=\"utf-8\") as f:\n    print(f.read().strip())\n",
+   "blanks": [
+    {
+     "answer": [
+      "w",
+      "a"
+     ]
+    }
+   ],
+   "expect_stdout": "x",
+   "show_output": true,
+   "bank": [
+    "w",
+    "r",
+    "a",
+    "x"
+   ],
+   "intro": "أي وضع يكتب (ينفع هنا w أو a)؟",
+   "explain": "الملف جديد، فكل من w وa ينشئه ويكتب."
+  },
+  {
+   "type": "code",
+   "title": "احفظ رسالة",
+   "instructions": [
+    "اكتب النص `تم الحفظ` في ملف `msg.txt` ثم اقرأه واطبعه."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "تم الحفظ"
+    }
+   ],
+   "solution": "with open(\"msg.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"تم الحفظ\")\nwith open(\"msg.txt\", encoding=\"utf-8\") as f:\n    print(f.read())\n",
+   "hints": [
+    "افتح بـ `\"w\"` واكتب.",
+    "ثم افتح للقراءة."
+   ],
+   "checks": [
+    {
+     "regex": "[\"\\']w[\"\\']",
+     "msg": "استخدم وضع الكتابة w"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "اكتب قائمة أسطر",
+   "instructions": [
+    "اكتب عناصر القائمة `ports` كل واحد في سطر داخل `ports.txt`، ثم اقرأ الملف واطبع **عدد الأسطر**."
+   ],
+   "starter": "ports = [\"22\", \"80\", \"443\"]\n",
+   "tests": [
+    {
+     "expect_stdout": "3"
+    }
+   ],
+   "solution": "ports = [\"22\", \"80\", \"443\"]\nwith open(\"ports.txt\", \"w\", encoding=\"utf-8\") as f:\n    for p in ports:\n        f.write(p + \"\\n\")\nwith open(\"ports.txt\", encoding=\"utf-8\") as f:\n    print(len(f.readlines()))\n",
+   "hints": [
+    "حلقة وفي كل مرة `write(p + \"\\n\")`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "سجل يتراكم",
+   "instructions": [
+    "الملف `audit.txt` فيه سطر قديم. أضف له سطراً جديداً `login ok` **بدون مسح القديم**، ثم اطبع محتوى الملف كاملاً."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "start\nlogin ok"
+    }
+   ],
+   "solution": "with open(\"audit.txt\", \"a\", encoding=\"utf-8\") as f:\n    f.write(\"login ok\\n\")\nwith open(\"audit.txt\", encoding=\"utf-8\") as f:\n    print(f.read().strip())\n",
+   "hints": [
+    "استخدم وضع `\"a\"`."
+   ],
+   "checks": [
+    {
+     "regex": "[\"\\']a[\"\\']",
+     "msg": "استخدم وضع الإضافة a"
+    }
+   ],
+   "files": {
+    "audit.txt": "start\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "أصلح: المسح بالغلط",
+   "instructions": [
+    "الكود يمسح السجل القديم بدل ما يضيف عليه. أصلحه ليطبع `old\nnew`."
+   ],
+   "starter": "with open(\"l.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"new\\n\")\nwith open(\"l.txt\", encoding=\"utf-8\") as f:\n    print(f.read().strip())\n",
+   "tests": [
+    {
+     "expect_stdout": "old\nnew"
+    }
+   ],
+   "solution": "with open(\"l.txt\", \"a\", encoding=\"utf-8\") as f:\n    f.write(\"new\\n\")\nwith open(\"l.txt\", encoding=\"utf-8\") as f:\n    print(f.read().strip())\n",
+   "hints": [
+    "غيّر الوضع من `w` إلى `a`."
+   ],
+   "variant": "bugfix",
+   "files": {
+    "l.txt": "old\n"
+   }
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يسوي الوضع \"w\"؟",
+     "options": [
+      "يكتب ويمسح القديم",
+      "يضيف في الآخر",
+      "يقرأ فقط"
+     ],
+     "answer": 0,
+     "why": "يمسح المحتوى."
+    },
+    {
+     "q": "وش يسوي الوضع \"a\"؟",
+     "options": [
+      "يضيف في آخر الملف",
+      "يمسح الملف",
+      "يقرأ"
+     ],
+     "answer": 0,
+     "why": "append."
+    },
+    {
+     "q": "هل write تضيف سطراً جديداً تلقائياً؟",
+     "options": [
+      "لا، نضيف \\n",
+      "نعم دائماً",
+      "فقط مع print"
+     ],
+     "answer": 0,
+     "why": "نضيفه بأنفسنا."
+    },
+    {
+     "q": "وش بديل f.write مع سطر جديد تلقائي؟",
+     "options": [
+      "print(x, file=f)",
+      "f.line(x)",
+      "save(x)"
+     ],
+     "answer": 0,
+     "why": "print مع file."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`\"w\"` تكتب وتمسح، `\"a\"` تضيف، `\"r\"` تقرأ.",
+    "`write` لا تضيف سطراً جديداً تلقائياً.",
+    "حدد `encoding=\"utf-8\"`."
+   ]
+  }
+ ]
+}

@@ -1,0 +1,233 @@
+{
+ "title_ar": "قراءة الملفات",
+ "title_en": "Reading Files",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "📂",
+   "goal": "تقرأ محتوى [[file]] نصي داخل برنامجك بـ `open` و`with`."
+  },
+  {
+   "type": "text",
+   "title": "فتح ملف وقراءته",
+   "body": [
+    "نفتح الملف بـ `open(\"اسم.txt\")` ثم نقرأ بـ `read()` كل المحتوى كنص واحد.",
+    "الأفضل نستخدم `with` ([[context-manager]]): يغلق الملف تلقائياً حتى لو صار خطأ.",
+    "لو الملف غير موجود يطلع `FileNotFoundError`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "في تمارين هذا الدرس الملف يكون جاهز بالاسم الذي نعطيك.",
+   "code": "with open(\"notes.txt\", encoding=\"utf-8\") as f:\n    content = f.read()\nprint(content)"
+  },
+  {
+   "type": "text",
+   "title": "القراءة سطراً سطراً",
+   "body": [
+    "`for line in f:` تمر على الأسطر واحداً واحداً، وهي الطريقة الأنسب للملفات الكبيرة.",
+    "`f.readlines()` ترجع قائمة بكل الأسطر.",
+    "كل سطر ينتهي بـ `\\n` فنستخدم `line.strip()` لإزالته."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "بدون strip تظهر سطور فاضية بين الأسطر لأن print تضيف سطراً جديداً.",
+   "code": "with open(\"log.txt\", encoding=\"utf-8\") as f:\n    for line in f:\n        print(line.strip())"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "file",
+    "context-manager"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "with open(\"t.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"a\\nb\\n\")\nwith open(\"t.txt\", encoding=\"utf-8\") as f:\n    lines = f.readlines()\nprint(len(lines))\n",
+   "options": [
+    "2",
+    "1",
+    "3",
+    "4"
+   ],
+   "answer": 0,
+   "why": "الملف فيه سطران: a وb."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): strip",
+   "code": "with open(\"t.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"hi\\n\")\nwith open(\"t.txt\", encoding=\"utf-8\") as f:\n    line = f.read()\nprint(repr(line.strip()))\n",
+   "options": [
+    "'hi'",
+    "'hi\\n'",
+    "'hi '",
+    "hi"
+   ],
+   "answer": 0,
+   "why": "strip تزيل السطر الجديد فيبقى hi، و`repr` تعرضه بعلامات الاقتباس."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: with",
+   "code": "____ open(\"t.txt\", \"w\", encoding=\"utf-8\") as f:\n    f.write(\"ok\")\nprint(\"done\")\n",
+   "blanks": [
+    {
+     "answer": "with"
+    }
+   ],
+   "expect_stdout": "done",
+   "show_output": true,
+   "bank": [
+    "with",
+    "def",
+    "if",
+    "for"
+   ],
+   "intro": "وش الكلمة اللي تغلق الملف تلقائياً؟",
+   "explain": "`with` تضمن إغلاق الملف."
+  },
+  {
+   "type": "code",
+   "title": "اقرأ الملف",
+   "instructions": [
+    "الملف `notes.txt` موجود بجانب كودك. اقرأه كاملاً واطبع محتواه."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "أول سطر\nثاني سطر"
+    }
+   ],
+   "solution": "with open(\"notes.txt\", encoding=\"utf-8\") as f:\n    print(f.read().strip())\n",
+   "hints": [
+    "استخدم `with open(...) as f`.",
+    "اطبع `f.read()`."
+   ],
+   "checks": [
+    {
+     "regex": "open\\s*\\(",
+     "msg": "استخدم open"
+    }
+   ],
+   "files": {
+    "notes.txt": "أول سطر\nثاني سطر\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "عدّ الأسطر",
+   "instructions": [
+    "الملف `log.txt` فيه سجل. اطبع **عدد الأسطر** فيه."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "4"
+    }
+   ],
+   "solution": "with open(\"log.txt\", encoding=\"utf-8\") as f:\n    lines = f.readlines()\nprint(len(lines))\n",
+   "hints": [
+    "`readlines()` ترجع قائمة أسطر."
+   ],
+   "files": {
+    "log.txt": "a\nb\nc\nd\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "اطبع كل سطر مرقماً",
+   "instructions": [
+    "اقرأ `names.txt` واطبع كل سطر بالشكل `1: sara` (الرقم يبدأ من 1)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "1: sara\n2: khalid\n3: nora"
+    }
+   ],
+   "solution": "with open(\"names.txt\", encoding=\"utf-8\") as f:\n    n = 1\n    for line in f:\n        print(str(n) + \": \" + line.strip())\n        n = n + 1\n",
+   "hints": [
+    "استخدم `strip()` لإزالة السطر الجديد.",
+    "عدّاد يبدأ من 1."
+   ],
+   "files": {
+    "names.txt": "sara\nkhalid\nnora\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "أصلح: الملف مغلق",
+   "instructions": [
+    "الكود يقرأ الملف بعد إغلاقه فيعطي `ValueError`. انقل القراءة داخل `with`."
+   ],
+   "starter": "with open(\"a.txt\", encoding=\"utf-8\") as f:\n    pass\nprint(f.read())\n",
+   "tests": [
+    {
+     "expect_stdout": "hello"
+    }
+   ],
+   "solution": "with open(\"a.txt\", encoding=\"utf-8\") as f:\n    print(f.read())\n",
+   "hints": [
+    "القراءة لازم تكون داخل كتلة `with`."
+   ],
+   "variant": "bugfix",
+   "files": {
+    "a.txt": "hello"
+   }
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نستخدم with؟",
+     "options": [
+      "تغلق الملف تلقائياً",
+      "تسرّع القراءة",
+      "تحمي بكلمة سر"
+     ],
+     "answer": 0,
+     "why": "الإغلاق التلقائي."
+    },
+    {
+     "q": "وش يرجع `f.read()`؟",
+     "options": [
+      "كل المحتوى كنص واحد",
+      "قائمة أسطر",
+      "عدد الأسطر"
+     ],
+     "answer": 0,
+     "why": "نص واحد."
+    },
+    {
+     "q": "وش يصير لو الملف غير موجود؟",
+     "options": [
+      "FileNotFoundError",
+      "يُنشأ تلقائياً",
+      "يرجع None"
+     ],
+     "answer": 0,
+     "why": "خطأ عدم وجود الملف."
+    },
+    {
+     "q": "ليش نستخدم strip على السطر؟",
+     "options": [
+      "لإزالة السطر الجديد في آخره",
+      "لحذف الحروف",
+      "لتحويله لرقم"
+     ],
+     "answer": 0,
+     "why": "كل سطر ينتهي بـ \\n."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`with open(...) as f:` تفتح الملف وتغلقه تلقائياً.",
+    "`read()` كل النص، و`for line in f` سطراً سطراً.",
+    "`strip()` تزيل السطر الجديد."
+   ]
+  }
+ ]
+}
