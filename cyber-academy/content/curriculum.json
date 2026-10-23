@@ -892,43 +892,43 @@
      "id": "m16.1",
      "title_ar": "الاستثناءات try/except",
      "title_en": "Exceptions",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m16.2",
      "title_ar": "رفع الأخطاء raise",
      "title_en": "Raising Errors",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m16.3",
      "title_ar": "تصحيح الأخطاء",
      "title_en": "Debugging",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m16.4",
      "title_ar": "assert والاختبارات",
      "title_en": "Assertions",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m16.5",
      "title_ar": "unittest",
      "title_en": "unittest",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m16.6",
      "title_ar": "أسلوب PEP 8",
      "title_en": "PEP 8",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m16.7",
      "title_ar": "venv و pip",
      "title_en": "venv & pip",
-     "ready": false
+     "ready": true
     }
    ]
   },

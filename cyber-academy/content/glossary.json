@@ -2301,5 +2301,68 @@
   "ar": "التحليل",
   "simple": "تحويل نص خام إلى بيانات منظمة نقدر نتعامل معها، مثل استخراج حقول سطر سجل.",
   "example": "تقسيم سطر سجل إلى IP ووقت وحالة."
+ },
+ "exception": {
+  "en": "Exception",
+  "say": "إكسبشن",
+  "ar": "الاستثناء",
+  "simple": "خطأ يحصل أثناء التشغيل ويوقف البرنامج إلا إذا تعاملت معه بـ try/except.",
+  "example": "ZeroDivisionError عند القسمة على صفر."
+ },
+ "try-except": {
+  "en": "try / except",
+  "say": "تراي إكسبت",
+  "ar": "معالجة الاستثناء",
+  "simple": "نجرّب كوداً في try، ولو حصل فيه خطأ ينتقل التنفيذ لكتلة except بدل ما ينهار البرنامج.",
+  "example": "try: int(x) / except ValueError: ..."
+ },
+ "raise": {
+  "en": "raise",
+  "say": "رِيز",
+  "ar": "رفع خطأ",
+  "simple": "أمر يطلق استثناءً بنفسك لما تكتشف مدخلاً أو حالة غير صالحة.",
+  "example": "raise ValueError(\"سالب\")"
+ },
+ "assert": {
+  "en": "assert",
+  "say": "أسيرت",
+  "ar": "تأكيد",
+  "simple": "فحص سريع يرفع AssertionError لو الشرط خطأ، يستخدم في الاختبارات وفحص الافتراضات.",
+  "example": "assert add(2, 3) == 5"
+ },
+ "unit-test": {
+  "en": "Unit test",
+  "say": "يونت تست",
+  "ar": "اختبار وحدة",
+  "simple": "اختبار صغير يتأكد أن دالة وحدة تعطي النتيجة المتوقعة لمدخل معين.",
+  "example": "self.assertEqual(add(1, 2), 3)"
+ },
+ "pep8": {
+  "en": "PEP 8",
+  "say": "بيب إيت",
+  "ar": "دليل أسلوب Python",
+  "simple": "الاتفاق الرسمي على شكل كتابة كود Python: تسمية ومسافات وطول أسطر.",
+  "example": "snake_case للمتغيرات والدوال."
+ },
+ "venv": {
+  "en": "Virtual environment (venv)",
+  "say": "فيرتشوال إنفايرونمنت",
+  "ar": "البيئة الافتراضية",
+  "simple": "مجلد معزول لحزم مشروع واحد حتى لا تتعارض نسخ الحزم بين المشاريع.",
+  "example": "python -m venv .venv"
+ },
+ "pip": {
+  "en": "pip",
+  "say": "بِب",
+  "ar": "مثبّت الحزم",
+  "simple": "أداة تثبّت حزم Python من الإنترنت.",
+  "example": "pip install requests"
+ },
+ "requirements": {
+  "en": "requirements.txt",
+  "say": "ريكوايرمنتس",
+  "ar": "ملف المتطلبات",
+  "simple": "ملف يسرد حزم المشروع ونسخها ليقدر أي شخص يثبتها بأمر واحد.",
+  "example": "requests==2.32.0"
  }
 }

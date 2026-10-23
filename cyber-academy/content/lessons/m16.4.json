@@ -1,0 +1,246 @@
+{
+ "title_ar": "assert والاختبارات",
+ "title_en": "Assertions",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "✅",
+   "goal": "تتأكد أن دوالك تعطي النتائج المتوقعة بـ [[assert]] قبل ما تثق فيها."
+  },
+  {
+   "type": "text",
+   "title": "تأكيد سريع",
+   "body": [
+    "`assert شرط` لا تسوي شيئاً لو الشرط صحيح، وترفع `AssertionError` لو خطأ. ونقدر نضيف رسالة: `assert x > 0, \"لازم موجب\"`.",
+    "اكتب اختباراً بسيطاً: استدع دالتك بمدخلات معروفة وقارن بالنتيجة المتوقعة.",
+    "قاعدة: **اكتب الاختبار الذي يفشل أولاً** ثم الكود الذي ينجحه (فكرة TDD)."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "لو فشل assert يظهر السطر الذي فشل مباشرة.",
+   "code": "def add(a, b):\n    return a + b\n\nassert add(2, 3) == 5\nassert add(-1, 1) == 0\nprint(\"كل الاختبارات نجحت\")"
+  },
+  {
+   "type": "text",
+   "title": "ماذا نختبر؟",
+   "body": [
+    "الحالة العادية، والحالات الحدية (صفر، فاضي، سالب)، والأخطاء المتوقعة.",
+    "اختبار الخطأ المتوقع: نمسكه ونتأكد أنه انرفع.",
+    "الاختبارات الجيدة صغيرة ومستقلة وأسماؤها واضحة."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "`assert` تُعطّل لو شغّلت Python بخيار -O؛ لا تعتمد عليها للتحقق من مدخلات المستخدم.",
+   "code": "def safe_int(s):\n    try:\n        return int(s)\n    except ValueError:\n        return None\n\nassert safe_int(\"5\") == 5\nassert safe_int(\"x\") is None\nassert safe_int(\"\") is None\nprint(\"ok\")"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "assert",
+    "unit-test"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "assert 1 + 1 == 2\nprint(\"ok\")\n",
+   "options": [
+    "ok",
+    "AssertionError",
+    "2"
+   ],
+   "answer": 0,
+   "why": "الشرط صحيح فيكمل."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): فشل",
+   "code": "try:\n    assert 1 + 1 == 3\nexcept AssertionError:\n    print(\"failed\")\n",
+   "options": [
+    "failed",
+    "ok",
+    "2"
+   ],
+   "answer": 0,
+   "why": "الشرط خطأ فيُرفع AssertionError وننمسكه."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: التأكيد",
+   "code": "def sq(n):\n    return n * n\n____ sq(3) == 9\nprint(\"ok\")\n",
+   "blanks": [
+    {
+     "answer": "assert"
+    }
+   ],
+   "expect_stdout": "ok",
+   "show_output": true,
+   "bank": [
+    "assert",
+    "check",
+    "test",
+    "if"
+   ],
+   "intro": "وش الكلمة اللي تتحقق من الشرط؟",
+   "explain": "`assert`."
+  },
+  {
+   "type": "code",
+   "title": "اختبر دالة",
+   "instructions": [
+    "الدالة `is_even(n)` معرفة. اكتب بعدها ثلاث عبارات `assert`: `is_even(2)` صحيحة، `is_even(3)` خطأ، `is_even(0)` صحيحة. ثم اطبع `passed`."
+   ],
+   "starter": "def is_even(n):\n    return n % 2 == 0\n",
+   "tests": [
+    {
+     "expect_stdout": "passed"
+    }
+   ],
+   "solution": "def is_even(n):\n    return n % 2 == 0\n\nassert is_even(2)\nassert not is_even(3)\nassert is_even(0)\nprint(\"passed\")\n",
+   "hints": [
+    "`assert not is_even(3)` للحالة الخاطئة."
+   ],
+   "checks": [
+    {
+     "regex": "assert\\b[\\s\\S]*assert\\b[\\s\\S]*assert\\b",
+     "msg": "اكتب ثلاث عبارات assert"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "اكتب الدالة",
+   "instructions": [
+    "اختباراتك جاهزة. عرّف `clamp(x, low, high)` ترجع `x` لو بين الحدين وإلا الحد الأقرب."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "clamp(5, 0, 10)",
+     "expect": 5
+    },
+    {
+     "call": "clamp(-3, 0, 10)",
+     "expect": 0
+    },
+    {
+     "call": "clamp(99, 0, 10)",
+     "expect": 10
+    },
+    {
+     "call": "clamp(10, 0, 10)",
+     "expect": 10,
+     "hidden": true
+    }
+   ],
+   "solution": "def clamp(x, low, high):\n    if x < low:\n        return low\n    if x > high:\n        return high\n    return x\n",
+   "hints": [
+    "قارن مع الحدين."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: الاختبار يكشف",
+   "instructions": [
+    "الاختبار `assert double(4) == 8` يفشل. أصلح الدالة (لا تعدّل الاختبار) ليطبع `ok`."
+   ],
+   "starter": "def double(n):\n    return n + 2\n\nassert double(4) == 8\nprint(\"ok\")\n",
+   "tests": [
+    {
+     "expect_stdout": "ok"
+    }
+   ],
+   "solution": "def double(n):\n    return n * 2\n\nassert double(4) == 8\nprint(\"ok\")\n",
+   "hints": [
+    "المضاعفة ضرب في 2."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "code",
+   "title": "الحالات الحدية",
+   "instructions": [
+    "عرّف `first_word(s)` ترجع أول كلمة في النص، أو `\"\"` لو النص فاضي أو كله مسافات."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "first_word(\"hello world\")",
+     "expect": "hello"
+    },
+    {
+     "call": "first_word(\"  hi \")",
+     "expect": "hi"
+    },
+    {
+     "call": "first_word(\"\")",
+     "expect": ""
+    },
+    {
+     "call": "first_word(\"   \")",
+     "expect": "",
+     "hidden": true
+    }
+   ],
+   "solution": "def first_word(s):\n    parts = s.split()\n    return parts[0] if parts else \"\"\n",
+   "hints": [
+    "`split()` تتجاهل المسافات.",
+    "تحقق من أن القائمة ليست فاضية."
+   ]
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يصير لو assert شرطها خطأ؟",
+     "options": [
+      "يُرفع AssertionError",
+      "يطبع False",
+      "لا شيء"
+     ],
+     "answer": 0,
+     "why": "يفشل الاختبار."
+    },
+    {
+     "q": "وش الحالات الحدية؟",
+     "options": [
+      "قيم على الأطراف مثل صفر وفاضي",
+      "قيم عشوائية فقط",
+      "الأخطاء الإملائية"
+     ],
+     "answer": 0,
+     "why": "غالباً فيها الأخطاء."
+    },
+    {
+     "q": "هل نعتمد على assert لفحص مدخلات المستخدم؟",
+     "options": [
+      "لا، قد تُعطّل",
+      "نعم دائماً",
+      "فقط للأرقام"
+     ],
+     "answer": 0,
+     "why": "استخدم raise و if."
+    },
+    {
+     "q": "وش الأفضل لما يفشل اختبار؟",
+     "options": [
+      "نصلح الكود لا الاختبار الصحيح",
+      "نحذف الاختبار",
+      "نتجاهله"
+     ],
+     "answer": 0,
+     "why": "الاختبار يمثل المطلوب."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`assert` تفحص الشرط وترفع AssertionError لو خطأ.",
+    "اختبر الحالة العادية والحدية.",
+    "لا تحذف الاختبار الصحيح لتنجح."
+   ]
+  }
+ ]
+}

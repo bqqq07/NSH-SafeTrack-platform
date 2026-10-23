@@ -1,0 +1,324 @@
+{
+ "title_ar": "الاستثناءات try/except",
+ "title_en": "Exceptions",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🛟",
+   "goal": "تمسك الأخطاء المتوقعة بـ [[try-except]] وتكمل البرنامج بدل ما ينهار."
+  },
+  {
+   "type": "text",
+   "title": "جرّب وإلا",
+   "body": [
+    "لما يحصل خطأ وقت التشغيل يُرفع [[exception]] (استثناء) ويتوقف البرنامج.",
+    "نحط الكود الخطر في `try`، ولو صار الخطأ ينتقل التنفيذ لكتلة `except`: `except ValueError:`.",
+    "حدد **نوع** الخطأ دائماً؛ `except:` العامة تخفي أخطاء ما توقعتها."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "الأخطاء الشائعة: ValueError, TypeError, KeyError, IndexError, ZeroDivisionError, FileNotFoundError.",
+   "code": "text = \"abc\"\ntry:\n    n = int(text)\n    print(n)\nexcept ValueError:\n    print(\"مو رقم\")\nprint(\"كمّلنا\")"
+  },
+  {
+   "type": "text",
+   "title": "else و finally والرسالة",
+   "body": [
+    "`as e` تعطيك كائن الخطأ: `except ValueError as e: print(e)`.",
+    "`else` تنفّذ لو ما صار خطأ، و`finally` تنفّذ **دائماً** (مفيدة للتنظيف).",
+    "نقدر نمسك أكثر من نوع: `except (KeyError, IndexError):`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "لا تمسك خطأ ثم تتجاهله بصمت: سجّله أو أبلغ عنه على الأقل.",
+   "code": "try:\n    x = 10 / 2\nexcept ZeroDivisionError:\n    print(\"صفر\")\nelse:\n    print(\"تمام\", x)\nfinally:\n    print(\"انتهى\")"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "exception",
+    "try-except",
+    "traceback"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "try:\n    print(int(\"x\"))\nexcept ValueError:\n    print(\"bad\")\nprint(\"end\")\n",
+   "options": [
+    "bad\nend",
+    "bad",
+    "end"
+   ],
+   "answer": 0,
+   "why": "الخطأ انمسك فطبعنا bad ثم كمّل البرنامج بـ end."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): finally",
+   "code": "try:\n    print(\"a\")\nfinally:\n    print(\"b\")\n",
+   "options": [
+    "a\nb",
+    "a",
+    "b\na",
+    "b"
+   ],
+   "answer": 0,
+   "why": "finally تنفّذ بعد الكتلة دائماً."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): else",
+   "code": "try:\n    x = 4 / 2\nexcept ZeroDivisionError:\n    print(\"err\")\nelse:\n    print(\"ok\", x)\n",
+   "options": [
+    "ok 2.0",
+    "err",
+    "ok 2"
+   ],
+   "answer": 0,
+   "why": "ما صار خطأ فتنفذ else، والقسمة تعطي 2.0."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: نوع الخطأ",
+   "code": "try:\n    print(10 / 0)\nexcept ____:\n    print(\"صفر\")\n",
+   "blanks": [
+    {
+     "answer": "ZeroDivisionError"
+    }
+   ],
+   "expect_stdout": "صفر",
+   "show_output": true,
+   "bank": [
+    "ZeroDivisionError",
+    "ValueError",
+    "KeyError",
+    "TypeError"
+   ],
+   "intro": "وش نوع الخطأ عند القسمة على صفر؟",
+   "explain": "`ZeroDivisionError`."
+  },
+  {
+   "type": "code",
+   "title": "قراءة رقم آمنة",
+   "instructions": [
+    "اقرأ سطراً. لو هو رقم صحيح اطبعه مضروباً في 2، وإلا اطبع `رقم غير صالح`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "8",
+     "stdin": [
+      "4"
+     ]
+    },
+    {
+     "expect_stdout": "رقم غير صالح",
+     "stdin": [
+      "abc"
+     ]
+    },
+    {
+     "expect_stdout": "-6",
+     "stdin": [
+      "-3"
+     ],
+     "hidden": true
+    },
+    {
+     "expect_stdout": "رقم غير صالح",
+     "stdin": [
+      "3.5"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "text = input()\ntry:\n    n = int(text)\n    print(n * 2)\nexcept ValueError:\n    print(\"رقم غير صالح\")\n",
+   "hints": [
+    "جرّب `int(text)` داخل `try`.",
+    "امسك `ValueError`."
+   ],
+   "checks": [
+    {
+     "regex": "except\\s+ValueError",
+     "msg": "امسك ValueError تحديداً"
+    }
+   ],
+   "stdin": [
+    "4"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "قاموس بدون KeyError",
+   "instructions": [
+    "`prices = {\"tea\": 5}`. اقرأ اسم منتج واطبع سعره، أو `غير موجود` لو ما كان في القاموس (استخدم try/except)."
+   ],
+   "starter": "prices = {\"tea\": 5}\n",
+   "tests": [
+    {
+     "expect_stdout": "5",
+     "stdin": [
+      "tea"
+     ]
+    },
+    {
+     "expect_stdout": "غير موجود",
+     "stdin": [
+      "cake"
+     ]
+    },
+    {
+     "expect_stdout": "غير موجود",
+     "stdin": [
+      ""
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "prices = {\"tea\": 5}\nname = input()\ntry:\n    print(prices[name])\nexcept KeyError:\n    print(\"غير موجود\")\n",
+   "hints": [
+    "امسك `KeyError`."
+   ],
+   "checks": [
+    {
+     "regex": "try\\s*:",
+     "msg": "استخدم try/except"
+    }
+   ],
+   "stdin": [
+    "tea"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "قراءة ملف احتياطية",
+   "instructions": [
+    "حاول قراءة `missing.txt` (غير موجود). لو لم يوجد اطبع `الملف مفقود`، وفي كل الأحوال اطبع `انتهى` باستخدام `finally`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "الملف مفقود\nانتهى"
+    }
+   ],
+   "solution": "try:\n    with open(\"missing.txt\", encoding=\"utf-8\") as f:\n        print(f.read())\nexcept FileNotFoundError:\n    print(\"الملف مفقود\")\nfinally:\n    print(\"انتهى\")\n",
+   "hints": [
+    "`FileNotFoundError`",
+    "finally في الآخر."
+   ],
+   "checks": [
+    {
+     "regex": "finally",
+     "msg": "استخدم finally"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تقسيم آمن",
+   "instructions": [
+    "عرّف `safe_div(a, b)` ترجع `a / b`، أو `None` لو `b` صفر (بدون `if`)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "safe_div(10, 4)",
+     "expect": 2.5
+    },
+    {
+     "call": "safe_div(1, 0)",
+     "expect": null
+    },
+    {
+     "call": "safe_div(0, 5)",
+     "expect": 0,
+     "hidden": true
+    }
+   ],
+   "solution": "def safe_div(a, b):\n    try:\n        return a / b\n    except ZeroDivisionError:\n        return None\n",
+   "hints": [
+    "try ثم return.",
+    "امسك ZeroDivisionError."
+   ],
+   "checks": [
+    {
+     "regex": "except\\s+ZeroDivisionError",
+     "msg": "امسك ZeroDivisionError"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: النوع الخطأ",
+   "instructions": [
+    "الكود يمسك `KeyError` لكن الخطأ الفعلي من نوع آخر فينهار. أصلحه ليطبع `خطأ في الفهرس`."
+   ],
+   "starter": "items = [1, 2]\ntry:\n    print(items[5])\nexcept KeyError:\n    print(\"خطأ في الفهرس\")\n",
+   "tests": [
+    {
+     "expect_stdout": "خطأ في الفهرس"
+    }
+   ],
+   "solution": "items = [1, 2]\ntry:\n    print(items[5])\nexcept IndexError:\n    print(\"خطأ في الفهرس\")\n",
+   "hints": [
+    "القوائم ترفع `IndexError`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يصير لو صار خطأ داخل try؟",
+     "options": [
+      "ينتقل التنفيذ إلى except المناسبة",
+      "يتوقف البرنامج دائماً",
+      "يتجاهل الخطأ ويكمل داخل try"
+     ],
+     "answer": 0,
+     "why": "يقفز لكتلة except."
+    },
+    {
+     "q": "متى تنفذ finally؟",
+     "options": [
+      "دائماً",
+      "فقط عند الخطأ",
+      "فقط بدون خطأ"
+     ],
+     "answer": 0,
+     "why": "للتنظيف."
+    },
+    {
+     "q": "ليش نحدد نوع الخطأ في except؟",
+     "options": [
+      "حتى لا نخفي أخطاء غير متوقعة",
+      "لتسريع الكود",
+      "ليس مهماً"
+     ],
+     "answer": 0,
+     "why": "except العامة تخفي المشاكل."
+    },
+    {
+     "q": "وش يمسك `int(\"x\")`؟",
+     "options": [
+      "ValueError",
+      "KeyError",
+      "IndexError"
+     ],
+     "answer": 0,
+     "why": "قيمة غير صالحة للتحويل."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`try / except` تمسك الأخطاء المتوقعة وتكمل البرنامج.",
+    "`else` بدون خطأ، و`finally` دائماً.",
+    "حدد نوع الخطأ ولا تتجاهله بصمت."
+   ]
+  }
+ ]
+}

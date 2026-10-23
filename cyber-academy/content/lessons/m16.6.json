@@ -1,0 +1,228 @@
+{
+ "title_ar": "أسلوب PEP 8",
+ "title_en": "PEP 8",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🎨",
+   "goal": "تكتب كودك بالشكل المتفق عليه ([[pep8]]) ليسهل على غيرك (ونفسك) قراءته."
+  },
+  {
+   "type": "text",
+   "title": "قواعد التسمية والمسافات",
+   "body": [
+    "**التسمية:** `snake_case` للمتغيرات والدوال (`failed_logins`)، و`PascalCase` للأصناف (`AuthError`)، و`UPPER_CASE` للثوابت (`MAX_TRIES`).",
+    "اسم يعبر عن المعنى: `failed_logins` أفضل من `x`. وتجنب الأسماء الغامضة مثل `l` و`O`.",
+    "4 مسافات للإزاحة، ومسافة حول العمليات: `a = b + 1`، وسطران فارغان بين الدوال، وأسطر لا تتجاوز ~79 حرفاً."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "الأدوات: `black` تنسق تلقائياً، و`ruff`/`flake8` تفحص المخالفات.",
+   "code": "MAX_TRIES = 3\n\ndef count_failed(logins):\n    failed = 0\n    for entry in logins:\n        if entry == \"fail\":\n            failed = failed + 1\n    return failed\n\nprint(count_failed([\"ok\", \"fail\"]), MAX_TRIES)"
+  },
+  {
+   "type": "text",
+   "title": "التعليقات والبساطة",
+   "body": [
+    "علّق على **لماذا** مو **ماذا**: `# نتجاهل الأسطر الفاضية لأن السجل فيه فواصل` أفضل من `# نمر على الأسطر`.",
+    "لا تكرر نفس الكود؛ استخرج دالة. ودالة قصيرة بمهمة واحدة.",
+    "الأسماء المتسقة تفيدك أكثر من الاختصارات الذكية."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "الكود يُقرأ أكثر مما يُكتب.",
+   "code": "# سيئ\ndef f(l):\n    t=0\n    for x in l:t=t+x\n    return t\n\n# أفضل\ndef total(numbers):\n    result = 0\n    for number in numbers:\n        result = result + number\n    return result\n\nprint(total([1, 2]))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "pep8"
+   ]
+  },
+  {
+   "type": "match",
+   "title": "طابق نوع الاسم بشكله",
+   "pairs": [
+    [
+     "متغير أو دالة",
+     "failed_logins"
+    ],
+    [
+     "صنف (Class)",
+     "AuthError"
+    ],
+    [
+     "ثابت",
+     "MAX_TRIES"
+    ],
+    [
+     "وحدة (ملف)",
+     "log_parser.py"
+    ]
+   ],
+   "why": "snake_case للمتغيرات والدوال والملفات، PascalCase للأصناف، UPPER_CASE للثوابت."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع: نفس النتيجة",
+   "code": "def t(l):\n    r=0\n    for x in l:r=r+x\n    return r\nprint(t([1, 2, 3]))\n",
+   "options": [
+    "6",
+    "0",
+    "3"
+   ],
+   "answer": 0,
+   "why": "الكود صحيح لكنه سيئ الشكل؛ PEP 8 عن القراءة لا التشغيل."
+  },
+  {
+   "type": "code",
+   "title": "أعد التسمية",
+   "instructions": [
+    "الدالة تعمل لكن أسماءها غامضة. أعد كتابتها بأسماء واضحة: الدالة `average` والمعامل `numbers`، ثم اطبع `average([2, 4])` ← `3.0`."
+   ],
+   "starter": "def f(l):\n    t = 0\n    for x in l:\n        t = t + x\n    return t / len(l)\n",
+   "tests": [
+    {
+     "expect_stdout": "3.0"
+    }
+   ],
+   "solution": "def average(numbers):\n    total = 0\n    for number in numbers:\n        total = total + number\n    return total / len(numbers)\n\nprint(average([2, 4]))\n",
+   "hints": [
+    "غيّر اسم الدالة والمعامل.",
+    "ثم اطبع النتيجة."
+   ],
+   "checks": [
+    {
+     "regex": "def\\s+average\\s*\\(\\s*numbers\\s*\\)",
+     "msg": "سمّ الدالة average ومعاملها numbers"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "ثابت بدل رقم سحري",
+   "instructions": [
+    "الكود يستخدم الرقم `3` مباشرة. عرّف ثابتاً `MAX_TRIES = 3` واستخدمه في الشرط. الناتج: `قفل` عند 3 فأكثر."
+   ],
+   "starter": "fails = int(input())\nif fails >= 3:\n    print(\"قفل\")\nelse:\n    print(\"سليم\")\n",
+   "tests": [
+    {
+     "expect_stdout": "قفل",
+     "stdin": [
+      "3"
+     ]
+    },
+    {
+     "expect_stdout": "سليم",
+     "stdin": [
+      "2"
+     ]
+    },
+    {
+     "expect_stdout": "قفل",
+     "stdin": [
+      "7"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "MAX_TRIES = 3\nfails = int(input())\nif fails >= MAX_TRIES:\n    print(\"قفل\")\nelse:\n    print(\"سليم\")\n",
+   "hints": [
+    "عرّف الثابت في الأعلى.",
+    "استبدل 3 به."
+   ],
+   "checks": [
+    {
+     "regex": "MAX_TRIES\\s*=\\s*3",
+     "msg": "عرّف MAX_TRIES = 3"
+    },
+    {
+     "regex": ">=\\s*MAX_TRIES",
+     "msg": "استخدم MAX_TRIES في الشرط"
+    }
+   ],
+   "stdin": [
+    "3"
+   ],
+   "allow_starter_pass": true
+  },
+  {
+   "type": "code",
+   "title": "أزل التكرار",
+   "instructions": [
+    "الكود يكرر نفس الأسطر. اكتب دالة `banner(text)` ترجع `*** text ***` واستخدمها مرتين: `banner(\"a\")` و`banner(\"b\")` مطبوعين."
+   ],
+   "starter": "print(\"*** a ***\")\nprint(\"*** b ***\")\n",
+   "tests": [
+    {
+     "expect_stdout": "*** a ***\n*** b ***"
+    }
+   ],
+   "solution": "def banner(text):\n    return \"*** \" + text + \" ***\"\n\nprint(banner(\"a\"))\nprint(banner(\"b\"))\n",
+   "hints": [
+    "اجعل النص معاملاً."
+   ],
+   "checks": [
+    {
+     "regex": "def\\s+banner",
+     "msg": "عرّف banner"
+    }
+   ],
+   "allow_starter_pass": true
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "أي أسلوب تسمية للمتغيرات والدوال؟",
+     "options": [
+      "snake_case",
+      "PascalCase",
+      "UPPER_CASE"
+     ],
+     "answer": 0,
+     "why": "مثل failed_logins."
+    },
+    {
+     "q": "أي أسلوب للأصناف؟",
+     "options": [
+      "PascalCase",
+      "snake_case",
+      "kebab-case"
+     ],
+     "answer": 0,
+     "why": "مثل AuthError."
+    },
+    {
+     "q": "كم مسافة للإزاحة في PEP 8؟",
+     "options": [
+      "4",
+      "2",
+      "8"
+     ],
+     "answer": 0,
+     "why": "أربع مسافات."
+    },
+    {
+     "q": "على وش نعلّق؟",
+     "options": [
+      "على لماذا فعلنا الشيء",
+      "على كل سطر ماذا يفعل",
+      "لا نعلّق"
+     ],
+     "answer": 0,
+     "why": "الكود يوضح ماذا."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "snake_case للدوال والمتغيرات، PascalCase للأصناف، UPPER_CASE للثوابت.",
+    "أسماء واضحة وإزاحة 4 مسافات.",
+    "علّق على السبب، وأزل التكرار بدوال."
+   ]
+  }
+ ]
+}

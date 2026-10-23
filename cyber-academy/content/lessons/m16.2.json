@@ -1,0 +1,272 @@
+{
+ "title_ar": "رفع الأخطاء raise",
+ "title_en": "Raising Errors",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🚨",
+   "goal": "تعلن عن مدخل غير صالح بنفسك بـ [[raise]] بدل ما تتركه يكمل ويخرب النتيجة."
+  },
+  {
+   "type": "text",
+   "title": "ارفع الخطأ بنفسك",
+   "body": [
+    "لو دالتك استقبلت قيمة غير صالحة (سن سالب مثلاً) فالأفضل ترفع خطأ واضحاً: `raise ValueError(\"السن لا يكون سالباً\")`.",
+    "من يستدعي الدالة يمسكه بـ `try/except` ويقرر وش يسوي.",
+    "ارفع النوع المناسب: `ValueError` لقيمة سيئة، `TypeError` لنوع خطأ، `KeyError` لمفتاح ناقص."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "الفشل المبكر والواضح أفضل من نتيجة خاطئة صامتة.",
+   "code": "def set_age(age):\n    if age < 0:\n        raise ValueError(\"السن لا يكون سالباً\")\n    return age\n\ntry:\n    set_age(-5)\nexcept ValueError as e:\n    print(\"خطأ:\", e)"
+  },
+  {
+   "type": "text",
+   "title": "استثناءات خاصة بك",
+   "body": [
+    "نصنع نوع خطأ خاصاً بوراثة `Exception`: `class AuthError(Exception): pass`.",
+    "ثم نرفعه ونمسكه باسمه، فيصير الكود أوضح: `except AuthError:`.",
+    "داخل `except` نقدر نعيد رفع نفس الخطأ بـ `raise` وحدها بعد تسجيله."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "الصفوف (class) نتعلمها بالتفصيل في مرحلة الكائنات؛ هنا نحتاج فقط هذا الشكل.",
+   "code": "class AuthError(Exception):\n    pass\n\ndef login(pw):\n    if pw != \"1234\":\n        raise AuthError(\"كلمة مرور خاطئة\")\n    return \"تم\"\n\ntry:\n    login(\"x\")\nexcept AuthError as e:\n    print(e)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "raise",
+    "exception",
+    "input-validation"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "def f(x):\n    if x < 0:\n        raise ValueError(\"neg\")\n    return x\n\ntry:\n    f(-1)\nexcept ValueError as e:\n    print(e)\n",
+   "options": [
+    "neg",
+    "ValueError",
+    "-1"
+   ],
+   "answer": 0,
+   "why": "e يحمل رسالة الخطأ: neg."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): قبل وبعد",
+   "code": "def f():\n    raise ValueError(\"x\")\n    print(\"after\")\n\ntry:\n    f()\nexcept ValueError:\n    print(\"caught\")\n",
+   "options": [
+    "caught",
+    "after\ncaught",
+    "caught\nafter"
+   ],
+   "answer": 0,
+   "why": "بعد raise تتوقف الدالة فلا يطبع after."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الرفع",
+   "code": "def check(n):\n    if n < 0:\n        ____ ValueError(\"سالب\")\n    return n\ntry:\n    check(-1)\nexcept ValueError as e:\n    print(e)\n",
+   "blanks": [
+    {
+     "answer": "raise"
+    }
+   ],
+   "expect_stdout": "سالب",
+   "show_output": true,
+   "bank": [
+    "raise",
+    "return",
+    "throw",
+    "except"
+   ],
+   "intro": "وش الكلمة اللي ترفع الخطأ؟",
+   "explain": "`raise`."
+  },
+  {
+   "type": "code",
+   "title": "تحقق من السن",
+   "instructions": [
+    "عرّف `validate_age(age)` ترجع `age` لو بين 0 و120، وإلا ترفع `ValueError(\"سن غير صالح\")`. ثم اقرأ رقماً، واطبع السن لو صالح، أو رسالة الخطأ لو لا."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "30",
+     "stdin": [
+      "30"
+     ]
+    },
+    {
+     "expect_stdout": "سن غير صالح",
+     "stdin": [
+      "-1"
+     ]
+    },
+    {
+     "expect_stdout": "سن غير صالح",
+     "stdin": [
+      "150"
+     ],
+     "hidden": true
+    },
+    {
+     "expect_stdout": "0",
+     "stdin": [
+      "0"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "def validate_age(age):\n    if age < 0 or age > 120:\n        raise ValueError(\"سن غير صالح\")\n    return age\n\ntry:\n    print(validate_age(int(input())))\nexcept ValueError as e:\n    print(e)\n",
+   "hints": [
+    "افحص الحدود ثم `raise ValueError(...)`.",
+    "اطبع الرسالة بـ `except ValueError as e`."
+   ],
+   "checks": [
+    {
+     "regex": "raise\\s+ValueError",
+     "msg": "ارفع ValueError"
+    }
+   ],
+   "stdin": [
+    "30"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "رسالة الخطأ",
+   "instructions": [
+    "اقرأ رقماً. استدع `check_port(n)` (معرّفة لك) — لو الخطأ مرفوع اطبع رسالة الخطأ، وإلا اطبع `ok`."
+   ],
+   "starter": "def check_port(n):\n    if not 1 <= n <= 65535:\n        raise ValueError(\"منفذ خارج النطاق\")\n    return n\n",
+   "tests": [
+    {
+     "expect_stdout": "ok",
+     "stdin": [
+      "80"
+     ]
+    },
+    {
+     "expect_stdout": "منفذ خارج النطاق",
+     "stdin": [
+      "70000"
+     ]
+    },
+    {
+     "expect_stdout": "منفذ خارج النطاق",
+     "stdin": [
+      "0"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "def check_port(n):\n    if not 1 <= n <= 65535:\n        raise ValueError(\"منفذ خارج النطاق\")\n    return n\n\nn = int(input())\ntry:\n    check_port(n)\n    print(\"ok\")\nexcept ValueError as e:\n    print(e)\n",
+   "hints": [
+    "استخدم `except ValueError as e`.",
+    "اطبع `e`."
+   ],
+   "stdin": [
+    "80"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "خطأ خاص",
+   "instructions": [
+    "عرّف صنف الخطأ `AuthError(Exception)`. ثم `login(pw)` ترفعه لو `pw` ليست `\"1234\"` وترجع `\"ok\"` لو صحيحة. اختبر باستدعاء `login(\"x\")` داخل try واطبع `رفض` لو انرفع."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "رفض"
+    }
+   ],
+   "solution": "class AuthError(Exception):\n    pass\n\ndef login(pw):\n    if pw != \"1234\":\n        raise AuthError(\"خطأ\")\n    return \"ok\"\n\ntry:\n    login(\"x\")\nexcept AuthError:\n    print(\"رفض\")\n",
+   "hints": [
+    "`class AuthError(Exception): pass`",
+    "امسكه باسمه."
+   ],
+   "checks": [
+    {
+     "regex": "class\\s+AuthError\\s*\\(\\s*Exception\\s*\\)",
+     "msg": "عرّف AuthError(Exception)"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: النتيجة الصامتة",
+   "instructions": [
+    "الدالة ترجع `-1` عند الخطأ فيختلط الأمر مع قيمة صالحة. غيّرها لترفع `ValueError` ويطبع الكود `bad`."
+   ],
+   "starter": "def sqrt_int(n):\n    if n < 0:\n        return -1\n    return int(n ** 0.5)\n\ntry:\n    sqrt_int(-4)\nexcept ValueError:\n    print(\"bad\")\n",
+   "tests": [
+    {
+     "expect_stdout": "bad"
+    }
+   ],
+   "solution": "def sqrt_int(n):\n    if n < 0:\n        raise ValueError(\"neg\")\n    return int(n ** 0.5)\n\ntry:\n    sqrt_int(-4)\nexcept ValueError:\n    print(\"bad\")\n",
+   "hints": [
+    "استبدل `return -1` بـ `raise ValueError(...)`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "متى نرفع الخطأ بأنفسنا؟",
+     "options": [
+      "لما نكتشف مدخلاً غير صالح",
+      "في كل سطر",
+      "لتسريع البرنامج"
+     ],
+     "answer": 0,
+     "why": "الفشل المبكر والواضح."
+    },
+    {
+     "q": "وش النوع المناسب لقيمة سيئة؟",
+     "options": [
+      "ValueError",
+      "KeyError",
+      "IndexError"
+     ],
+     "answer": 0,
+     "why": "ValueError."
+    },
+    {
+     "q": "كيف نصنع استثناءً خاصاً؟",
+     "options": [
+      "class Name(Exception)",
+      "def Name(Exception)",
+      "raise Name"
+     ],
+     "answer": 0,
+     "why": "بوراثة Exception."
+    },
+    {
+     "q": "وش نكتب لنحصل على رسالة الخطأ؟",
+     "options": [
+      "except ValueError as e ثم e",
+      "except e",
+      "raise e"
+     ],
+     "answer": 0,
+     "why": "as e."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`raise ValueError(\"...\")` تعلن عن مدخل غير صالح.",
+    "من يستدعي الدالة يمسكه بـ try/except.",
+    "نصنع أخطاءنا بوراثة Exception."
+   ]
+  }
+ ]
+}

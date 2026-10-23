@@ -1,0 +1,245 @@
+{
+ "title_ar": "تصحيح الأخطاء Debugging",
+ "title_en": "Debugging",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🪲",
+   "goal": "تتعلم منهج [[debugging]]: تقرأ رسالة الخطأ، تتتبع القيم، وتحصر المشكلة."
+  },
+  {
+   "type": "text",
+   "title": "اقرأ الخطأ أولاً",
+   "body": [
+    "رسالة الخطأ ([[traceback]]) تقول لك: **النوع** و**الرسالة** و**السطر**. اقرأ آخر سطر أولاً (نوع الخطأ ووصفه) ثم ارجع للسطر المذكور.",
+    "الخطأ في السطر المذكور أو **قبله** (مثل قوس غير مغلق).",
+    "ثلاث أنواع: خطأ صياغة (SyntaxError) قبل التشغيل، وخطأ تشغيل (مثل TypeError)، وخطأ منطقي (يعمل لكن بنتيجة خاطئة، وهو الأصعب)."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "خطوات التصحيح: اقرأ ← أعد إنتاج الخطأ ← افترض سبباً ← اختبر ← أصلح.",
+   "code": "nums = [1, 2, 3]\ntotal = 0\nfor n in nums:\n    total = total + n\nprint(\"avg\", total / len(nums))"
+  },
+  {
+   "type": "text",
+   "title": "تتبّع القيم",
+   "body": [
+    "أسهل أداة: `print` مؤقتة تعرض قيم المتغيرات في نقاط مختلفة، ثم تحذفها بعد الإصلاح.",
+    "قسّم المشكلة: هل الخطأ قبل هذا السطر أم بعده؟ (البحث الثنائي).",
+    "اختبر بمدخلات صغيرة معروفة نتيجتها.",
+    "أخطاء منطقية شائعة: بدء العد من 0 أو 1، المقارنة بـ `=` بدل `==`، الحلقة تتوقف مبكراً (off-by-one)."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "طريقة «البطة المطاطية»: اشرح كودك بصوت عالٍ سطراً سطراً.",
+   "code": "def total(nums):\n    t = 0\n    for n in nums:\n        t = t + n\n        print(\"debug:\", n, t)\n    return t\n\nprint(total([1, 2]))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "debugging",
+    "traceback",
+    "bug"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): off-by-one",
+   "code": "total = 0\nfor i in range(1, 4):\n    total = total + i\nprint(total)\n",
+   "options": [
+    "6",
+    "10",
+    "3"
+   ],
+   "answer": 0,
+   "why": "range(1,4) تعطي 1 و2 و3 فقط والمجموع 6."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): فهرس",
+   "code": "items = [\"a\", \"b\", \"c\"]\nprint(items[len(items) - 1])\n",
+   "options": [
+    "c",
+    "b",
+    "a"
+   ],
+   "answer": 0,
+   "why": "آخر فهرس هو len-1."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: المقارنة",
+   "code": "x = 5\nif x ____ 5:\n    print(\"equal\")\n",
+   "blanks": [
+    {
+     "answer": "=="
+    }
+   ],
+   "expect_stdout": "equal",
+   "show_output": true,
+   "bank": [
+    "==",
+    "=",
+    "!=",
+    "is"
+   ],
+   "intro": "وش علامة المقارنة بالتساوي؟",
+   "explain": "`==` للمقارنة، و`=` للإسناد."
+  },
+  {
+   "type": "code",
+   "title": "أصلح: متوسط",
+   "instructions": [
+    "الدالة تحسب المتوسط لكن المنطق خطأ (تقسم على عدد خاطئ). أصلحها: `average([2, 4, 6])` ترجع `4.0`."
+   ],
+   "starter": "def average(nums):\n    total = 0\n    for n in nums:\n        total = total + n\n    return total / (len(nums) + 1)\n",
+   "tests": [
+    {
+     "call": "average([2, 4, 6])",
+     "expect": 4.0
+    },
+    {
+     "call": "average([10])",
+     "expect": 10.0
+    },
+    {
+     "call": "average([1, 2])",
+     "expect": 1.5,
+     "hidden": true
+    }
+   ],
+   "solution": "def average(nums):\n    total = 0\n    for n in nums:\n        total = total + n\n    return total / len(nums)\n",
+   "hints": [
+    "القسمة على عدد العناصر نفسه."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "code",
+   "title": "أصلح: off-by-one",
+   "instructions": [
+    "المفروض يطبع الأرقام من 1 إلى 5 لكنه يتوقف عند 4. أصلحه."
+   ],
+   "starter": "for i in range(1, 5):\n    print(i)\n",
+   "tests": [
+    {
+     "expect_stdout": "1\n2\n3\n4\n5"
+    }
+   ],
+   "solution": "for i in range(1, 6):\n    print(i)\n",
+   "hints": [
+    "الحد الأعلى في range غير مشمول."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "code",
+   "title": "أصلح: الشرط",
+   "instructions": [
+    "الكود يطبع `قفل` لكل المحاولات. المفروض يطبع `قفل` فقط لو الفشل 3 فأكثر. أصلح الشرط."
+   ],
+   "starter": "fails = int(input())\nif fails > 0:\n    print(\"قفل\")\nelse:\n    print(\"سليم\")\n",
+   "tests": [
+    {
+     "expect_stdout": "سليم",
+     "stdin": [
+      "2"
+     ]
+    },
+    {
+     "expect_stdout": "قفل",
+     "stdin": [
+      "3"
+     ]
+    },
+    {
+     "expect_stdout": "قفل",
+     "stdin": [
+      "9"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "fails = int(input())\nif fails >= 3:\n    print(\"قفل\")\nelse:\n    print(\"سليم\")\n",
+   "hints": [
+    "استخدم `>=` مع 3."
+   ],
+   "variant": "bugfix",
+   "stdin": [
+    "2"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: المسافة البادئة",
+   "instructions": [
+    "الكود يعطي `IndentationError`. أصلحه ليطبع `1` ثم `2`."
+   ],
+   "starter": "for i in [1, 2]:\nprint(i)\n",
+   "tests": [
+    {
+     "expect_stdout": "1\n2"
+    }
+   ],
+   "solution": "for i in [1, 2]:\n    print(i)\n",
+   "hints": [
+    "جسم الحلقة بمسافة بادئة."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش نقرأ أولاً في رسالة الخطأ؟",
+     "options": [
+      "نوع الخطأ ورسالته في آخر سطر",
+      "اسم الملف فقط",
+      "لا نقرأها"
+     ],
+     "answer": 0,
+     "why": "ثم نرجع للسطر المذكور."
+    },
+    {
+     "q": "وش الخطأ المنطقي؟",
+     "options": [
+      "يعمل الكود لكن النتيجة خاطئة",
+      "خطأ في الصياغة",
+      "تعطل الجهاز"
+     ],
+     "answer": 0,
+     "why": "الأصعب في الاكتشاف."
+    },
+    {
+     "q": "أسهل أداة لتتبع القيم؟",
+     "options": [
+      "print مؤقتة",
+      "إعادة تثبيت Python",
+      "حذف الملف"
+     ],
+     "answer": 0,
+     "why": "نعرض القيم ونحذفها بعد الإصلاح."
+    },
+    {
+     "q": "وش off-by-one؟",
+     "options": [
+      "خطأ بمقدار واحد في الحدود",
+      "خطأ في الاتصال",
+      "خطأ في الترميز"
+     ],
+     "answer": 0,
+     "why": "مثل range بحد خاطئ."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "اقرأ الخطأ، أعد إنتاجه، افترض سبباً، اختبر، أصلح.",
+    "`print` المؤقتة لتتبع القيم.",
+    "احذر off-by-one و`=` بدل `==`."
+   ]
+  }
+ ]
+}

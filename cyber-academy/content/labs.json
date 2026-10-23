@@ -197,6 +197,12 @@
    "slide": 5,
    "title": "رتّب خطوات تشغيل برنامج",
    "lesson": "وش هي البرمجة؟ وليش Python؟"
+  },
+  {
+   "id": "m16.7",
+   "slide": 4,
+   "title": "رتّب خطوات مشروع جديد",
+   "lesson": "venv و pip"
   }
  ],
  "match": [
@@ -331,6 +337,18 @@
    "slide": 6,
    "title": "طابق اللغة بمجالها",
    "lesson": "وش هي البرمجة؟ وليش Python؟"
+  },
+  {
+   "id": "m16.6",
+   "slide": 4,
+   "title": "طابق نوع الاسم بشكله",
+   "lesson": "أسلوب PEP 8"
+  },
+  {
+   "id": "m16.7",
+   "slide": 5,
+   "title": "طابق الأمر بوظيفته",
+   "lesson": "venv و pip"
   }
  ],
  "firewall": [
@@ -1057,6 +1075,84 @@
    "slide": 6,
    "title": "توقّع (3): group",
    "lesson": "التعابير النمطية Regex"
+  },
+  {
+   "id": "m16.1",
+   "slide": 4,
+   "title": "توقّع (1)",
+   "lesson": "الاستثناءات try/except"
+  },
+  {
+   "id": "m16.1",
+   "slide": 5,
+   "title": "توقّع (2): finally",
+   "lesson": "الاستثناءات try/except"
+  },
+  {
+   "id": "m16.1",
+   "slide": 6,
+   "title": "توقّع (3): else",
+   "lesson": "الاستثناءات try/except"
+  },
+  {
+   "id": "m16.2",
+   "slide": 4,
+   "title": "توقّع (1)",
+   "lesson": "رفع الأخطاء raise"
+  },
+  {
+   "id": "m16.2",
+   "slide": 5,
+   "title": "توقّع (2): قبل وبعد",
+   "lesson": "رفع الأخطاء raise"
+  },
+  {
+   "id": "m16.3",
+   "slide": 4,
+   "title": "توقّع (1): off-by-one",
+   "lesson": "تصحيح الأخطاء Debugging"
+  },
+  {
+   "id": "m16.3",
+   "slide": 5,
+   "title": "توقّع (2): فهرس",
+   "lesson": "تصحيح الأخطاء Debugging"
+  },
+  {
+   "id": "m16.4",
+   "slide": 4,
+   "title": "توقّع (1)",
+   "lesson": "assert والاختبارات"
+  },
+  {
+   "id": "m16.4",
+   "slide": 5,
+   "title": "توقّع (2): فشل",
+   "lesson": "assert والاختبارات"
+  },
+  {
+   "id": "m16.5",
+   "slide": 4,
+   "title": "توقّع (1)",
+   "lesson": "unittest"
+  },
+  {
+   "id": "m16.5",
+   "slide": 5,
+   "title": "توقّع (2): error",
+   "lesson": "unittest"
+  },
+  {
+   "id": "m16.6",
+   "slide": 5,
+   "title": "توقّع: نفس النتيجة",
+   "lesson": "أسلوب PEP 8"
+  },
+  {
+   "id": "m16.7",
+   "slide": 6,
+   "title": "توقّع: قراءة المتطلبات",
+   "lesson": "venv و pip"
   }
  ],
  "fillcode": [
@@ -1281,6 +1377,36 @@
    "slide": 7,
    "title": "أكمل: الأرقام",
    "lesson": "التعابير النمطية Regex"
+  },
+  {
+   "id": "m16.1",
+   "slide": 7,
+   "title": "أكمل: نوع الخطأ",
+   "lesson": "الاستثناءات try/except"
+  },
+  {
+   "id": "m16.2",
+   "slide": 6,
+   "title": "أكمل: الرفع",
+   "lesson": "رفع الأخطاء raise"
+  },
+  {
+   "id": "m16.3",
+   "slide": 6,
+   "title": "أكمل: المقارنة",
+   "lesson": "تصحيح الأخطاء Debugging"
+  },
+  {
+   "id": "m16.4",
+   "slide": 6,
+   "title": "أكمل: التأكيد",
+   "lesson": "assert والاختبارات"
+  },
+  {
+   "id": "m16.5",
+   "slide": 6,
+   "title": "أكمل: الصنف",
+   "lesson": "unittest"
   }
  ],
  "code": [
@@ -2417,6 +2543,162 @@
    "slide": 7,
    "title": "4) استخراج بالـ regex",
    "lesson": "مشروع: محلل سجلات"
+  },
+  {
+   "id": "m16.1",
+   "slide": 8,
+   "title": "قراءة رقم آمنة",
+   "lesson": "الاستثناءات try/except"
+  },
+  {
+   "id": "m16.1",
+   "slide": 9,
+   "title": "قاموس بدون KeyError",
+   "lesson": "الاستثناءات try/except"
+  },
+  {
+   "id": "m16.1",
+   "slide": 10,
+   "title": "قراءة ملف احتياطية",
+   "lesson": "الاستثناءات try/except"
+  },
+  {
+   "id": "m16.1",
+   "slide": 11,
+   "title": "تقسيم آمن",
+   "lesson": "الاستثناءات try/except"
+  },
+  {
+   "id": "m16.1",
+   "slide": 12,
+   "title": "أصلح: النوع الخطأ",
+   "lesson": "الاستثناءات try/except"
+  },
+  {
+   "id": "m16.2",
+   "slide": 7,
+   "title": "تحقق من السن",
+   "lesson": "رفع الأخطاء raise"
+  },
+  {
+   "id": "m16.2",
+   "slide": 8,
+   "title": "رسالة الخطأ",
+   "lesson": "رفع الأخطاء raise"
+  },
+  {
+   "id": "m16.2",
+   "slide": 9,
+   "title": "خطأ خاص",
+   "lesson": "رفع الأخطاء raise"
+  },
+  {
+   "id": "m16.2",
+   "slide": 10,
+   "title": "أصلح: النتيجة الصامتة",
+   "lesson": "رفع الأخطاء raise"
+  },
+  {
+   "id": "m16.3",
+   "slide": 7,
+   "title": "أصلح: متوسط",
+   "lesson": "تصحيح الأخطاء Debugging"
+  },
+  {
+   "id": "m16.3",
+   "slide": 8,
+   "title": "أصلح: off-by-one",
+   "lesson": "تصحيح الأخطاء Debugging"
+  },
+  {
+   "id": "m16.3",
+   "slide": 9,
+   "title": "أصلح: الشرط",
+   "lesson": "تصحيح الأخطاء Debugging"
+  },
+  {
+   "id": "m16.3",
+   "slide": 10,
+   "title": "أصلح: المسافة البادئة",
+   "lesson": "تصحيح الأخطاء Debugging"
+  },
+  {
+   "id": "m16.4",
+   "slide": 7,
+   "title": "اختبر دالة",
+   "lesson": "assert والاختبارات"
+  },
+  {
+   "id": "m16.4",
+   "slide": 8,
+   "title": "اكتب الدالة",
+   "lesson": "assert والاختبارات"
+  },
+  {
+   "id": "m16.4",
+   "slide": 9,
+   "title": "أصلح: الاختبار يكشف",
+   "lesson": "assert والاختبارات"
+  },
+  {
+   "id": "m16.4",
+   "slide": 10,
+   "title": "الحالات الحدية",
+   "lesson": "assert والاختبارات"
+  },
+  {
+   "id": "m16.5",
+   "slide": 7,
+   "title": "اكتب اختباراً",
+   "lesson": "unittest"
+  },
+  {
+   "id": "m16.5",
+   "slide": 8,
+   "title": "اختبر الخطأ",
+   "lesson": "unittest"
+  },
+  {
+   "id": "m16.5",
+   "slide": 9,
+   "title": "اكتشف الفشل",
+   "lesson": "unittest"
+  },
+  {
+   "id": "m16.6",
+   "slide": 6,
+   "title": "أعد التسمية",
+   "lesson": "أسلوب PEP 8"
+  },
+  {
+   "id": "m16.6",
+   "slide": 7,
+   "title": "ثابت بدل رقم سحري",
+   "lesson": "أسلوب PEP 8"
+  },
+  {
+   "id": "m16.6",
+   "slide": 8,
+   "title": "أزل التكرار",
+   "lesson": "أسلوب PEP 8"
+  },
+  {
+   "id": "m16.7",
+   "slide": 7,
+   "title": "محلل المتطلبات",
+   "lesson": "venv و pip"
+  },
+  {
+   "id": "m16.7",
+   "slide": 8,
+   "title": "حزم غير مثبتة النسخة",
+   "lesson": "venv و pip"
+  },
+  {
+   "id": "m16.7",
+   "slide": 9,
+   "title": "فحص الأسماء المشبوهة",
+   "lesson": "venv و pip"
   }
  ],
  "parsons": [

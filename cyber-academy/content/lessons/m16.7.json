@@ -1,0 +1,208 @@
+{
+ "title_ar": "venv و pip",
+ "title_en": "venv & pip",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "📦",
+   "goal": "تعرف كيف تثبت مكتبات خارجية وتعزل كل مشروع في [[venv]] خاص به."
+  },
+  {
+   "type": "text",
+   "title": "المكتبات والعزل",
+   "body": [
+    "Python معها مكتبة قياسية كبيرة، لكن هناك مئات الآلاف من الحزم الخارجية (مثل `requests`). نثبتها بـ [[pip]]: `pip install requests`.",
+    "مشروعان قد يحتاجان نسختين مختلفتين من نفس الحزمة. الحل: **بيئة افتراضية** ([[venv]]) لكل مشروع.",
+    "تنشئها: `python -m venv .venv`. وتفعّلها: في لينكس وماك `source .venv/bin/activate`، وفي ويندوز `.venv\\Scripts\\activate`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "هذي أوامر تشغّلها في جهازك، ما تشتغل داخل صفحة التمرين في المتصفح.",
+   "code": "# أوامر الطرفية (ليست كود Python):\n# python -m venv .venv\n# source .venv/bin/activate\n# pip install requests==2.32.0\n# pip freeze > requirements.txt"
+  },
+  {
+   "type": "text",
+   "title": "ملف المتطلبات والأمان",
+   "body": [
+    "[[requirements]] ملف يسرد الحزم ونسخها: سطر لكل حزمة `requests==2.32.0`. غيرك يثبتها كلها بـ `pip install -r requirements.txt`.",
+    "**أمن سلاسل التوريد:** الحزم الخبيثة بأسماء قريبة (typosquatting) تُستخدم في الهجمات، فتأكد من اسم الحزمة وصاحبها وثبّت النسخ.",
+    "لا ترفع مجلد `.venv` لـ git؛ ارفع `requirements.txt` فقط."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "افحص الحزم قبل تثبيتها: عدد التنزيلات وتاريخ آخر تحديث والمصدر.",
+   "code": "lines = [\"requests==2.32.0\", \"flask>=3.0\"]\nfor line in lines:\n    name = line.split(\"==\")[0].split(\">=\")[0]\n    print(name)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "venv",
+    "pip",
+    "requirements"
+   ]
+  },
+  {
+   "type": "order",
+   "title": "رتّب خطوات مشروع جديد",
+   "items": [
+    "ننشئ البيئة: python -m venv .venv",
+    "نفعّل البيئة",
+    "نثبت الحزم: pip install requests",
+    "نحفظ المتطلبات: pip freeze > requirements.txt",
+    "نشغل برنامجنا"
+   ],
+   "why": "العزل أولاً ثم التثبيت ثم حفظ المتطلبات."
+  },
+  {
+   "type": "match",
+   "title": "طابق الأمر بوظيفته",
+   "pairs": [
+    [
+     "python -m venv .venv",
+     "ينشئ بيئة افتراضية"
+    ],
+    [
+     "pip install requests",
+     "يثبت حزمة"
+    ],
+    [
+     "pip freeze",
+     "يعرض الحزم ونسخها المثبتة"
+    ],
+    [
+     "pip install -r requirements.txt",
+     "يثبت كل متطلبات المشروع"
+    ]
+   ],
+   "why": "كل أمر له دور في دورة حياة المشروع."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع: قراءة المتطلبات",
+   "code": "line = \"requests==2.32.0\"\nname, version = line.split(\"==\")\nprint(name, version)\n",
+   "options": [
+    "requests 2.32.0",
+    "requests==2.32.0",
+    "2.32.0 requests"
+   ],
+   "answer": 0,
+   "why": "نقسم عند == فنحصل على الاسم والنسخة."
+  },
+  {
+   "type": "code",
+   "title": "محلل المتطلبات",
+   "instructions": [
+    "`requirements.txt` فيه سطر لكل حزمة بالشكل `الاسم==النسخة`. اطبع كل حزمة بالشكل `الاسم: النسخة` (تجاهل الأسطر الفاضية)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "requests: 2.32.0\nflask: 3.0.3\nrich: 13.7.1"
+    }
+   ],
+   "solution": "with open(\"requirements.txt\", encoding=\"utf-8\") as f:\n    for line in f:\n        line = line.strip()\n        if not line:\n            continue\n        name, version = line.split(\"==\")\n        print(name + \": \" + version)\n",
+   "hints": [
+    "استخدم `split(\"==\")`.",
+    "تجاهل الأسطر الفاضية."
+   ],
+   "files": {
+    "requirements.txt": "requests==2.32.0\nflask==3.0.3\n\nrich==13.7.1\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "حزم غير مثبتة النسخة",
+   "instructions": [
+    "اطبع أسماء الحزم في `requirements.txt` التي **ليس فيها `==`** (نسخة غير مثبتة) لأنها خطر على الاستقرار. كل اسم في سطر."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "flask\nrich"
+    }
+   ],
+   "solution": "with open(\"requirements.txt\", encoding=\"utf-8\") as f:\n    for line in f:\n        line = line.strip()\n        if line and \"==\" not in line:\n            print(line)\n",
+   "hints": [
+    "استخدم `\"==\" not in line`."
+   ],
+   "files": {
+    "requirements.txt": "requests==2.32.0\nflask\nrich\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "فحص الأسماء المشبوهة",
+   "instructions": [
+    "أمن سلاسل التوريد: `requirements.txt` فيه حزم. اطبع `SUSPECT name` لكل حزمة اسمها **ليس** ضمن القائمة الموثوقة `TRUSTED` (الأسماء تقارن بحروف صغيرة)."
+   ],
+   "starter": "TRUSTED = {\"requests\", \"flask\", \"rich\"}\n",
+   "tests": [
+    {
+     "expect_stdout": "SUSPECT reqeusts\nSUSPECT flassk"
+    }
+   ],
+   "solution": "TRUSTED = {\"requests\", \"flask\", \"rich\"}\nwith open(\"requirements.txt\", encoding=\"utf-8\") as f:\n    for line in f:\n        line = line.strip()\n        if not line:\n            continue\n        name = line.split(\"==\")[0].lower()\n        if name not in TRUSTED:\n            print(\"SUSPECT \" + name)\n",
+   "hints": [
+    "خذ الاسم قبل `==`.",
+    "قارنه مع `TRUSTED`."
+   ],
+   "files": {
+    "requirements.txt": "requests==2.32.0\nreqeusts==1.0\nFlask==3.0.3\nflassk==1.0\n"
+   }
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نستخدم venv؟",
+     "options": [
+      "لعزل حزم كل مشروع",
+      "لتسريع الإنترنت",
+      "لتشفير الكود"
+     ],
+     "answer": 0,
+     "why": "لتفادي تعارض النسخ."
+    },
+    {
+     "q": "وش يثبت الحزم من requirements.txt؟",
+     "options": [
+      "pip install -r requirements.txt",
+      "python requirements.txt",
+      "venv install"
+     ],
+     "answer": 0,
+     "why": "خيار -r."
+    },
+    {
+     "q": "وش typosquatting؟",
+     "options": [
+      "حزمة خبيثة باسم قريب من حزمة معروفة",
+      "خطأ إملائي في الكود",
+      "نوع تشفير"
+     ],
+     "answer": 0,
+     "why": "هجوم سلسلة توريد."
+    },
+    {
+     "q": "وش نرفع في git من البيئة؟",
+     "options": [
+      "requirements.txt فقط",
+      "مجلد .venv كامل",
+      "كلمات السر"
+     ],
+     "answer": 0,
+     "why": "لا نرفع الحزم نفسها."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`pip` تثبّت الحزم و`venv` تعزل كل مشروع.",
+    "`requirements.txt` يسجل الحزم ونسخها.",
+    "احذر الحزم بأسماء مشابهة (سلسلة التوريد)."
+   ]
+  }
+ ]
+}
