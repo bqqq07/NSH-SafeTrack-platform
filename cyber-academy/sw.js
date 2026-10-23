@@ -1,14 +1,16 @@
 // Service Worker: يخلي المنصة تشتغل بدون نت.
 // الاستراتيجية: نجرّب النت أولاً (عشان التحديثات توصل)، وإذا فشل نرجع للنسخة المحفوظة.
-const CACHE = 'cyber-academy-v6';
+const CACHE = 'cyber-academy-v7';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest', 'icons/icon.svg',
   'css/style.css',
   'js/app.js', 'js/admin.js', 'js/store.js', 'js/glossary.js', 'js/player.js', 'js/api.js', 'js/sync.js',
+  'js/codeui.js', 'js/pyerrors.js', 'js/pyrunner.js', 'js/pyworker.js', 'js/pyharness.py',
   'content/curriculum.json', 'content/glossary.json', 'content/labs.json', 'content/term_lessons.json'
 ];
 
-// عند التثبيت نحفظ الملفات الأساسية وكل الدروس (حوالي 150KB) عشان تشتغل المنصة كاملة بدون نت
+// عند التثبيت نحفظ الملفات الأساسية وكل الدروس عشان تشتغل المنصة كاملة بدون نت.
+// محرك Python (vendor/pyodide ≈ 13MB) ما نحمّله هنا: يتحمّل ويتخزّن أول مرة يشغّل المتعلم كوداً (طلبات نفس الموقع تنحفظ تلقائياً).
 async function precache() {
   const c = await caches.open(CACHE);
   await c.addAll(CORE);

@@ -1,0 +1,298 @@
+{
+ "title_ar": "الحلقة while",
+ "title_en": "While Loops",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔁",
+   "goal": "تكرر تنفيذ كود **طالما** شرط معين صحيح باستخدام `while` ([[loop]])."
+  },
+  {
+   "type": "text",
+   "title": "كرر طالما الشرط صح",
+   "body": [
+    "`while` تفحص الشرط. لو صح تنفذ الكتلة ثم ترجع تفحص من جديد، وهكذا لين يصير الشرط خطأ.",
+    "كل مرة تنفذ فيها الكتلة تسمى دورة ([[iteration]]).",
+    "غالباً نستخدم عدّاد ([[counter]]) يزيد في كل دورة."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "اقرأها: «طالما i أصغر من أو تساوي 3، اطبعها وزدها 1».",
+   "code": "i = 1\nwhile i <= 3:\n    print(i)\n    i = i + 1\nprint(\"انتهت\")"
+  },
+  {
+   "type": "text",
+   "title": "احذر الحلقة اللانهائية",
+   "body": [
+    "لو الشرط ما يصير خطأ أبداً (مثلاً نسيت تزيد العدّاد) تشتغل الحلقة للأبد: [[infinite-loop]].",
+    "في المنصة نوقف الكود بعد 6 ثواني، لكن في برامج حقيقية قد تجمّد الجهاز.",
+    "نمط مفيد: **قيمة الإيقاف** ([[sentinel]]): نقرأ مدخلات لين المستخدم يكتب كلمة معينة مثل `exit`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "قاعدة: لازم شي داخل الحلقة يغيّر الشرط (زيادة عدّاد، قراءة مدخل جديد...).",
+   "code": "line = input()\nwhile line != \"exit\":\n    print(\"وصلني:\", line)\n    line = input()"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "loop",
+    "iteration",
+    "counter",
+    "infinite-loop",
+    "sentinel",
+    "condition"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "i = 1\nwhile i <= 3:\n    print(i)\n    i = i + 1\n",
+   "options": [
+    "1\n2\n3",
+    "1\n2\n3\n4",
+    "0\n1\n2",
+    "3\n2\n1"
+   ],
+   "answer": 0,
+   "why": "يبدأ من 1 ويطبع لين ما يصير i أكبر من 3."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): المجموع",
+   "code": "total = 0\nn = 1\nwhile n <= 4:\n    total = total + n\n    n = n + 1\nprint(total)\n",
+   "options": [
+    "10",
+    "4",
+    "6",
+    "24"
+   ],
+   "answer": 0,
+   "why": "1+2+3+4 = 10."
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: العدّ التنازلي",
+   "lines": [
+    "n = 3",
+    "while n > 0:",
+    "    print(n)",
+    "    n = n - 1",
+    "print(\"انطلق!\")"
+   ],
+   "expect_stdout": "3\n2\n1\nانطلق!",
+   "intro": "رتّب الأسطر. انتبه للإزاحة: آخر `print` خارج الحلقة.",
+   "distractors": [
+    "    print(\"انطلق!\")"
+   ],
+   "explain": "السطر الأخير بدون إزاحة لأنه يُنفذ مرة وحدة بعد انتهاء الحلقة."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الشرط",
+   "code": "n = 3\n____ n > 0:\n    print(n)\n    n = n - 1\n",
+   "blanks": [
+    {
+     "answer": "while"
+    }
+   ],
+   "expect_stdout": "3\n2\n1",
+   "show_output": true,
+   "bank": [
+    "while",
+    "if",
+    "for",
+    "loop"
+   ],
+   "intro": "وش الكلمة اللي تكرر الكتلة طالما الشرط صح؟",
+   "explain": "`while` تكرر طالما الشرط True."
+  },
+  {
+   "type": "code",
+   "title": "عدّ تنازلي",
+   "instructions": [
+    "اطبع الأرقام من 5 إلى 1 (كل رقم بسطر) ثم **انطلق!** باستخدام `while`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "5\n4\n3\n2\n1\nانطلق!",
+     "label": "العد ثم انطلق!"
+    }
+   ],
+   "solution": "n = 5\nwhile n > 0:\n    print(n)\n    n = n - 1\nprint(\"انطلق!\")\n",
+   "hints": [
+    "ابدأ بـ `n = 5`.",
+    "في كل دورة اطبع ثم قلّل n بـ 1."
+   ],
+   "checks": [
+    {
+     "regex": "\\bwhile\\b",
+     "msg": "استخدم while"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "مجموع الأرقام",
+   "instructions": [
+    "اقرأ رقماً `n` واطبع مجموع الأرقام من 1 إلى n (مثلاً n=4 يعطي 10)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "10",
+     "stdin": [
+      "4"
+     ]
+    },
+    {
+     "expect_stdout": "5050",
+     "stdin": [
+      "100"
+     ]
+    },
+    {
+     "expect_stdout": "1",
+     "stdin": [
+      "1"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "n = int(input())\ntotal = 0\ni = 1\nwhile i <= n:\n    total = total + i\n    i = i + 1\nprint(total)\n",
+   "hints": [
+    "خزّن المجموع في متغير يبدأ بـ 0.",
+    "زد العدّاد i في كل دورة."
+   ],
+   "checks": [
+    {
+     "regex": "\\bwhile\\b",
+     "msg": "استخدم while"
+    }
+   ],
+   "stdin": [
+    "4"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "عدّاد المدخلات",
+   "instructions": [
+    "اقرأ كلمات (كل كلمة بسطر) لين تكتب `exit`. اطبع **كم كلمة** قرأت قبل exit."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "2",
+     "stdin": [
+      "أ",
+      "ب",
+      "exit"
+     ]
+    },
+    {
+     "expect_stdout": "0",
+     "stdin": [
+      "exit"
+     ]
+    },
+    {
+     "expect_stdout": "4",
+     "stdin": [
+      "a",
+      "b",
+      "c",
+      "d",
+      "exit"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "count = 0\nline = input()\nwhile line != \"exit\":\n    count = count + 1\n    line = input()\nprint(count)\n",
+   "hints": [
+    "اقرأ سطراً قبل الحلقة.",
+    "اقرأ سطراً جديداً داخل الحلقة."
+   ],
+   "stdin": [
+    "أ",
+    "ب",
+    "exit"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: حلقة لا نهائية",
+   "instructions": [
+    "الكود يطبع 1 للأبد! أصلحه ليطبع 1 ثم 2 ثم 3 وينتهي."
+   ],
+   "starter": "i = 1\nwhile i <= 3:\n    print(i)\n",
+   "tests": [
+    {
+     "expect_stdout": "1\n2\n3",
+     "label": "يطبع 1 ثم 2 ثم 3"
+    }
+   ],
+   "solution": "i = 1\nwhile i <= 3:\n    print(i)\n    i = i + 1\n",
+   "hints": [
+    "العدّاد `i` ما يتغير أبداً.",
+    "أضف سطراً يزيد i داخل الحلقة."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "متى تتوقف حلقة `while`؟",
+     "options": [
+      "لما الشرط يصير خطأ",
+      "بعد 10 دورات دايماً",
+      "لما نكتب end"
+     ],
+     "answer": 0,
+     "why": "تتوقف لما الشرط False."
+    },
+    {
+     "q": "وش سبب الحلقة اللانهائية غالباً؟",
+     "options": [
+      "شي داخل الحلقة ما يغيّر الشرط",
+      "نسيان else",
+      "استخدام print"
+     ],
+     "answer": 0,
+     "why": "مثل نسيان زيادة العدّاد."
+    },
+    {
+     "q": "وش قيمة n بعد: n = 3 ثم while n > 0: n = n - 1؟",
+     "options": [
+      "0",
+      "1",
+      "3"
+     ],
+     "answer": 0,
+     "why": "تنقص لين تصير 0 فيتوقف الشرط."
+    },
+    {
+     "q": "وش هي قيمة الإيقاف (Sentinel)؟",
+     "options": [
+      "قيمة خاصة تنهي قراءة المدخلات",
+      "متغير عدّاد",
+      "دالة"
+     ],
+     "answer": 0,
+     "why": "مثل exit."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`while` تكرر الكتلة طالما الشرط صح.",
+    "لازم شي داخل الحلقة يغيّر الشرط وإلا صارت لا نهائية.",
+    "نمط الإيقاف: اقرأ مدخلاً قبل الحلقة وداخلها لين قيمة الإيقاف."
+   ]
+  }
+ ]
+}

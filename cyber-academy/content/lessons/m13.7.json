@@ -1,0 +1,260 @@
+{
+ "title_ar": "القوائم الشاملة",
+ "title_en": "List Comprehensions",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "⚡",
+   "goal": "تبني قائمة جديدة بسطر واحد بـ [[comprehension]] بدل حلقة كاملة."
+  },
+  {
+   "type": "text",
+   "title": "الحلقة في سطر",
+   "body": [
+    "بدل أن نكتب حلقة ونضيف بـ `append`، نكتب القائمة الشاملة: `[تعبير for x in مصدر]`.",
+    "مثال: `squares = [x * x for x in range(5)]` يعطي `[0, 1, 4, 9, 16]`.",
+    "اقرأها هكذا: «لكل x في المصدر، ضع x*x في القائمة»."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "ما فيها سحر: هي نفس الحلقة مكتوبة بشكل مختصر.",
+   "code": "nums = [1, 2, 3]\ndoubled = [n * 2 for n in nums]\nprint(doubled)"
+  },
+  {
+   "type": "text",
+   "title": "إضافة شرط",
+   "body": [
+    "نضيف `if` في الآخر لنأخذ بعض العناصر فقط: `[x for x in nums if x > 2]`.",
+    "ونقدر نحوّل ونفلتر معاً: `[w.upper() for w in words if len(w) > 3]`.",
+    "لو صار السطر معقداً جداً، اكتبه حلقة عادية؛ الوضوح أهم من الاختصار."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "نفس الفكرة تنفع على set و dict أيضاً.",
+   "code": "ports = [22, 80, 443, 8080]\nhigh = [p for p in ports if p > 1000]\nprint(high)\nweb = [p for p in ports if p in (80, 443)]\nprint(web)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "comprehension"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "print([x + 1 for x in [1, 2, 3]])\n",
+   "options": [
+    "[2, 3, 4]",
+    "[1, 2, 3]",
+    "[2, 3]",
+    "[3, 4, 5]"
+   ],
+   "answer": 0,
+   "why": "نضيف 1 لكل عنصر."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): شرط",
+   "code": "nums = [1, 2, 3, 4, 5, 6]\nprint([n for n in nums if n % 2 == 0])\n",
+   "options": [
+    "[2, 4, 6]",
+    "[1, 3, 5]",
+    "[2, 4]",
+    "[1, 2, 3, 4, 5, 6]"
+   ],
+   "answer": 0,
+   "why": "نأخذ الأعداد الزوجية فقط: 2 و4 و6."
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: مربعات",
+   "lines": [
+    "nums = [1, 2, 3, 4]",
+    "squares = [n * n for n in nums]",
+    "print(squares)"
+   ],
+   "expect_stdout": "[1, 4, 9, 16]",
+   "intro": "رتّب الأسطر لتطبع مربع كل رقم.",
+   "explain": "نعرّف القائمة ثم نبني الجديدة ثم نطبع."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الشرط",
+   "code": "nums = [5, 12, 8, 20]\nbig = [n for n in nums ____ n > 10]\nprint(big)\n",
+   "blanks": [
+    {
+     "answer": "if"
+    }
+   ],
+   "expect_stdout": "[12, 20]",
+   "show_output": true,
+   "bank": [
+    "if",
+    "in",
+    "for",
+    "and"
+   ],
+   "intro": "وش الكلمة اللي تضيف الشرط؟",
+   "explain": "`if` في آخر القائمة الشاملة تفلتر العناصر."
+  },
+  {
+   "type": "code",
+   "title": "الأطوال",
+   "instructions": [
+    "`words = [\"scan\", \"firewall\", \"ip\"]`. استخدم قائمة شاملة لبناء أطوال الكلمات واطبعها: `[4, 8, 2]`"
+   ],
+   "starter": "words = [\"scan\", \"firewall\", \"ip\"]\n",
+   "tests": [
+    {
+     "expect_stdout": "[4, 8, 2]",
+     "label": "يطبع [4, 8, 2]"
+    }
+   ],
+   "solution": "words = [\"scan\", \"firewall\", \"ip\"]\nprint([len(w) for w in words])\n",
+   "hints": [
+    "`[len(w) for w in words]`"
+   ],
+   "checks": [
+    {
+     "regex": "\\[[^\\]]*\\bfor\\b[^\\]]*\\]",
+     "msg": "استخدم قائمة شاملة"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "المنافذ المفتوحة المميزة",
+   "instructions": [
+    "`ports = [21, 22, 80, 443, 3306]`. باستخدام قائمة شاملة اطبع المنافذ **الأقل من 100** فقط: `[21, 22, 80]`"
+   ],
+   "starter": "ports = [21, 22, 80, 443, 3306]\n",
+   "tests": [
+    {
+     "expect_stdout": "[21, 22, 80]",
+     "label": "يطبع [21, 22, 80]"
+    }
+   ],
+   "solution": "ports = [21, 22, 80, 443, 3306]\nprint([p for p in ports if p < 100])\n",
+   "hints": [
+    "أضف `if p < 100`."
+   ],
+   "checks": [
+    {
+     "regex": "\\[[^\\]]*\\bfor\\b[^\\]]*\\bif\\b[^\\]]*\\]",
+     "msg": "قائمة شاملة بشرط"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أسماء بحروف كبيرة",
+   "instructions": [
+    "اقرأ كلمات في سطر واحد مفصولة بمسافة، واطبع قائمة الكلمات التي **طولها أكبر من 3** بحروف كبيرة. مثلاً `to scan the host` ← `['SCAN', 'HOST']`"
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "['SCAN', 'HOST']",
+     "stdin": [
+      "to scan the host"
+     ]
+    },
+    {
+     "expect_stdout": "[]",
+     "stdin": [
+      "a b c"
+     ]
+    },
+    {
+     "expect_stdout": "['LONGER']",
+     "stdin": [
+      "longer is ok"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "words = input().split()\nprint([w.upper() for w in words if len(w) > 3])\n",
+   "hints": [
+    "`split()` يقسم النص لكلمات.",
+    "حوّل وفلتر في قائمة شاملة."
+   ],
+   "stdin": [
+    "to scan the host"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: القائمة الشاملة",
+   "instructions": [
+    "الكود يرتب الشرط في مكان خاطئ فيعطي `SyntaxError`. أصلحه ليطبع `[2, 4]`."
+   ],
+   "starter": "nums = [1, 2, 3, 4]\nprint([n if n % 2 == 0 for n in nums])\n",
+   "tests": [
+    {
+     "expect_stdout": "[2, 4]",
+     "label": "يطبع [2, 4]"
+    }
+   ],
+   "solution": "nums = [1, 2, 3, 4]\nprint([n for n in nums if n % 2 == 0])\n",
+   "hints": [
+    "الشرط `if` يأتي بعد `for`.",
+    "`[n for n in nums if n % 2 == 0]`"
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش تعطي `[x * 2 for x in [1, 2]]`؟",
+     "options": [
+      "[2, 4]",
+      "[1, 2]",
+      "[1, 2, 1, 2]"
+     ],
+     "answer": 0,
+     "why": "نضرب كل عنصر في 2."
+    },
+    {
+     "q": "وين نضع الشرط؟",
+     "options": [
+      "بعد for في آخر القائمة",
+      "قبل الأقواس",
+      "بين الأقواس والاسم"
+     ],
+     "answer": 0,
+     "why": "`[x for x in a if شرط]`"
+    },
+    {
+     "q": "متى نتجنب القائمة الشاملة؟",
+     "options": [
+      "لما تصير معقدة وغير واضحة",
+      "دائماً",
+      "لما تكون القائمة قصيرة"
+     ],
+     "answer": 0,
+     "why": "الوضوح أهم من الاختصار."
+    },
+    {
+     "q": "وش تعطي `[n for n in [1, 5, 9] if n > 3]`؟",
+     "options": [
+      "[5, 9]",
+      "[1]",
+      "[1, 5, 9]"
+     ],
+     "answer": 0,
+     "why": "نأخذ ما فوق 3."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`[تعبير for x in مصدر]` تبني قائمة بسطر.",
+    "نضيف `if` للفلترة.",
+    "لو صارت معقدة اكتبها حلقة عادية."
+   ]
+  }
+ ]
+}

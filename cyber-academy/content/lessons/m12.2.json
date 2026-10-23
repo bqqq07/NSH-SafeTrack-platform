@@ -1,0 +1,326 @@
+{
+ "title_ar": "العمليات المنطقية",
+ "title_en": "and / or / not",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🧠",
+   "goal": "تجمع عدة شروط بـ `and` و`or` و`not` ([[logical-operator]]) لتبني قرارات أدق."
+  },
+  {
+   "type": "text",
+   "title": "ثلاث كلمات تجمع الشروط",
+   "body": [
+    "`and` (و): الاثنين لازم يكونان صح.",
+    "`or` (أو): يكفي واحد منهما.",
+    "`not` (نفي): يعكس القيمة."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "مثل الحياة: «مسموح الدخول لو عمرك 18+ **و** معك تذكرة».",
+   "code": "age = 20\nhas_ticket = True\nprint(age >= 18 and has_ticket)\nprint(age < 18 or has_ticket)\nprint(not has_ticket)"
+  },
+  {
+   "type": "text",
+   "title": "جدول الصحة والمقارنة المتسلسلة",
+   "body": [
+    "`True and False` ← `False` (يكفي واحد خطأ). `True or False` ← `True` (يكفي واحد صح).",
+    "بايثون يسمح بمقارنة متسلسلة: `0 < x < 10` معناها `x > 0 and x < 10`.",
+    "تنبيه: `x == 1 or 2` **ما** معناها «x تساوي 1 أو 2». لازم `x == 1 or x == 2`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "الرقم 2 لوحده يعتبر True دائماً، فشرط `x == 1 or 2` صح دايماً!",
+   "code": "print(True and False, True or False, not True)\nx = 5\nprint(0 < x < 10)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "logical-operator",
+    "bool",
+    "condition"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "print(True and False, True or False, not True)",
+   "options": [
+    "False True False",
+    "True True False",
+    "False False False",
+    "True True True"
+   ],
+   "answer": 0,
+   "why": "`and` تحتاج الاثنين (False)، `or` يكفي واحد (True)، و`not True` تعطي False."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2)",
+   "code": "age = 15\nhas_id = True\nprint(age >= 18 or has_id)\nprint(age >= 18 and has_id)\n",
+   "options": [
+    "True\nFalse",
+    "True\nTrue",
+    "False\nFalse",
+    "False\nTrue"
+   ],
+   "answer": 0,
+   "why": "أحد الشرطين صح (`has_id`) فـ `or` صح، لكن `and` تحتاج الاثنين."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): متسلسلة",
+   "code": "x = 12\nprint(0 < x < 10)\nprint(not (x > 5))\n",
+   "options": [
+    "False\nFalse",
+    "True\nTrue",
+    "False\nTrue",
+    "True\nFalse"
+   ],
+   "answer": 0,
+   "why": "12 أكبر من 10 فالمتسلسلة False، و`not (12 > 5)` تعطي False."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الشرطين معاً",
+   "code": "age = 25\nhas_ticket = True\nif age >= 18 ____ has_ticket:\n    print(\"ادخل\")\n",
+   "blanks": [
+    {
+     "answer": "and"
+    }
+   ],
+   "expect_stdout": "ادخل",
+   "show_output": true,
+   "bank": [
+    "and",
+    "or",
+    "not",
+    "if"
+   ],
+   "intro": "نبغى الشرطين يتحققان معاً.",
+   "explain": "`and` تحتاج الاثنين صح."
+  },
+  {
+   "type": "code",
+   "title": "هل مسموح بالدخول؟",
+   "instructions": [
+    "اقرأ العمر (رقم) ثم هل معه تذكرة (`نعم` أو `لا`). اطبع **مسموح** لو عمره 18 فأكثر **و** عنده تذكرة، وإلا **ممنوع**."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "مسموح",
+     "stdin": [
+      "20",
+      "نعم"
+     ]
+    },
+    {
+     "expect_stdout": "ممنوع",
+     "stdin": [
+      "20",
+      "لا"
+     ]
+    },
+    {
+     "expect_stdout": "ممنوع",
+     "stdin": [
+      "16",
+      "نعم"
+     ]
+    },
+    {
+     "expect_stdout": "مسموح",
+     "stdin": [
+      "18",
+      "نعم"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "age = int(input())\nticket = input()\nif age >= 18 and ticket == \"نعم\":\n    print(\"مسموح\")\nelse:\n    print(\"ممنوع\")\n",
+   "hints": [
+    "اقرأ العمر ثم التذكرة.",
+    "اجمع الشرطين بـ `and`."
+   ],
+   "stdin": [
+    "20",
+    "نعم"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "ساعات الدوام",
+   "instructions": [
+    "اقرأ الساعة (0-23). الدوام من 8 **إلى قبل** 16. اطبع **مفتوح** أو **مغلق**."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "مفتوح",
+     "stdin": [
+      "9"
+     ]
+    },
+    {
+     "expect_stdout": "مغلق",
+     "stdin": [
+      "16"
+     ]
+    },
+    {
+     "expect_stdout": "مغلق",
+     "stdin": [
+      "7"
+     ]
+    },
+    {
+     "expect_stdout": "مفتوح",
+     "stdin": [
+      "8"
+     ],
+     "hidden": true
+    },
+    {
+     "expect_stdout": "مفتوح",
+     "stdin": [
+      "15"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "hour = int(input())\nif 8 <= hour < 16:\n    print(\"مفتوح\")\nelse:\n    print(\"مغلق\")\n",
+   "hints": [
+    "استخدم المقارنة المتسلسلة `8 <= hour < 16`.",
+    "أو `hour >= 8 and hour < 16`"
+   ],
+   "stdin": [
+    "9"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "رقم منفذ صحيح",
+   "instructions": [
+    "اقرأ رقماً واطبع `True` لو هو رقم منفذ صحيح (من 1 إلى 65535)، وإلا `False` (اطبع نتيجة الشرط مباشرة)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "True",
+     "stdin": [
+      "443"
+     ]
+    },
+    {
+     "expect_stdout": "False",
+     "stdin": [
+      "0"
+     ]
+    },
+    {
+     "expect_stdout": "False",
+     "stdin": [
+      "70000"
+     ]
+    },
+    {
+     "expect_stdout": "True",
+     "stdin": [
+      "65535"
+     ],
+     "hidden": true
+    },
+    {
+     "expect_stdout": "True",
+     "stdin": [
+      "1"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "port = int(input())\nprint(1 <= port <= 65535)\n",
+   "hints": [
+    "المنفذ بين 1 و65535 شامل.",
+    "`print(1 <= port <= 65535)`"
+   ],
+   "stdin": [
+    "443"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: الشرط دايماً صح",
+   "instructions": [
+    "الكود يطبع **نعم** حتى لو x = 5. أصلحه عشان ما يطبع شي لما x تساوي 5."
+   ],
+   "starter": "x = 5\nif x == 1 or 2:\n    print(\"نعم\")\n",
+   "tests": [
+    {
+     "expect_stdout": "",
+     "label": "ما يطبع شي لما x = 5"
+    }
+   ],
+   "solution": "x = 5\nif x == 1 or x == 2:\n    print(\"نعم\")\n",
+   "hints": [
+    "الرقم 2 لوحده يعتبر True.",
+    "قارن x بكل رقم: `x == 1 or x == 2`"
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يطبع `print(True and False)`؟",
+     "options": [
+      "False",
+      "True",
+      "خطأ"
+     ],
+     "answer": 0,
+     "why": "`and` تحتاج الاثنين صح."
+    },
+    {
+     "q": "وش يطبع `print(not False)`؟",
+     "options": [
+      "True",
+      "False",
+      "None"
+     ],
+     "answer": 0,
+     "why": "`not` تعكس."
+    },
+    {
+     "q": "المقارنة `3 < x < 8` معناها؟",
+     "options": [
+      "x أكبر من 3 وأصغر من 8",
+      "x أكبر من 3 أو أصغر من 8",
+      "x يساوي 3 أو 8"
+     ],
+     "answer": 0,
+     "why": "مقارنة متسلسلة بـ and."
+    },
+    {
+     "q": "وش المشكلة في `x == 1 or 2`؟",
+     "options": [
+      "الجزء 2 دايماً صح فالشرط دايماً صح",
+      "ما فيها مشكلة",
+      "خطأ كتابة"
+     ],
+     "answer": 0,
+     "why": "لازم قارن كل قيمة: `x == 1 or x == 2`."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`and` تحتاج كل الشروط صح، `or` يكفي واحد، `not` تعكس.",
+    "`0 < x < 10` مقارنة متسلسلة.",
+    "لا تكتب `x == 1 or 2`: قارن كل قيمة لوحدها."
+   ]
+  }
+ ]
+}

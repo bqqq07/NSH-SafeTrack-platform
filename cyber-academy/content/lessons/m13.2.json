@@ -1,0 +1,274 @@
+{
+ "title_ar": "أساليب القوائم",
+ "title_en": "List Methods",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🛠️",
+   "goal": "تضيف وتحذف وترتّب عناصر القائمة بأساليبها، وتفهم فخ أنها **تغيّر القائمة نفسها**."
+  },
+  {
+   "type": "text",
+   "title": "أهم الأساليب",
+   "body": [
+    "`append(x)` تضيف عنصراً في النهاية. `insert(i, x)` تضيفه في موضع. `remove(x)` تحذف أول x. `pop()` تحذف آخر عنصر وترجعه.",
+    "`sort()` ترتّب القائمة نفسها، و`reverse()` تعكسها. و`sorted(list)` ترجع نسخة مرتبة بدون ما تغيّر الأصل.",
+    "دوال جاهزة: `len()` `min()` `max()` `sum()`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "نرتّب تنازلياً بـ `sort(reverse=True)`.",
+   "code": "nums = [3, 1, 2]\nnums.append(5)\nnums.sort()\nprint(nums)\nprint(max(nums), sum(nums))"
+  },
+  {
+   "type": "text",
+   "title": "الفخ: sort ترجع None",
+   "body": [
+    "أساليب القائمة مثل `sort()` و`append()` **تغيّر القائمة وترجع `None`**.",
+    "فلو كتبت `nums = nums.sort()` تضيع القائمة وتصير `None`!",
+    "الصح: `nums.sort()` وحدها، أو `new = sorted(nums)`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "هذا الفرق بين أساليب النصوص (ترجع جديد) وأساليب القوائم (تغيّر الأصل).",
+   "code": "nums = [3, 1, 2]\nnums = nums.sort()   # خطأ!\nprint(nums)          # None"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "list",
+    "method",
+    "mutable"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "nums = [3, 1, 2]\nnums.append(5)\nnums.sort()\nprint(nums)\n",
+   "options": [
+    "[1, 2, 3, 5]",
+    "[3, 1, 2, 5]",
+    "[5, 3, 2, 1]",
+    "[1, 2, 3]"
+   ],
+   "answer": 0,
+   "why": "أضفنا 5 ثم رتبنا تصاعدياً."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): pop و remove",
+   "code": "items = [\"a\", \"b\", \"c\"]\nlast = items.pop()\nitems.remove(\"a\")\nprint(last, items)\n",
+   "options": [
+    "c ['b']",
+    "c ['a', 'b']",
+    "b ['c']",
+    "a ['b']"
+   ],
+   "answer": 0,
+   "why": "`pop()` ترجع \"c\" وتحذفه، و`remove(\"a\")` تحذف \"a\" فيبقى \"b\"."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): None",
+   "code": "nums = [3, 1, 2]\nresult = nums.sort()\nprint(result)\n",
+   "options": [
+    "None",
+    "[1, 2, 3]",
+    "[3, 1, 2]",
+    "خطأ"
+   ],
+   "answer": 0,
+   "why": "`sort()` تغيّر القائمة وترجع `None`."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: إضافة عنصر",
+   "code": "ports = [22, 80]\nports.____(443)\nprint(ports)\n",
+   "blanks": [
+    {
+     "answer": "append"
+    }
+   ],
+   "expect_stdout": "[22, 80, 443]",
+   "show_output": true,
+   "bank": [
+    "append",
+    "add",
+    "push",
+    "insert"
+   ],
+   "intro": "وش الأسلوب اللي يضيف عنصراً في آخر القائمة؟",
+   "explain": "`append` تضيف في النهاية."
+  },
+  {
+   "type": "code",
+   "title": "رتّب تنازلياً",
+   "instructions": [
+    "القائمة `scores = [70, 95, 82, 60]`. اطبعها بعد ترتيبها **من الأكبر للأصغر**."
+   ],
+   "starter": "scores = [70, 95, 82, 60]\n",
+   "tests": [
+    {
+     "expect_stdout": "[95, 82, 70, 60]",
+     "label": "مرتبة تنازلياً"
+    }
+   ],
+   "solution": "scores = [70, 95, 82, 60]\nscores.sort(reverse=True)\nprint(scores)\n",
+   "hints": [
+    "الأسلوب `sort` مع `reverse=True`.",
+    "لا تخزن ناتجها في متغير."
+   ],
+   "checks": [
+    {
+     "regex": "sort",
+     "msg": "استخدم sort"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "جمّع المدخلات",
+   "instructions": [
+    "اقرأ `n` ثم `n` اسم (كل واحد بسطر) وخزنها في قائمة، ثم اطبع القائمة مرتبة أبجدياً."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "['a', 'b', 'c']",
+     "stdin": [
+      "3",
+      "c",
+      "a",
+      "b"
+     ]
+    },
+    {
+     "expect_stdout": "['x']",
+     "stdin": [
+      "1",
+      "x"
+     ]
+    },
+    {
+     "expect_stdout": "['m', 'n']",
+     "stdin": [
+      "2",
+      "n",
+      "m"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "n = int(input())\nnames = []\nfor _ in range(n):\n    names.append(input())\nnames.sort()\nprint(names)\n",
+   "hints": [
+    "ابدأ بقائمة فاضية `[]`.",
+    "استخدم `append` داخل الحلقة."
+   ],
+   "stdin": [
+    "3",
+    "c",
+    "a",
+    "b"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أعلى 3 درجات",
+   "instructions": [
+    "القائمة `scores = [70, 95, 82, 60, 88]`. اطبع **أعلى ثلاث درجات** مرتبة من الأكبر: `[95, 88, 82]`. (تلميح: التقطيع `[:3]` بنتعلمه الدرس الجاي، جرّب حلقة أو `pop`)."
+   ],
+   "starter": "scores = [70, 95, 82, 60, 88]\n",
+   "tests": [
+    {
+     "expect_stdout": "[95, 88, 82]",
+     "label": "يطبع [95, 88, 82]"
+    }
+   ],
+   "solution": "scores = [70, 95, 82, 60, 88]\nscores.sort(reverse=True)\nprint([scores[0], scores[1], scores[2]])\n",
+   "hints": [
+    "رتّب تنازلياً أولاً.",
+    "اطبع أول ثلاثة عناصر في قائمة جديدة."
+   ],
+   "checks": [
+    {
+     "regex": "sort",
+     "msg": "رتّب القائمة"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: None",
+   "instructions": [
+    "الكود يطبع `None`. أصلحه ليطبع `[1, 2, 3]`."
+   ],
+   "starter": "nums = [3, 1, 2]\nnums = nums.sort()\nprint(nums)\n",
+   "tests": [
+    {
+     "expect_stdout": "[1, 2, 3]",
+     "label": "يطبع [1, 2, 3]"
+    }
+   ],
+   "solution": "nums = [3, 1, 2]\nnums.sort()\nprint(nums)\n",
+   "hints": [
+    "`sort()` تغيّر القائمة وترجع None.",
+    "لا تخزّن ناتجها."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يسوي `items.append(\"x\")`؟",
+     "options": [
+      "يضيف x لآخر القائمة",
+      "يحذف x",
+      "يرتبها"
+     ],
+     "answer": 0,
+     "why": "append تضيف في النهاية."
+    },
+    {
+     "q": "وش يرجع `[1, 2].sort()`؟",
+     "options": [
+      "None",
+      "[1, 2]",
+      "True"
+     ],
+     "answer": 0,
+     "why": "تغيّر القائمة وترجع None."
+    },
+    {
+     "q": "كيف تحصل على نسخة مرتبة بدون تغيير الأصل؟",
+     "options": [
+      "sorted(list)",
+      "list.sort()",
+      "list.order()"
+     ],
+     "answer": 0,
+     "why": "`sorted` ترجع قائمة جديدة."
+    },
+    {
+     "q": "وش يطبع `max([4, 9, 2])`؟",
+     "options": [
+      "9",
+      "4",
+      "2"
+     ],
+     "answer": 0,
+     "why": "أكبر قيمة."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`append` `insert` `remove` `pop` `sort` `reverse` من أهم أساليب القوائم.",
+    "أساليب القوائم **تغيّر القائمة وترجع None**.",
+    "`sorted()` ترجع نسخة جديدة."
+   ]
+  }
+ ]
+}

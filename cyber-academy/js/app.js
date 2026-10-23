@@ -14,8 +14,13 @@ const lessonsOf = () => curriculum.levels.flatMap((l) => l.modules.map((m) => ({
 const isDone = (id) => !!store.get().lessons[id]?.done;
 // القفل المتسلسل: الدرس يفتح بعد إنهاء اللي قبله (بترتيب المنهج عبر المستويات).
 // الدرس اللي انتهى سابقاً يبقى مفتوحاً للمراجعة.
-const readyList = () => lessonsOf().filter((m) => m.ready);
-const prevOf = (id) => { const l = readyList(); const i = l.findIndex((m) => m.id === id); return i > 0 ? l[i - 1] : null; };
+// كل مسار (الأمن / Python) له قفله المتسلسل الخاص، فمتعلم الأمن ما يحتاج يخلص مساره عشان يبدأ بايثون
+const trackOf = (id) => lessonsOf().find((m) => m.id === id)?.level.track || 'security';
+const readyList = (track) => lessonsOf().filter((m) => m.ready && (!track || m.level.track === track));
+const prevOf = (id) => { const l = readyList(trackOf(id)); const i = l.findIndex((m) => m.id === id); return i > 0 ? l[i - 1] : null; };
+const levelLabel = (l) => (l.track === 'python' ? `P${l.id - 10}` : `المستوى ${l.id}`);
+const TRACKS = { security: ['🛡️', 'الأمن السيبراني'], python: ['🐍', 'Python'] };
+let pathTrack = 'security';
 // تحكم المشرف: إيقاف التدريب، وسقف للمستوى، وفتح كل الدروس
 const me = () => sync.currentUser();
 const isSuspended = () => me()?.status === 'suspended';
@@ -28,7 +33,7 @@ const isUnlocked = (id) => {
   return !p || isDone(id) || isDone(p.id);
 };
 // الدرس التالي = أول درس جاهز ما انحل وضمن السقف المسموح
-const nextLesson = () => lessonsOf().find((m) => m.ready && !isDone(m.id) && !overCap(m.id));
+const nextLesson = (track = 'security') => lessonsOf().find((m) => m.ready && m.level.track === track && !isDone(m.id) && !overCap(m.id));
 
 // شاشة الإيقاف: يوقفها المشرف ويكتب فيها رسالة للمتدرب
 function suspendedScreen() {
@@ -48,10 +53,12 @@ function suspendedScreen() {
 
 function home() {
   const st = store.get();
-  const next = nextLesson();
-  const all = lessonsOf();
-  const ready = all.filter((m) => m.ready);
+  const next = nextLesson('security');
+  const pyNext = nextLesson('python');
+  const ready = readyList('security');
   const done = ready.filter((m) => isDone(m.id)).length;
+  const pyReady = readyList('python');
+  const pyDone = pyReady.filter((m) => isDone(m.id)).length;
   const terms = allTerms();
   // "مصطلح اليوم" يتغير كل يوم ويثبت طول اليوم
   const wod = terms[Math.floor(Date.now() / 864e5) % terms.length];
@@ -74,9 +81,13 @@ function home() {
         ? `<div class="card"><h2>🏁 وصلت للحد المسموح</h2><p>أنهيت كل دروس المستويات المفتوحة لك. تواصل مع مشرفك لفتح المستوى التالي.</p></div>`
         : `<div class="card"><h2>🎉 خلصت كل الدروس المتاحة</h2><p>دروس جديدة جاية قريب.</p></div>`}
     <div class="card soft">
-      <div class="row between"><b>تقدمك</b><span class="muted">${done}/${ready.length} دروس</span></div>
+      <div class="row between"><b>🛡️ مسار الأمن</b><span class="muted">${done}/${ready.length} دروس</span></div>
       <div class="bar" style="margin-top:8px"><i style="width:${ready.length ? (done / ready.length) * 100 : 0}%"></i></div>
     </div>
+    ${pyReady.length ? `<a class="card" style="display:block;text-decoration:none;color:inherit;border-color:var(--blue)" href="${pyNext ? `#/lesson/${pyNext.id}` : '#/path'}">
+      <div class="row between"><b>🐍 مسار Python</b><span class="muted">${pyDone}/${pyReady.length} دروس</span></div>
+      <div class="bar" style="margin:8px 0"><i style="width:${(pyDone / pyReady.length) * 100}%;background:var(--blue)"></i></div>
+      <small class="muted">${pyNext ? `${pyDone ? 'كمّل' : 'ابدأ'}: ${esc(pyNext.title_ar)}` : 'خلصت الدروس المتاحة'}</small></a>` : ''}
     <a class="card" style="display:block;text-decoration:none;color:inherit" href="#/review"><b>🔁 مراجعة المصطلحات</b><p class="muted" style="margin:0">ثبّت اللي تعلمته بتكرار متباعد.</p></a>
     <div class="card">
       <span class="badge">🔤 مصطلح اليوم</span>
@@ -87,11 +98,12 @@ function home() {
 }
 
 function path() {
-  const next = nextLesson();
-  view.innerHTML = `<h1>🗺️ مسار التعلم</h1>` + curriculum.levels.map((l) => `
+  const next = nextLesson(pathTrack);
+  const tabs = `<div class="seg" style="margin-bottom:14px">${Object.entries(TRACKS).map(([k, [ic, name]]) => `<button data-track="${k}" class="${pathTrack === k ? 'on' : ''}">${ic} ${name}</button>`).join('')}</div>`;
+  view.innerHTML = `<h1>🗺️ مسار التعلم</h1>${tabs}` + curriculum.levels.filter((l) => l.track === pathTrack).map((l) => `
     <section class="level">
       <div class="level-head" style="background:${l.color}">
-        <small>المستوى ${l.id}</small>
+        <small>${levelLabel(l)}</small>
         <h2 style="margin:0">${l.icon} ${esc(l.title_ar)}</h2>
         <small class="en">${esc(l.title_en)}</small>
         <small style="float:left">${l.modules.filter((m) => isDone(m.id)).length}/${l.modules.length}</small>
@@ -106,6 +118,7 @@ function path() {
         </a>`;
       }).join('')}
     </section>`).join('');
+  view.querySelectorAll('[data-track]').forEach((b) => b.addEventListener('click', () => { pathTrack = b.dataset.track; path(); }));
 }
 
 async function lesson(id, query) {
@@ -119,7 +132,7 @@ async function lesson(id, query) {
     return;
   }
   if (!isUnlocked(id)) {
-    const p = prevOf(id), nx = nextLesson();
+    const p = prevOf(id), nx = nextLesson(trackOf(id));
     view.innerHTML = `<div class="card result"><div class="big">🔒</div><h2>هذا الدرس مقفل</h2>
       <p>أكمل أول <b>${esc(p.title_ar)}</b> عشان ينفتح.</p>
       <a class="btn" href="#/lesson/${nx ? nx.id : p.id}">${nx ? 'كمّل من وين وقفت' : 'ارجع للدرس السابق'}</a><br><a class="btn ghost" href="#/path">المسار</a></div>`;
@@ -127,7 +140,7 @@ async function lesson(id, query) {
   }
   try {
     const data = await (await fetch(`content/lessons/${id}.json`)).json();
-    const list = readyList(), i = list.findIndex((m) => m.id === id);
+    const list = readyList(trackOf(id)), i = list.findIndex((m) => m.id === id);
     playLesson(view, { id, ...data }, (go) => { location.hash = go || '#/path'; }, startAt, list[i + 1]?.id || null);
   } catch {
     view.innerHTML = `<div class="card"><h2>ما قدرنا نحمّل الدرس 😕</h2><p>تأكد من الاتصال وجرّب مرة ثانية.</p><a class="btn" href="#/path">رجوع</a></div>`;
@@ -153,6 +166,10 @@ function glossary() {
 
 // ---- المختبر: كل التمارين العملية في مكان واحد ----
 const LAB_NAMES = {
+  code: ['🐍', 'اكتب كود Python', 'تمارين برمجة بفحص تلقائي'],
+  predict: ['🔮', 'توقّع الناتج', 'وش يطبع هذا الكود؟'],
+  parsons: ['🧩', 'رتّب أسطر الكود', 'رتّب الأسطر لتشتغل'],
+  fillcode: ['✏️', 'أكمل الفراغ', 'أكمل الكود الناقص'],
   terminal: ['⌨️', 'سطر الأوامر', 'تدرّب على أوامر حقيقية في محاكي آمن'],
   phish: ['🎣', 'اكتشف المشبوه', 'رسائل تصيّد وسجلات وحزم شبكة'],
   passlab: ['🔐', 'مختبر الباسورد', 'قِس قوة الباسورد'],

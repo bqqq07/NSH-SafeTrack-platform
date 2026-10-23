@@ -1,0 +1,290 @@
+{
+ "title_ar": "القيم المنطقية والمقارنات",
+ "title_en": "Booleans & Comparisons",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "⚖️",
+   "goal": "تقارن القيم وتحصل على **صح أو خطأ** ([[bool]])، وهذا أساس كل قرار يتخذه برنامجك."
+  },
+  {
+   "type": "text",
+   "title": "صح أو خطأ",
+   "body": [
+    "القيمة المنطقية ([[bool]]) إما `True` أو `False` (بحرف كبير أول).",
+    "نحصل عليها من **المقارنات** ([[comparison-operator]]): `==` يساوي، `!=` لا يساوي، `<` `>` `<=` `>=`.",
+    "ولاحظ: `=` للتعيين، و`==` للمقارنة!"
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "warn",
+   "note": "أشهر خطأ: كتابة `=` بدل `==` في المقارنة.",
+   "code": "print(5 > 3)\nprint(10 == 10)\nprint(\"a\" == \"A\")\nprint(3 != 4)"
+  },
+  {
+   "type": "text",
+   "title": "مقارنات أكثر",
+   "body": [
+    "`in` تفحص إذا نص داخل نص آخر: `\"py\" in \"python\"` تعطي `True`.",
+    "المقارنة تفرق بين الحروف الكبيرة والصغيرة.",
+    "وبعض القيم تُعامل كخطأ: `0` و`\"\"` (نص فارغ) تعطي `False` لما نحولها بـ `bool()`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "في الدرس القادم نستخدم هذي القيم داخل `if` لاتخاذ قرارات.",
+   "code": "print(\"py\" in \"python\")\nprint(3 == 3.0)\nprint(bool(0), bool(\"\"), bool(\"x\"))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "bool",
+    "comparison-operator",
+    "operator"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "print(5 > 3)\nprint(10 != 10)\nprint(\"a\" == \"A\")\n",
+   "options": [
+    "True\nFalse\nFalse",
+    "True\nTrue\nTrue",
+    "True\nFalse\nTrue",
+    "False\nFalse\nFalse"
+   ],
+   "answer": 0,
+   "why": "5 أكبر من 3 (True)، و10 تساوي 10 فالمقارنة `!=` خطأ (False)، والحرف الصغير غير الكبير (False)."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): in",
+   "code": "print(\"py\" in \"python\")\nprint(\"java\" in \"python\")\n",
+   "options": [
+    "True\nFalse",
+    "True\nTrue",
+    "False\nFalse",
+    "False\nTrue"
+   ],
+   "answer": 0,
+   "why": "`py` موجودة داخل `python`، و`java` لا."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): bool",
+   "code": "print(bool(0), bool(\"\"), bool(\"x\"))",
+   "options": [
+    "False False True",
+    "False False False",
+    "True True True",
+    "False True True"
+   ],
+   "answer": 0,
+   "why": "الصفر والنص الفارغ يعتبران خطأ، وأي نص فيه شي يعتبر صح."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: المقارنة",
+   "code": "x = 5\nprint(x ____ 5)\n",
+   "blanks": [
+    {
+     "answer": "=="
+    }
+   ],
+   "expect_stdout": "True",
+   "show_output": true,
+   "bank": [
+    "==",
+    "=",
+    "!=",
+    "<"
+   ],
+   "intro": "أي رمز يفحص إذا x تساوي 5؟",
+   "explain": "`==` مقارنة، و`=` تعيين قيمة."
+  },
+  {
+   "type": "code",
+   "title": "هل بالغ؟",
+   "instructions": [
+    "اقرأ العمر (رقماً) واطبع `True` إذا كان **18 أو أكثر**، وإلا `False`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "True",
+     "stdin": [
+      "20"
+     ]
+    },
+    {
+     "expect_stdout": "False",
+     "stdin": [
+      "17"
+     ]
+    },
+    {
+     "expect_stdout": "True",
+     "stdin": [
+      "18"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "age = int(input())\nprint(age >= 18)\n",
+   "hints": [
+    "حوّل المدخل لرقم.",
+    "استخدم `>=` واطبع النتيجة مباشرة."
+   ],
+   "stdin": [
+    "20"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "هل الملف خطير؟",
+   "instructions": [
+    "اقرأ اسم ملف واطبع `True` إذا ينتهي بـ `.exe`، وإلا `False`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "True",
+     "stdin": [
+      "setup.exe"
+     ]
+    },
+    {
+     "expect_stdout": "False",
+     "stdin": [
+      "photo.jpg"
+     ]
+    },
+    {
+     "expect_stdout": "True",
+     "stdin": [
+      "invoice.pdf.exe"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "name = input()\nprint(name.endswith(\".exe\"))\n",
+   "hints": [
+    "`endswith()` ترجع True أو False.",
+    "اطبع نتيجتها."
+   ],
+   "stdin": [
+    "setup.exe"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "اسم المستخدم يحتوي admin؟",
+   "instructions": [
+    "اقرأ اسم مستخدم واطبع `True` إذا كان يحتوي الكلمة `admin` (بحروف صغيرة)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "True",
+     "stdin": [
+      "super_admin"
+     ]
+    },
+    {
+     "expect_stdout": "False",
+     "stdin": [
+      "sara"
+     ]
+    },
+    {
+     "expect_stdout": "True",
+     "stdin": [
+      "admin"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "user = input()\nprint(\"admin\" in user)\n",
+   "hints": [
+    "استخدم `in`.",
+    "`\"admin\" in user`"
+   ],
+   "stdin": [
+    "super_admin"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: = بدل ==",
+   "instructions": [
+    "الكود يعطي خطأ. أصلحه ليطبع `True`."
+   ],
+   "starter": "x = 5\nprint(x = 5)\n",
+   "tests": [
+    {
+     "expect_stdout": "True",
+     "label": "يطبع True"
+    }
+   ],
+   "solution": "x = 5\nprint(x == 5)\n",
+   "hints": [
+    "للمقارنة نحتاج علامتي يساوي.",
+    "غيّر `=` إلى `==`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش الفرق بين `=` و`==`؟",
+     "options": [
+      "`=` تعيين و`==` مقارنة",
+      "نفس الشي",
+      "`=` مقارنة و`==` تعيين"
+     ],
+     "answer": 0,
+     "why": "واحدة تخزّن والثانية تفحص."
+    },
+    {
+     "q": "وش يطبع `print(7 <= 7)`؟",
+     "options": [
+      "True",
+      "False",
+      "7"
+     ],
+     "answer": 0,
+     "why": "7 أصغر من أو تساوي 7."
+    },
+    {
+     "q": "وش يطبع `print(\"A\" == \"a\")`؟",
+     "options": [
+      "False",
+      "True",
+      "خطأ"
+     ],
+     "answer": 0,
+     "why": "المقارنة تفرق بين الحروف الكبيرة والصغيرة."
+    },
+    {
+     "q": "وش قيمة `bool(\"\")`؟",
+     "options": [
+      "False",
+      "True",
+      "None"
+     ],
+     "answer": 0,
+     "why": "النص الفارغ يعتبر خطأ."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "المقارنات ترجع `True` أو `False`.",
+    "`==` للمقارنة، و`=` لتعيين قيمة.",
+    "`in` تفحص وجود نص داخل نص.",
+    "الأساس لاتخاذ القرارات في الدرس القادم."
+   ]
+  }
+ ]
+}

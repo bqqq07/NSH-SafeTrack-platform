@@ -49,7 +49,8 @@
      "title_en": "Accounts & Passwords",
      "ready": true
     }
-   ]
+   ],
+   "track": "security"
   },
   {
    "id": 1,
@@ -100,7 +101,8 @@
      "title_en": "Careers in Cyber",
      "ready": true
     }
-   ]
+   ],
+   "track": "security"
   },
   {
    "id": 2,
@@ -175,7 +177,8 @@
      "title_en": "If You Get Hacked",
      "ready": true
     }
-   ]
+   ],
+   "track": "security"
   },
   {
    "id": 3,
@@ -244,7 +247,8 @@
      "title_en": "Packet Analysis",
      "ready": true
     }
-   ]
+   ],
+   "track": "security"
   },
   {
    "id": 4,
@@ -295,7 +299,8 @@
      "title_en": "Crypto Playground",
      "ready": true
     }
-   ]
+   ],
+   "track": "security"
   },
   {
    "id": 5,
@@ -346,7 +351,8 @@
      "title_en": "Virtual Machines",
      "ready": true
     }
-   ]
+   ],
+   "track": "security"
   },
   {
    "id": 6,
@@ -385,7 +391,8 @@
      "title_en": "Bug Bounty",
      "ready": true
     }
-   ]
+   ],
+   "track": "security"
   },
   {
    "id": 7,
@@ -436,7 +443,8 @@
      "title_en": "MITRE ATT&CK",
      "ready": true
     }
-   ]
+   ],
+   "track": "security"
   },
   {
    "id": 8,
@@ -481,7 +489,8 @@
      "title_en": "Security Report",
      "ready": true
     }
-   ]
+   ],
+   "track": "security"
   },
   {
    "id": 9,
@@ -525,6 +534,645 @@
      "title_ar": "السيرة الذاتية وأول وظيفة",
      "title_en": "CV & First Job",
      "ready": true
+    }
+   ],
+   "track": "security"
+  },
+  {
+   "id": 10,
+   "icon": "🐣",
+   "color": "#58cc02",
+   "track": "python",
+   "title_ar": "ابدأ هنا",
+   "title_en": "Python: Start Here",
+   "modules": [
+    {
+     "id": "m10.1",
+     "title_ar": "وش هي البرمجة؟ وليش Python؟",
+     "title_en": "What is Programming?",
+     "ready": true
+    },
+    {
+     "id": "m10.2",
+     "title_ar": "أول برنامج: print",
+     "title_en": "Your First Program",
+     "ready": true
+    },
+    {
+     "id": "m10.3",
+     "title_ar": "كيف يقرأ Python الكود",
+     "title_en": "How Python Reads Code",
+     "ready": true
+    },
+    {
+     "id": "m10.4",
+     "title_ar": "التعليقات وكتابة كود مقروء",
+     "title_en": "Comments",
+     "ready": true
+    },
+    {
+     "id": "m10.5",
+     "title_ar": "قراءة رسائل الخطأ",
+     "title_en": "Reading Errors",
+     "ready": true
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "icon": "🔤",
+   "color": "#1cb0f6",
+   "track": "python",
+   "title_ar": "الأساسيات",
+   "title_en": "Python Basics",
+   "modules": [
+    {
+     "id": "m11.1",
+     "title_ar": "المتغيرات",
+     "title_en": "Variables",
+     "ready": true
+    },
+    {
+     "id": "m11.2",
+     "title_ar": "الأرقام والعمليات",
+     "title_en": "Numbers & Operators",
+     "ready": true
+    },
+    {
+     "id": "m11.3",
+     "title_ar": "النصوص",
+     "title_en": "Strings",
+     "ready": true
+    },
+    {
+     "id": "m11.4",
+     "title_ar": "أساليب النصوص",
+     "title_en": "String Methods",
+     "ready": true
+    },
+    {
+     "id": "m11.5",
+     "title_ar": "f-strings وتنسيق الطباعة",
+     "title_en": "f-strings & Formatting",
+     "ready": true
+    },
+    {
+     "id": "m11.6",
+     "title_ar": "المدخلات input",
+     "title_en": "User Input",
+     "ready": true
+    },
+    {
+     "id": "m11.7",
+     "title_ar": "تحويل الأنواع",
+     "title_en": "Type Casting",
+     "ready": true
+    },
+    {
+     "id": "m11.8",
+     "title_ar": "القيم المنطقية والمقارنات",
+     "title_en": "Booleans & Comparisons",
+     "ready": true
+    },
+    {
+     "id": "m11.9",
+     "title_ar": "مشروع: حاسبة فاتورة",
+     "title_en": "Project: Invoice Calculator",
+     "ready": true
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "icon": "🔀",
+   "color": "#ff9600",
+   "track": "python",
+   "title_ar": "التحكم بالتدفق",
+   "title_en": "Control Flow",
+   "modules": [
+    {
+     "id": "m12.1",
+     "title_ar": "if / elif / else",
+     "title_en": "Conditionals",
+     "ready": true
+    },
+    {
+     "id": "m12.2",
+     "title_ar": "العمليات المنطقية",
+     "title_en": "and / or / not",
+     "ready": true
+    },
+    {
+     "id": "m12.3",
+     "title_ar": "الحلقة while",
+     "title_en": "While Loops",
+     "ready": true
+    },
+    {
+     "id": "m12.4",
+     "title_ar": "الحلقة for و range",
+     "title_en": "For Loops & range",
+     "ready": true
+    },
+    {
+     "id": "m12.5",
+     "title_ar": "break و continue",
+     "title_en": "break & continue",
+     "ready": true
+    },
+    {
+     "id": "m12.6",
+     "title_ar": "الحلقات المتداخلة",
+     "title_en": "Nested Loops",
+     "ready": true
+    },
+    {
+     "id": "m12.7",
+     "title_ar": "أنماط شائعة",
+     "title_en": "Common Patterns",
+     "ready": true
+    },
+    {
+     "id": "m12.8",
+     "title_ar": "مشروع: لعبة تخمين الرقم",
+     "title_en": "Project: Number Guessing Game",
+     "ready": true
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "icon": "🗃️",
+   "color": "#ce82ff",
+   "track": "python",
+   "title_ar": "هياكل البيانات",
+   "title_en": "Data Structures",
+   "modules": [
+    {
+     "id": "m13.1",
+     "title_ar": "القوائم list",
+     "title_en": "Lists",
+     "ready": true
+    },
+    {
+     "id": "m13.2",
+     "title_ar": "أساليب القوائم",
+     "title_en": "List Methods",
+     "ready": true
+    },
+    {
+     "id": "m13.3",
+     "title_ar": "التقطيع",
+     "title_en": "Slicing",
+     "ready": true
+    },
+    {
+     "id": "m13.4",
+     "title_ar": "المجموعات الثابتة tuple",
+     "title_en": "Tuples",
+     "ready": true
+    },
+    {
+     "id": "m13.5",
+     "title_ar": "القواميس dict",
+     "title_en": "Dictionaries",
+     "ready": true
+    },
+    {
+     "id": "m13.6",
+     "title_ar": "المجموعات set",
+     "title_en": "Sets",
+     "ready": true
+    },
+    {
+     "id": "m13.7",
+     "title_ar": "القوائم الشاملة",
+     "title_en": "List Comprehensions",
+     "ready": true
+    },
+    {
+     "id": "m13.8",
+     "title_ar": "الهياكل المتداخلة",
+     "title_en": "Nested Structures",
+     "ready": true
+    },
+    {
+     "id": "m13.9",
+     "title_ar": "مشروع: دفتر جهات اتصال",
+     "title_en": "Project: Contact Book",
+     "ready": true
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "icon": "🧰",
+   "color": "#2b70c9",
+   "track": "python",
+   "title_ar": "الدوال",
+   "title_en": "Functions",
+   "modules": [
+    {
+     "id": "m14.1",
+     "title_ar": "تعريف دالة def",
+     "title_en": "Defining Functions",
+     "ready": false
+    },
+    {
+     "id": "m14.2",
+     "title_ar": "المعاملات والقيمة المرجعة",
+     "title_en": "Parameters & Return",
+     "ready": false
+    },
+    {
+     "id": "m14.3",
+     "title_ar": "القيم الافتراضية",
+     "title_en": "Default Arguments",
+     "ready": false
+    },
+    {
+     "id": "m14.4",
+     "title_ar": "النطاق Scope",
+     "title_en": "Scope",
+     "ready": false
+    },
+    {
+     "id": "m14.5",
+     "title_ar": "*args و **kwargs",
+     "title_en": "*args & **kwargs",
+     "ready": false
+    },
+    {
+     "id": "m14.6",
+     "title_ar": "lambda و map/filter",
+     "title_en": "Lambda",
+     "ready": false
+    },
+    {
+     "id": "m14.7",
+     "title_ar": "التوثيق وتلميحات الأنواع",
+     "title_en": "Docstrings & Type Hints",
+     "ready": false
+    },
+    {
+     "id": "m14.8",
+     "title_ar": "مشروع: مكتبة دوال",
+     "title_en": "Project: Utility Library",
+     "ready": false
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "icon": "📁",
+   "color": "#a560e8",
+   "track": "python",
+   "title_ar": "الملفات والنصوص",
+   "title_en": "Files & Text",
+   "modules": [
+    {
+     "id": "m15.1",
+     "title_ar": "قراءة الملفات",
+     "title_en": "Reading Files",
+     "ready": false
+    },
+    {
+     "id": "m15.2",
+     "title_ar": "الكتابة في الملفات",
+     "title_en": "Writing Files",
+     "ready": false
+    },
+    {
+     "id": "m15.3",
+     "title_ar": "معالجة الأسطر",
+     "title_en": "Processing Lines",
+     "ready": false
+    },
+    {
+     "id": "m15.4",
+     "title_ar": "الترميز UTF-8 والعربي",
+     "title_en": "Encoding & Arabic",
+     "ready": false
+    },
+    {
+     "id": "m15.5",
+     "title_ar": "ملفات CSV",
+     "title_en": "CSV",
+     "ready": false
+    },
+    {
+     "id": "m15.6",
+     "title_ar": "ملفات JSON",
+     "title_en": "JSON",
+     "ready": false
+    },
+    {
+     "id": "m15.7",
+     "title_ar": "التعابير النمطية Regex",
+     "title_en": "Regular Expressions",
+     "ready": false
+    },
+    {
+     "id": "m15.8",
+     "title_ar": "مشروع: محلل سجلات",
+     "title_en": "Project: Log Parser",
+     "ready": false
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "icon": "🐞",
+   "color": "#ff4b4b",
+   "track": "python",
+   "title_ar": "الأخطاء والجودة",
+   "title_en": "Errors & Quality",
+   "modules": [
+    {
+     "id": "m16.1",
+     "title_ar": "الاستثناءات try/except",
+     "title_en": "Exceptions",
+     "ready": false
+    },
+    {
+     "id": "m16.2",
+     "title_ar": "رفع الأخطاء raise",
+     "title_en": "Raising Errors",
+     "ready": false
+    },
+    {
+     "id": "m16.3",
+     "title_ar": "تصحيح الأخطاء",
+     "title_en": "Debugging",
+     "ready": false
+    },
+    {
+     "id": "m16.4",
+     "title_ar": "assert والاختبارات",
+     "title_en": "Assertions",
+     "ready": false
+    },
+    {
+     "id": "m16.5",
+     "title_ar": "unittest",
+     "title_en": "unittest",
+     "ready": false
+    },
+    {
+     "id": "m16.6",
+     "title_ar": "أسلوب PEP 8",
+     "title_en": "PEP 8",
+     "ready": false
+    },
+    {
+     "id": "m16.7",
+     "title_ar": "venv و pip",
+     "title_en": "venv & pip",
+     "ready": false
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "icon": "🏗️",
+   "color": "#4b4b4b",
+   "track": "python",
+   "title_ar": "الوحدات والكائنات",
+   "title_en": "Modules & OOP",
+   "modules": [
+    {
+     "id": "m17.1",
+     "title_ar": "الوحدات import",
+     "title_en": "Modules",
+     "ready": false
+    },
+    {
+     "id": "m17.2",
+     "title_ar": "المكتبة القياسية",
+     "title_en": "Standard Library",
+     "ready": false
+    },
+    {
+     "id": "m17.3",
+     "title_ar": "الفئات والكائنات",
+     "title_en": "Classes",
+     "ready": false
+    },
+    {
+     "id": "m17.4",
+     "title_ar": "الخصائص والأساليب",
+     "title_en": "Attributes & Methods",
+     "ready": false
+    },
+    {
+     "id": "m17.5",
+     "title_ar": "الوراثة",
+     "title_en": "Inheritance",
+     "ready": false
+    },
+    {
+     "id": "m17.6",
+     "title_ar": "الأساليب الخاصة",
+     "title_en": "Dunder Methods",
+     "ready": false
+    },
+    {
+     "id": "m17.7",
+     "title_ar": "dataclass",
+     "title_en": "dataclass",
+     "ready": false
+    },
+    {
+     "id": "m17.8",
+     "title_ar": "مشروع: إدارة الحسابات",
+     "title_en": "Project: Account Manager",
+     "ready": false
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "icon": "🚀",
+   "color": "#00cd9c",
+   "track": "python",
+   "title_ar": "متوسط متقدّم",
+   "title_en": "Intermediate+",
+   "modules": [
+    {
+     "id": "m18.1",
+     "title_ar": "المولّدات Generators",
+     "title_en": "Generators",
+     "ready": false
+    },
+    {
+     "id": "m18.2",
+     "title_ar": "المزخرفات Decorators",
+     "title_en": "Decorators",
+     "ready": false
+    },
+    {
+     "id": "m18.3",
+     "title_ar": "مديرو السياق",
+     "title_en": "Context Managers",
+     "ready": false
+    },
+    {
+     "id": "m18.4",
+     "title_ar": "collections",
+     "title_en": "collections",
+     "ready": false
+    },
+    {
+     "id": "m18.5",
+     "title_ar": "itertools و functools",
+     "title_en": "itertools & functools",
+     "ready": false
+    },
+    {
+     "id": "m18.6",
+     "title_ar": "التزامن",
+     "title_en": "Concurrency",
+     "ready": false
+    },
+    {
+     "id": "m18.7",
+     "title_ar": "الأداء وBig-O",
+     "title_en": "Performance",
+     "ready": false
+    },
+    {
+     "id": "m18.8",
+     "title_ar": "قواعد البيانات sqlite3",
+     "title_en": "sqlite3",
+     "ready": false
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "icon": "🛡️",
+   "color": "#1899d6",
+   "track": "python",
+   "title_ar": "Python للأمن السيبراني",
+   "title_en": "Python for Security",
+   "modules": [
+    {
+     "id": "m19.1",
+     "title_ar": "بصمة الملفات hashlib",
+     "title_en": "File Integrity",
+     "ready": false
+    },
+    {
+     "id": "m19.2",
+     "title_ar": "مولّد باسوردات secrets",
+     "title_en": "Password Generator",
+     "ready": false
+    },
+    {
+     "id": "m19.3",
+     "title_ar": "فاحص قوة الباسورد",
+     "title_en": "Password Checker",
+     "ready": false
+    },
+    {
+     "id": "m19.4",
+     "title_ar": "كاشف التخمين من السجلات",
+     "title_en": "Brute-force Detector",
+     "ready": false
+    },
+    {
+     "id": "m19.5",
+     "title_ar": "استخراج IOC بـ Regex",
+     "title_en": "IOC Extraction",
+     "ready": false
+    },
+    {
+     "id": "m19.6",
+     "title_ar": "تحليل سجلات الويب",
+     "title_en": "Web Log Analysis",
+     "ready": false
+    },
+    {
+     "id": "m19.7",
+     "title_ar": "فحص المنافذ المحلية",
+     "title_en": "Local Port Check",
+     "ready": false
+    },
+    {
+     "id": "m19.8",
+     "title_ar": "requests وواجهات JSON",
+     "title_en": "APIs",
+     "ready": false
+    },
+    {
+     "id": "m19.9",
+     "title_ar": "التشفير بـ cryptography",
+     "title_en": "Fernet",
+     "ready": false
+    },
+    {
+     "id": "m19.10",
+     "title_ar": "تقرير أمني تلقائي",
+     "title_en": "Auto Report",
+     "ready": false
+    }
+   ]
+  },
+  {
+   "id": 20,
+   "icon": "🏁",
+   "color": "#ffc800",
+   "track": "python",
+   "title_ar": "المشاريع الختامية",
+   "title_en": "Capstone Projects",
+   "modules": [
+    {
+     "id": "m20.1",
+     "title_ar": "مراقب سجلات",
+     "title_en": "Log Monitor",
+     "ready": false
+    },
+    {
+     "id": "m20.2",
+     "title_ar": "مدير باسوردات مشفّر",
+     "title_en": "Password Vault",
+     "ready": false
+    },
+    {
+     "id": "m20.3",
+     "title_ar": "فاحص سلامة الملفات",
+     "title_en": "Integrity Checker",
+     "ready": false
+    },
+    {
+     "id": "m20.4",
+     "title_ar": "محلل حزم من ملف",
+     "title_en": "Packet File Analyzer",
+     "ready": false
+    },
+    {
+     "id": "m20.5",
+     "title_ar": "مولّد تقارير أمنية",
+     "title_en": "Report Generator",
+     "ready": false
+    },
+    {
+     "id": "m20.6",
+     "title_ar": "مستخرج IOC",
+     "title_en": "IOC Extractor",
+     "ready": false
+    },
+    {
+     "id": "m20.7",
+     "title_ar": "بوت تذكير",
+     "title_en": "Reminder Bot",
+     "ready": false
+    },
+    {
+     "id": "m20.8",
+     "title_ar": "لعبة CTF",
+     "title_en": "Build a CTF",
+     "ready": false
     }
    ]
   }

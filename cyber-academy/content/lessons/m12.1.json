@@ -1,0 +1,374 @@
+{
+ "title_ar": "if / elif / else",
+ "title_en": "Conditionals",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔀",
+   "goal": "تخلّي برنامجك **يقرر**: ينفذ كوداً معيناً فقط لما يتحقق [[condition]] (شرط)."
+  },
+  {
+   "type": "text",
+   "title": "الشرط: لو صح نفّذ",
+   "body": [
+    "جملة `if` ([[if-statement]]) تفحص شرطاً. لو طلع `True` تنفذ الكتلة اللي تحتها، ولو `False` تتخطاها.",
+    "اللي ينفذ داخل الشرط يُكتب **بإزاحة 4 مسافات** وبعد النقطتين `:`. هذي الكتلة ([[block]]).",
+    "`else` تنفذ لما الشرط يطلع خطأ."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "warn",
+   "note": "النقطتان `:` والإزاحة إلزاميتان، ونسيان أي منهما أشهر أخطاء الشروط.",
+   "code": "age = 20\nif age >= 18:\n    print(\"بالغ\")\nelse:\n    print(\"قاصر\")"
+  },
+  {
+   "type": "text",
+   "title": "أكثر من احتمال: elif",
+   "body": [
+    "`elif` (اختصار else if) تضيف شرطاً ثانياً يُفحص فقط لو الأول فشل.",
+    "بايثون يفحص من الأعلى للأسفل ويوقف عند **أول شرط صحيح**: فالترتيب مهم!"
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "رتّب الشروط من الأخص للأعم: `>= 90` قبل `>= 70`، وإلا الثاني يلتقط الكل.",
+   "code": "score = 75\nif score >= 90:\n    print(\"ممتاز\")\nelif score >= 70:\n    print(\"جيد\")\nelse:\n    print(\"يحتاج مراجعة\")"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "condition",
+    "if-statement",
+    "block",
+    "comparison-operator",
+    "indentation"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "age = 20\nif age >= 18:\n    print(\"بالغ\")\nelse:\n    print(\"قاصر\")\n",
+   "options": [
+    "بالغ",
+    "قاصر",
+    "بالغ\nقاصر",
+    "خطأ"
+   ],
+   "answer": 0,
+   "why": "20 أكبر من أو تساوي 18 فينفذ `if` ويتخطى `else`."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): elif",
+   "code": "score = 75\nif score >= 90:\n    print(\"A\")\nelif score >= 70:\n    print(\"B\")\nelse:\n    print(\"C\")\n",
+   "options": [
+    "B",
+    "A",
+    "C",
+    "B\nC"
+   ],
+   "answer": 0,
+   "why": "الشرط الأول خطأ، والثاني صح فيطبع B ويتخطى الباقي."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): أول شرط صحيح",
+   "code": "x = 15\nif x > 10:\n    print(\"كبير\")\nelif x > 5:\n    print(\"متوسط\")\n",
+   "options": [
+    "كبير",
+    "متوسط",
+    "كبير\nمتوسط",
+    "ما يطبع شي"
+   ],
+   "answer": 0,
+   "why": "يوقف عند أول شرط صحيح (`x > 10`) فما يفحص `elif`."
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: فحص العمر",
+   "lines": [
+    "age = 17",
+    "if age >= 18:",
+    "    print(\"مسموح\")",
+    "else:",
+    "    print(\"ممنوع\")"
+   ],
+   "expect_stdout": "ممنوع",
+   "intro": "رتّب الأسطر. انتبه: فيه سطر بدون إزاحة ما ينفع داخل الشرط.",
+   "distractors": [
+    "print(\"مسموح\")"
+   ],
+   "explain": "الأسطر تحت `if` و`else` لازم تكون مزاحة."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الشرط",
+   "code": "score = 60\n____ score >= 50:\n    print(\"نجاح\")\n",
+   "blanks": [
+    {
+     "answer": "if"
+    }
+   ],
+   "expect_stdout": "نجاح",
+   "show_output": true,
+   "bank": [
+    "if",
+    "for",
+    "while",
+    "elif"
+   ],
+   "intro": "وش الكلمة اللي تبدأ بها جملة الشرط؟",
+   "explain": "نبدأ بـ `if` ثم الشرط ثم `:`."
+  },
+  {
+   "type": "code",
+   "title": "تصنيف الدرجة",
+   "instructions": [
+    "اقرأ الدرجة (رقماً) واطبع: **ممتاز** لو 90 أو أكثر، **جيد** لو 70 أو أكثر، وإلا **يحتاج مراجعة**."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "ممتاز",
+     "stdin": [
+      "95"
+     ]
+    },
+    {
+     "expect_stdout": "جيد",
+     "stdin": [
+      "75"
+     ]
+    },
+    {
+     "expect_stdout": "يحتاج مراجعة",
+     "stdin": [
+      "40"
+     ]
+    },
+    {
+     "expect_stdout": "ممتاز",
+     "stdin": [
+      "90"
+     ],
+     "hidden": true
+    },
+    {
+     "expect_stdout": "جيد",
+     "stdin": [
+      "70"
+     ],
+     "hidden": true
+    },
+    {
+     "expect_stdout": "يحتاج مراجعة",
+     "stdin": [
+      "69"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "score = int(input())\nif score >= 90:\n    print(\"ممتاز\")\nelif score >= 70:\n    print(\"جيد\")\nelse:\n    print(\"يحتاج مراجعة\")\n",
+   "hints": [
+    "استخدم `if` ثم `elif` ثم `else`.",
+    "ابدأ بالأعلى: `score >= 90`."
+   ],
+   "stdin": [
+    "95"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "قوة الباسورد",
+   "instructions": [
+    "اقرأ كلمة مرور. اطبع **قوية** لو طولها 12 حرفاً أو أكثر، وإلا **ضعيفة**."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "ضعيفة",
+     "stdin": [
+      "abc"
+     ]
+    },
+    {
+     "expect_stdout": "قوية",
+     "stdin": [
+      "a-long-passphrase-77"
+     ]
+    },
+    {
+     "expect_stdout": "قوية",
+     "stdin": [
+      "abcdefghijkl"
+     ],
+     "hidden": true
+    },
+    {
+     "expect_stdout": "ضعيفة",
+     "stdin": [
+      "abcdefghijk"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "password = input()\nif len(password) >= 12:\n    print(\"قوية\")\nelse:\n    print(\"ضعيفة\")\n",
+   "hints": [
+    "استخدم `len()` لطول النص.",
+    "قارنه بـ 12 بـ `>=`."
+   ],
+   "stdin": [
+    "abc"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "زوجي أم فردي؟",
+   "instructions": [
+    "اقرأ رقماً واطبع **زوجي** أو **فردي**."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "زوجي",
+     "stdin": [
+      "10"
+     ]
+    },
+    {
+     "expect_stdout": "فردي",
+     "stdin": [
+      "7"
+     ]
+    },
+    {
+     "expect_stdout": "زوجي",
+     "stdin": [
+      "0"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "n = int(input())\nif n % 2 == 0:\n    print(\"زوجي\")\nelse:\n    print(\"فردي\")\n",
+   "hints": [
+    "الزوجي: باقي قسمته على 2 يساوي 0.",
+    "استخدم `%` و`==`."
+   ],
+   "stdin": [
+    "10"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: نقطتين ناقصة",
+   "instructions": [
+    "الكود فيه `SyntaxError`. أصلحه ليطبع: أكبر"
+   ],
+   "starter": "x = 5\nif x > 3\n    print(\"أكبر\")\n",
+   "tests": [
+    {
+     "expect_stdout": "أكبر",
+     "label": "يطبع: أكبر"
+    }
+   ],
+   "solution": "x = 5\nif x > 3:\n    print(\"أكبر\")\n",
+   "hints": [
+    "شوف نهاية سطر `if`.",
+    "ناقص `:`"
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "code",
+   "title": "أصلح: الإزاحة",
+   "instructions": [
+    "الكود فيه `IndentationError`. أصلحه ليطبع: أكبر"
+   ],
+   "starter": "x = 5\nif x > 3:\nprint(\"أكبر\")\n",
+   "tests": [
+    {
+     "expect_stdout": "أكبر",
+     "label": "يطبع: أكبر"
+    }
+   ],
+   "solution": "x = 5\nif x > 3:\n    print(\"أكبر\")\n",
+   "hints": [
+    "السطر تحت `if` لازم يكون مزاحاً.",
+    "أضف 4 مسافات قبل `print`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "code",
+   "title": "أصلح: ترتيب الشروط",
+   "instructions": [
+    "الدرجة 95 لكن الكود يطبع **جيد**. أصلحه ليطبع **ممتاز**."
+   ],
+   "starter": "score = 95\nif score >= 70:\n    print(\"جيد\")\nelif score >= 90:\n    print(\"ممتاز\")\n",
+   "tests": [
+    {
+     "expect_stdout": "ممتاز",
+     "label": "يطبع: ممتاز"
+    }
+   ],
+   "solution": "score = 95\nif score >= 90:\n    print(\"ممتاز\")\nelif score >= 70:\n    print(\"جيد\")\n",
+   "hints": [
+    "الشرط الأول يلتقط 95 قبل ما يوصل للثاني.",
+    "بدّل ترتيب الشرطين."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يحدد الأسطر اللي تتبع `if`؟",
+     "options": [
+      "الإزاحة بعد النقطتين",
+      "الأقواس { }",
+      "كلمة end"
+     ],
+     "answer": 0,
+     "why": "بايثون يعتمد على الإزاحة."
+    },
+    {
+     "q": "متى تنفذ `else`؟",
+     "options": [
+      "لما كل الشروط قبلها خطأ",
+      "دايماً",
+      "لما الشرط صح"
+     ],
+     "answer": 0,
+     "why": "`else` هي الاحتياط."
+    },
+    {
+     "q": "كيف يفحص بايثون سلسلة `if/elif/else`؟",
+     "options": [
+      "من الأعلى ويوقف عند أول شرط صحيح",
+      "يفحصها كلها",
+      "من الأسفل"
+     ],
+     "answer": 0,
+     "why": "يوقف عند أول شرط صحيح."
+    },
+    {
+     "q": "وش لازم ينتهي به سطر `if`؟",
+     "options": [
+      "نقطتين :",
+      "فاصلة منقوطة ;",
+      "قوس )"
+     ],
+     "answer": 0,
+     "why": "النقطتان تفتحان الكتلة."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`if` تنفذ كتلة لو الشرط صح، و`else` لو خطأ، و`elif` لاحتمالات إضافية.",
+    "النقطتان والإزاحة (4 مسافات) إلزاميتان.",
+    "بايثون يوقف عند أول شرط صحيح: رتّب من الأخص للأعم."
+   ]
+  }
+ ]
+}

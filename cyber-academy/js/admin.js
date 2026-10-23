@@ -28,6 +28,7 @@ function ago(s) {
 const daysSince = (s) => { const d = parseUtc(s); return d ? (Date.now() - d.getTime()) / 864e5 : Infinity; };
 
 const levelsOf = (cur) => cur.levels;
+const lv = (l) => (l.track === 'python' ? `P${l.id - 10}` : `م${l.id}`);
 const lessonTitle = (cur, id) => cur.levels.flatMap((l) => l.modules).find((m) => m.id === id)?.title_ar || id;
 const pct = (done, total) => (total ? Math.round((done / total) * 100) : 0);
 const displayName = (u) => esc(u.name || u.username);
@@ -213,7 +214,7 @@ export async function adminUserPage(view, cur, id) {
   const render = (d) => {
     const u = d.user, total = d.total_lessons, p = pct(u.done, total);
     const self = me && me.username === u.username;
-    const lvOptions = (sel) => levelsOf(cur).map((l) => `<option value="${l.id}" ${sel === l.id ? 'selected' : ''}>المستوى ${l.id}: ${esc(l.title_ar)}</option>`).join('');
+    const lvOptions = (sel) => levelsOf(cur).map((l) => `<option value="${l.id}" ${sel === l.id ? 'selected' : ''}>${lv(l)}: ${esc(l.title_ar)}</option>`).join('');
 
     view.innerHTML = `
       <a href="#/admin" class="muted">← كل المتدربين</a>
@@ -233,7 +234,7 @@ export async function adminUserPage(view, cur, id) {
         <h3>التقدم حسب المستوى</h3>
         ${levelsOf(cur).map((l) => {
           const done = (u.levels && u.levels[l.id]) || 0, n = l.modules.filter((m) => m.ready).length;
-          return `<div class="row between" style="font-size:.85rem"><span>${l.icon} م${l.id}: ${esc(l.title_ar)}</span><span>${done}/${n}</span></div><div class="bar" style="margin:3px 0 10px"><i style="width:${pct(done, n)}%"></i></div>`;
+          return `<div class="row between" style="font-size:.85rem"><span>${l.icon} ${lv(l)}: ${esc(l.title_ar)}</span><span>${done}/${n}</span></div><div class="bar" style="margin:3px 0 10px"><i style="width:${pct(done, n)}%"></i></div>`;
         }).join('')}
       </div>
 
@@ -267,7 +268,7 @@ export async function adminUserPage(view, cur, id) {
       </div>
 
       <details class="card"><summary><b>📚 الدروس بالتفصيل</b></summary>
-        ${levelsOf(cur).map((l) => `<h3 style="margin-top:12px">${l.icon} المستوى ${l.id}</h3>` + l.modules.filter((m) => m.ready).map((m) => {
+        ${levelsOf(cur).map((l) => `<h3 style="margin-top:12px">${l.icon} ${lv(l)}: ${esc(l.title_ar)}</h3>` + l.modules.filter((m) => m.ready).map((m) => {
           const x = d.lessons[m.id];
           const s = x && x.done ? `✅ ${x.score}%` : x && x.slide ? '▶ قيد الدراسة' : '—';
           return `<div class="row between" style="font-size:.88rem;border-bottom:1px solid var(--line);padding:4px 0"><span>${esc(m.title_ar)}</span><span>${s}</span></div>`;

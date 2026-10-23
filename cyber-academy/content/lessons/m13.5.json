@@ -1,0 +1,324 @@
+{
+ "title_ar": "القواميس dict",
+ "title_en": "Dictionaries",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "📖",
+   "goal": "تخزّن بيانات على شكل **مفتاح وقيمة** في [[dict]] (قاموس)، وهو أهم هيكل لتحليل البيانات."
+  },
+  {
+   "type": "text",
+   "title": "دليل هاتف",
+   "body": [
+    "القاموس ([[dict]]) يخزّن أزواجاً: **المفتاح** ([[key]]) و**القيمة** ([[value]]). نصل للقيمة بمفتاحها مو برقم.",
+    "نكتبه بين `{ }`: `user = {\"name\": \"سارة\", \"age\": 25}`.",
+    "نضيف أو نعدّل بـ `user[\"city\"] = \"جدة\"`، ونحذف بـ `del user[\"age\"]`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "المفتاح غالباً نص أو رقم، والقيمة أي شي.",
+   "code": "user = {\"name\": \"سارة\", \"age\": 25}\nprint(user[\"name\"])\nuser[\"city\"] = \"جدة\"\nprint(user)"
+  },
+  {
+   "type": "text",
+   "title": "الوصول الآمن والمرور",
+   "body": [
+    "لو طلبت مفتاحاً غير موجود يطلع `KeyError`. استخدم `user.get(\"x\")` فترجع `None` (أو قيمة افتراضية: `get(\"x\", 0)`).",
+    "`key in user` تفحص وجود المفتاح.",
+    "`.keys()` المفاتيح، `.values()` القيم، `.items()` الأزواج: `for k, v in user.items():`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "نمط التكرار: `counts[x] = counts.get(x, 0) + 1`. نستخدمه لعدّ محاولات الفشل لكل عنوان IP!",
+   "code": "counts = {}\nfor ch in \"hello\":\n    counts[ch] = counts.get(ch, 0) + 1\nprint(counts)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "dict",
+    "key",
+    "value",
+    "mutable"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "user = {\"name\": \"سارة\", \"age\": 25}\nuser[\"city\"] = \"جدة\"\nprint(len(user), user[\"city\"])\n",
+   "options": [
+    "3 جدة",
+    "2 جدة",
+    "3 city"
+   ],
+   "answer": 0,
+   "why": "أضفنا مفتاحاً ثالثاً فصار الطول 3."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): get",
+   "code": "d = {\"a\": 1}\nprint(d.get(\"a\"), d.get(\"b\"), d.get(\"b\", 0))\n",
+   "options": [
+    "1 None 0",
+    "1 0 0",
+    "1 None None"
+   ],
+   "answer": 0,
+   "why": "`get` ترجع None لو المفتاح ناقص، أو القيمة الافتراضية اللي حطيتها."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): العدّ",
+   "code": "counts = {}\nfor ch in \"aab\":\n    counts[ch] = counts.get(ch, 0) + 1\nprint(counts)\n",
+   "options": [
+    "{'a': 2, 'b': 1}",
+    "{'a': 1, 'b': 2}",
+    "{'a': 1, 'b': 1}",
+    "{'b': 1, 'a': 2}"
+   ],
+   "answer": 0,
+   "why": "a ظهرت مرتين وb مرة."
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: عدّ الحروف",
+   "lines": [
+    "counts = {}",
+    "for ch in \"banana\":",
+    "    counts[ch] = counts.get(ch, 0) + 1",
+    "print(counts)"
+   ],
+   "expect_stdout": "{'b': 1, 'a': 3, 'n': 2}",
+   "intro": "رتّب الأسطر لعدّ تكرار كل حرف.",
+   "explain": "نمط العدّ بالقاموس: `get(key, 0) + 1`."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الوصول الآمن",
+   "code": "d = {\"a\": 1}\nprint(d.____(\"x\", 0))\n",
+   "blanks": [
+    {
+     "answer": "get"
+    }
+   ],
+   "expect_stdout": "0",
+   "show_output": true,
+   "bank": [
+    "get",
+    "find",
+    "key",
+    "pop"
+   ],
+   "intro": "وش الأسلوب اللي يرجع قيمة افتراضية لو المفتاح ناقص؟",
+   "explain": "`get` تمنع `KeyError`."
+  },
+  {
+   "type": "code",
+   "title": "بطاقة مستخدم",
+   "instructions": [
+    "أنشئ قاموساً `user` فيه `name` = `خالد` و`age` = 30، ثم اطبع: `خالد 30`"
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "خالد 30",
+     "label": "يطبع: خالد 30"
+    }
+   ],
+   "solution": "user = {\"name\": \"خالد\", \"age\": 30}\nprint(user[\"name\"], user[\"age\"])\n",
+   "hints": [
+    "القاموس بين `{ }` و`\"مفتاح\": قيمة`.",
+    "اطبع القيمتين بمفتاحيهما."
+   ],
+   "checks": [
+    {
+     "regex": "\\{",
+     "msg": "استخدم قاموساً { }"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تكرار الأحرف",
+   "instructions": [
+    "اقرأ كلمة واطبع قاموس تكرار حروفها (بترتيب ظهورها). مثلاً `aab` ← `{'a': 2, 'b': 1}`"
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "{'a': 2, 'b': 1}",
+     "stdin": [
+      "aab"
+     ]
+    },
+    {
+     "expect_stdout": "{'s': 1, 'a': 1, 'r': 1, 'h': 1}",
+     "stdin": [
+      "sarh"
+     ]
+    },
+    {
+     "expect_stdout": "{'o': 2, 'k': 1}",
+     "stdin": [
+      "oko"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "word = input()\ncounts = {}\nfor ch in word:\n    counts[ch] = counts.get(ch, 0) + 1\nprint(counts)\n",
+   "hints": [
+    "قاموس فاضي في البداية.",
+    "`counts[ch] = counts.get(ch, 0) + 1`"
+   ],
+   "stdin": [
+    "aab"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "محاولات الفشل لكل مستخدم",
+   "instructions": [
+    "اقرأ `n` ثم `n` اسم مستخدم (كل واحد سجّل محاولة فاشلة). اطبع قاموس عدد محاولات كل مستخدم."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "{'ali': 2, 'sara': 1}",
+     "stdin": [
+      "3",
+      "ali",
+      "sara",
+      "ali"
+     ]
+    },
+    {
+     "expect_stdout": "{'x': 1}",
+     "stdin": [
+      "1",
+      "x"
+     ]
+    },
+    {
+     "expect_stdout": "{'a': 3}",
+     "stdin": [
+      "3",
+      "a",
+      "a",
+      "a"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "n = int(input())\nfails = {}\nfor _ in range(n):\n    user = input()\n    fails[user] = fails.get(user, 0) + 1\nprint(fails)\n",
+   "hints": [
+    "نفس نمط العدّ.",
+    "المفتاح هو اسم المستخدم."
+   ],
+   "stdin": [
+    "3",
+    "ali",
+    "sara",
+    "ali"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "مجموع القيم",
+   "instructions": [
+    "`prices = {\"قهوة\": 12, \"كيك\": 20, \"عصير\": 15}`. اطبع **مجموع الأسعار** باستخدام `for` على `.values()`."
+   ],
+   "starter": "prices = {\"قهوة\": 12, \"كيك\": 20, \"عصير\": 15}\n",
+   "tests": [
+    {
+     "expect_stdout": "47",
+     "label": "يطبع 47"
+    }
+   ],
+   "solution": "prices = {\"قهوة\": 12, \"كيك\": 20, \"عصير\": 15}\ntotal = 0\nfor p in prices.values():\n    total = total + p\nprint(total)\n",
+   "hints": [
+    "`prices.values()` ترجع القيم.",
+    "اجمعها في متغير."
+   ],
+   "checks": [
+    {
+     "regex": "values\\s*\\(",
+     "msg": "استخدم .values()"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: KeyError",
+   "instructions": [
+    "الكود يعطي `KeyError`. اجعله يطبع `0` بدل ما ينهار (بدون إضافة المفتاح للقاموس)."
+   ],
+   "starter": "stock = {\"a\": 5}\nprint(stock[\"b\"])\n",
+   "tests": [
+    {
+     "expect_stdout": "0",
+     "label": "يطبع 0"
+    }
+   ],
+   "solution": "stock = {\"a\": 5}\nprint(stock.get(\"b\", 0))\n",
+   "hints": [
+    "`get` تمنع `KeyError`.",
+    "`stock.get(\"b\", 0)`"
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "كيف نصل لقيمة في قاموس؟",
+     "options": [
+      "بمفتاحها: d[\"key\"]",
+      "برقم الموضع فقط",
+      "بالطول"
+     ],
+     "answer": 0,
+     "why": "القاموس يعتمد على المفاتيح."
+    },
+    {
+     "q": "وش تسوي `d.get(\"x\", 0)` لو x غير موجود؟",
+     "options": [
+      "ترجع 0",
+      "KeyError",
+      "None"
+     ],
+     "answer": 0,
+     "why": "القيمة الافتراضية."
+    },
+    {
+     "q": "وش يطبع `len({\"a\": 1, \"b\": 2})`؟",
+     "options": [
+      "2",
+      "1",
+      "4"
+     ],
+     "answer": 0,
+     "why": "عدد الأزواج."
+    },
+    {
+     "q": "كيف نمر على المفاتيح والقيم معاً؟",
+     "options": [
+      "for k, v in d.items()",
+      "for x in d.pairs()",
+      "for k in d.all()"
+     ],
+     "answer": 0,
+     "why": "`items()` ترجع أزواجاً."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "القاموس مفاتيح وقيم بين `{ }`.",
+    "`get` تمنع `KeyError`، و`in` تفحص المفتاح، و`items()` للمرور.",
+    "نمط العدّ: `d[x] = d.get(x, 0) + 1`."
+   ]
+  }
+ ]
+}

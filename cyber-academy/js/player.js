@@ -1,6 +1,7 @@
 // مشغّل الدرس: يعرض الدرس شرائح (Stories-style)، يحفظ مكان التوقف، ويحسب النتيجة.
 import { rich, esc } from './glossary.js';
 import * as store from './store.js';
+import { renderCode, renderPredict, renderParsons, renderFillCode } from './codeui.js';
 
 const CALLOUT = {
   info: ['🧠', 'معلومة'],
@@ -185,6 +186,12 @@ const renderers = {
       box.querySelector('#nx').addEventListener('click', () => { done(); ctx.next(); });
     });
   },
+
+  // تمارين البرمجة بلغة Python (محرر + تشغيل داخل المتصفح)
+  code: renderCode,
+  predict: renderPredict,
+  parsons: renderParsons,
+  fillcode: renderFillCode,
 
   // ترتيب خطوات: يضغط العناصر بالترتيب الصحيح (مثل طبقات OSI أو مراحل الاستجابة)
   order(s, box, done, ctx) {

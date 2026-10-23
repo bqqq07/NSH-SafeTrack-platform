@@ -1,0 +1,315 @@
+{
+ "title_ar": "الحلقة for و range",
+ "title_en": "For Loops & range",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔂",
+   "goal": "تكرر عدداً **معروفاً** من المرات أو تمر على كل حرف في نص باستخدام `for` و`range()`."
+  },
+  {
+   "type": "text",
+   "title": "for: لكل عنصر",
+   "body": [
+    "`for` تمر على سلسلة من القيم: تأخذ قيمة قيمة وتنفذ الكتلة لكل واحدة.",
+    "[[range]] تولّد أرقاماً: `range(5)` تعطي 0 1 2 3 4. و`range(1, 6)` تعطي 1 إلى 5 (النهاية **غير** شاملة). و`range(0, 10, 3)` تقفز 3 3.",
+    "ونقدر نمر على **حروف النص**: `for ch in \"abc\"`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "tip",
+   "note": "متى نستخدم for؟ لما نعرف عدد المرات أو عندنا سلسلة نمر عليها. ومتى while؟ لما نكرر «لين يحصل شي».",
+   "code": "for i in range(3):\n    print(i)\nfor ch in \"abc\":\n    print(ch)"
+  },
+  {
+   "type": "text",
+   "title": "أنماط مهمة",
+   "body": [
+    "**التجميع:** نبدأ `total = 0` ثم `total = total + i` في كل دورة.",
+    "**العدّ بشرط:** `if` داخل `for` تعدّ فقط اللي يحقق الشرط.",
+    "ولو ما احتجنا قيمة المتغير نسميه `_` بالعرف."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "info",
+   "note": "هذي الأنماط هي أساس تحليل البيانات: نمر، نفحص، نجمّع.",
+   "code": "total = 0\nfor i in range(1, 5):\n    total = total + i\nprint(total)   # 10\n\ncount = 0\nfor ch in \"banana\":\n    if ch == \"a\":\n        count = count + 1\nprint(count)   # 3"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "loop",
+    "range",
+    "iteration",
+    "accumulator",
+    "counter"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "for i in range(3):\n    print(i)\n",
+   "options": [
+    "0\n1\n2",
+    "1\n2\n3",
+    "0\n1\n2\n3",
+    "3\n2\n1"
+   ],
+   "answer": 0,
+   "why": "`range(3)` تعطي 0 و1 و2 (من 0 وبدون 3)."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): القفز",
+   "code": "for i in range(0, 10, 3):\n    print(i)\n",
+   "options": [
+    "0\n3\n6\n9",
+    "0\n3\n6",
+    "3\n6\n9",
+    "0\n3\n6\n9\n12"
+   ],
+   "answer": 0,
+   "why": "تبدأ من 0 وتقفز 3 لين ما توصل 10: 0 3 6 9."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): المجموع",
+   "code": "total = 0\nfor i in range(1, 5):\n    total = total + i\nprint(total)\n",
+   "options": [
+    "10",
+    "15",
+    "6",
+    "4"
+   ],
+   "answer": 0,
+   "why": "1+2+3+4 = 10."
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: مجموع 1 إلى 4",
+   "lines": [
+    "total = 0",
+    "for i in range(1, 5):",
+    "    total = total + i",
+    "print(total)"
+   ],
+   "expect_stdout": "10",
+   "intro": "رتّب الأسطر لحساب المجموع.",
+   "explain": "`range(1, 5)` تعطي 1 إلى 4."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: المدى",
+   "code": "for i in ____(1, 6):\n    print(i)\n",
+   "blanks": [
+    {
+     "answer": "range"
+    }
+   ],
+   "expect_stdout": "1\n2\n3\n4\n5",
+   "show_output": true,
+   "bank": [
+    "range",
+    "len",
+    "while",
+    "list"
+   ],
+   "intro": "وش الدالة اللي تولّد أرقاماً من 1 إلى 5؟",
+   "explain": "`range(1, 6)` تعطي 1 2 3 4 5."
+  },
+  {
+   "type": "code",
+   "title": "أرقام 1 إلى 5",
+   "instructions": [
+    "اطبع الأرقام من 1 إلى 5 (كل رقم بسطر) باستخدام `for` و`range`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "1\n2\n3\n4\n5",
+     "label": "الأرقام من 1 إلى 5"
+    }
+   ],
+   "solution": "for i in range(1, 6):\n    print(i)\n",
+   "hints": [
+    "النهاية غير شاملة: لو تبغى تصل 5 اكتب 6.",
+    "`range(1, 6)`"
+   ],
+   "checks": [
+    {
+     "regex": "\\bfor\\b",
+     "msg": "استخدم for"
+    },
+    {
+     "regex": "range\\s*\\(",
+     "msg": "استخدم range"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "جدول الضرب",
+   "instructions": [
+    "اقرأ رقماً `n` واطبع جدول ضربه من 1 إلى 5، كل سطر بالشكل: `7 x 1 = 7`"
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "7 x 1 = 7\n7 x 2 = 14\n7 x 3 = 21\n7 x 4 = 28\n7 x 5 = 35",
+     "stdin": [
+      "7"
+     ]
+    },
+    {
+     "expect_stdout": "2 x 1 = 2\n2 x 2 = 4\n2 x 3 = 6\n2 x 4 = 8\n2 x 5 = 10",
+     "stdin": [
+      "2"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "n = int(input())\nfor i in range(1, 6):\n    print(f\"{n} x {i} = {n * i}\")\n",
+   "hints": [
+    "استخدم `for i in range(1, 6)`.",
+    "اطبع بـ f-string: `f\"{n} x {i} = {n * i}\"`"
+   ],
+   "stdin": [
+    "7"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "مجموع الأرقام الزوجية",
+   "instructions": [
+    "اطبع مجموع الأرقام الزوجية من 2 إلى 20 (يعني 110). جرّب `range` بخطوة."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "110",
+     "label": "يطبع 110"
+    }
+   ],
+   "solution": "total = 0\nfor n in range(2, 21, 2):\n    total = total + n\nprint(total)\n",
+   "hints": [
+    "الخطوة الثالثة في `range`.",
+    "`range(2, 21, 2)`"
+   ],
+   "checks": [
+    {
+     "regex": "range\\s*\\(",
+     "msg": "استخدم range"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "عدّ حرف",
+   "instructions": [
+    "اقرأ كلمة واطبع **كم مرة** ظهر الحرف `a` فيها."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "3",
+     "stdin": [
+      "banana"
+     ]
+    },
+    {
+     "expect_stdout": "0",
+     "stdin": [
+      "python"
+     ]
+    },
+    {
+     "expect_stdout": "2",
+     "stdin": [
+      "Alaska"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "word = input()\ncount = 0\nfor ch in word:\n    if ch == \"a\":\n        count = count + 1\nprint(count)\n",
+   "hints": [
+    "امر على كل حرف بـ `for ch in word`.",
+    "استخدم `if` وعدّاد."
+   ],
+   "stdin": [
+    "banana"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: نقص الرقم 5",
+   "instructions": [
+    "الكود يطبع 1 إلى 4 فقط. أصلحه ليطبع 1 إلى 5."
+   ],
+   "starter": "for i in range(1, 5):\n    print(i)\n",
+   "tests": [
+    {
+     "expect_stdout": "1\n2\n3\n4\n5",
+     "label": "الأرقام من 1 إلى 5"
+    }
+   ],
+   "solution": "for i in range(1, 6):\n    print(i)\n",
+   "hints": [
+    "نهاية `range` غير شاملة.",
+    "غيّر 5 إلى 6."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يعطي `range(3)`؟",
+     "options": [
+      "0 1 2",
+      "1 2 3",
+      "0 1 2 3"
+     ],
+     "answer": 0,
+     "why": "من 0 وبدون الرقم 3."
+    },
+    {
+     "q": "وش يعطي `range(2, 8, 2)`؟",
+     "options": [
+      "2 4 6",
+      "2 4 6 8",
+      "2 3 4 5 6 7"
+     ],
+     "answer": 0,
+     "why": "تبدأ من 2، تقفز 2، وتتوقف قبل 8."
+    },
+    {
+     "q": "متى نفضّل `for` على `while`؟",
+     "options": [
+      "لما نعرف عدد المرات أو عندنا سلسلة نمر عليها",
+      "دايماً",
+      "لما نبغى حلقة لا نهائية"
+     ],
+     "answer": 0,
+     "why": "for للمرور على سلسلة معروفة."
+    },
+    {
+     "q": "وش يطبع `for c in \"ab\": print(c)`؟",
+     "options": [
+      "a ثم b (كل حرف بسطر)",
+      "ab",
+      "خطأ"
+     ],
+     "answer": 0,
+     "why": "يمر على كل حرف."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`for` تمر على سلسلة، و`range` تولّد أرقاماً (النهاية غير شاملة).",
+    "أنماط: التجميع بمتغير يبدأ 0، والعدّ بشرط داخل الحلقة.",
+    "نستخدم `for` لعدد معروف و`while` لحد يتحقق شرط."
+   ]
+  }
+ ]
+}

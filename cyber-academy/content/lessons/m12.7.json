@@ -1,0 +1,360 @@
+{
+ "title_ar": "أنماط شائعة",
+ "title_en": "Common Patterns",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🧩",
+   "goal": "تتعلم خمسة أنماط تتكرر في كل البرامج: العدّ والتجميع وأكبر قيمة والبحث وبناء النصوص."
+  },
+  {
+   "type": "text",
+   "title": "الأنماط الخمسة",
+   "body": [
+    "**العدّ ([[counter]]):** `count = 0` ثم `count += 1`... أو `count = count + 1` عند كل حدث.",
+    "**التجميع ([[accumulator]]):** `total = 0` ثم `total = total + x`.",
+    "**أكبر قيمة:** نبدأ بأول قيمة ونحدّث لما نلقى أكبر.",
+    "**الراية (flag):** متغير True/False يتغير لما نلقى شي.",
+    "**بناء نص:** `result = \"\"` ثم نضيف حرفاً حرفاً."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "هذي الأنماط تتكرر في تحليل السجلات: عدّ محاولات الفشل، أكبر عدد طلبات، البحث عن IP...",
+   "code": "best = 0\nfor n in [5, 12, 3]:   # قائمة (بنتعلمها قريباً)\n    if n > best:\n        best = n\nprint(best)   # 12"
+  },
+  {
+   "type": "text",
+   "title": "قراءة n مدخل",
+   "body": [
+    "غالباً نقرأ أولاً **عدد** القيم `n` ثم نقرأها بحلقة: `for _ in range(n): x = int(input())`.",
+    "الشرطة السفلية `_` اسم متغير نعطيه لما ما نحتاج قيمته."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "في الدرس القادم (القوائم) نقدر نخزن القيم كلها وما نحتاج نعيد قراءتها.",
+   "code": "n = int(input())\ntotal = 0\nfor _ in range(n):\n    total = total + int(input())\nprint(total)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "counter",
+    "accumulator",
+    "loop",
+    "range"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع: التجميع والعدّ",
+   "code": "total = 0\ncount = 0\nfor i in range(1, 6):\n    if i % 2 == 1:\n        total = total + i\n        count = count + 1\nprint(total, count)\n",
+   "options": [
+    "9 3",
+    "15 5",
+    "6 2",
+    "9 5"
+   ],
+   "answer": 0,
+   "why": "الفرديات: 1+3+5 = 9 وعددها 3."
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: بناء نص معكوس",
+   "lines": [
+    "word = \"abc\"",
+    "result = \"\"",
+    "for ch in word:",
+    "    result = ch + result",
+    "print(result)"
+   ],
+   "expect_stdout": "cba",
+   "intro": "رتّب الأسطر لعكس كلمة.",
+   "explain": "نضيف كل حرف **قبل** اللي جمعناه فينعكس الترتيب."
+  },
+  {
+   "type": "code",
+   "title": "مجموع n رقم",
+   "instructions": [
+    "اقرأ `n` ثم `n` رقماً (كل رقم بسطر) واطبع مجموعها."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "60",
+     "stdin": [
+      "3",
+      "10",
+      "20",
+      "30"
+     ]
+    },
+    {
+     "expect_stdout": "5",
+     "stdin": [
+      "1",
+      "5"
+     ]
+    },
+    {
+     "expect_stdout": "0",
+     "stdin": [
+      "0"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "n = int(input())\ntotal = 0\nfor _ in range(n):\n    total = total + int(input())\nprint(total)\n",
+   "hints": [
+    "اقرأ n أولاً.",
+    "كرر n مرة: اقرأ رقماً وأضفه."
+   ],
+   "stdin": [
+    "3",
+    "10",
+    "20",
+    "30"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أكبر رقم",
+   "instructions": [
+    "اقرأ `n` ثم `n` رقماً (كلها موجبة) واطبع **أكبرها**."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "12",
+     "stdin": [
+      "4",
+      "5",
+      "12",
+      "3",
+      "9"
+     ]
+    },
+    {
+     "expect_stdout": "7",
+     "stdin": [
+      "1",
+      "7"
+     ]
+    },
+    {
+     "expect_stdout": "100",
+     "stdin": [
+      "3",
+      "100",
+      "5",
+      "99"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "n = int(input())\nbest = 0\nfor _ in range(n):\n    x = int(input())\n    if x > best:\n        best = x\nprint(best)\n",
+   "hints": [
+    "ابدأ بـ best = 0.",
+    "حدّثه لما تلقى رقماً أكبر."
+   ],
+   "stdin": [
+    "4",
+    "5",
+    "12",
+    "3",
+    "9"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "المتوسط",
+   "instructions": [
+    "اقرأ `n` ثم `n` درجة واطبع **متوسطها** (مثل 90.0)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "90.0",
+     "stdin": [
+      "3",
+      "80",
+      "90",
+      "100"
+     ]
+    },
+    {
+     "expect_stdout": "5.0",
+     "stdin": [
+      "2",
+      "4",
+      "6"
+     ]
+    },
+    {
+     "expect_stdout": "50.0",
+     "stdin": [
+      "1",
+      "50"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "n = int(input())\ntotal = 0\nfor _ in range(n):\n    total = total + int(input())\nprint(total / n)\n",
+   "hints": [
+    "اجمع الدرجات ثم اقسم على n.",
+    "القسمة `/` ترجع عشري."
+   ],
+   "stdin": [
+    "3",
+    "80",
+    "90",
+    "100"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "محاولات الدخول الفاشلة",
+   "instructions": [
+    "اقرأ `n` ثم `n` حالة دخول (كل حالة نص: `نجح` أو `فشل`). اطبع **عدد حالات الفشل**."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "2",
+     "stdin": [
+      "4",
+      "فشل",
+      "نجح",
+      "فشل",
+      "نجح"
+     ]
+    },
+    {
+     "expect_stdout": "0",
+     "stdin": [
+      "2",
+      "نجح",
+      "نجح"
+     ]
+    },
+    {
+     "expect_stdout": "3",
+     "stdin": [
+      "3",
+      "فشل",
+      "فشل",
+      "فشل"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "n = int(input())\nfails = 0\nfor _ in range(n):\n    status = input()\n    if status == \"فشل\":\n        fails = fails + 1\nprint(fails)\n",
+   "hints": [
+    "عدّاد يزيد عند كل «فشل».",
+    "قارن النص بـ `==`."
+   ],
+   "stdin": [
+    "4",
+    "فشل",
+    "نجح",
+    "فشل",
+    "نجح"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "اعكس الكلمة",
+   "instructions": [
+    "اقرأ كلمة واطبعها **معكوسة** باستخدام حلقة (مثلاً `python` ← `nohtyp`)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "nohtyp",
+     "stdin": [
+      "python"
+     ]
+    },
+    {
+     "expect_stdout": "cba",
+     "stdin": [
+      "abc"
+     ]
+    },
+    {
+     "expect_stdout": "a",
+     "stdin": [
+      "a"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "word = input()\nresult = \"\"\nfor ch in word:\n    result = ch + result\nprint(result)\n",
+   "hints": [
+    "ابدأ بنص فاضي.",
+    "ضع كل حرف **قبل** النص المتجمّع."
+   ],
+   "checks": [
+    {
+     "regex": "\\bfor\\b",
+     "msg": "استخدم حلقة for"
+    }
+   ],
+   "stdin": [
+    "python"
+   ]
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "كيف تبدأ متغير التجميع؟",
+     "options": [
+      "بـ 0",
+      "بـ 1",
+      "بدون قيمة"
+     ],
+     "answer": 0,
+     "why": "الجمع يبدأ من الصفر."
+    },
+    {
+     "q": "وش نمط العدّ؟",
+     "options": [
+      "متغير يزيد 1 عند كل حدث",
+      "متغير يحفظ النصوص",
+      "حلقة لا نهائية"
+     ],
+     "answer": 0,
+     "why": "count = count + 1 عند تحقق الشرط."
+    },
+    {
+     "q": "ليش نسمي المتغير `_` في الحلقة؟",
+     "options": [
+      "لأننا ما نحتاج قيمته",
+      "لأنه أسرع",
+      "لأنه إلزامي"
+     ],
+     "answer": 0,
+     "why": "عرف: متغير مهمل."
+    },
+    {
+     "q": "كيف نعكس نصاً بحلقة؟",
+     "options": [
+      "نضيف كل حرف قبل النتيجة",
+      "نضيفه بعدها",
+      "نستخدم while"
+     ],
+     "answer": 0,
+     "why": "الإضافة من الأمام تعكس الترتيب."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "أنماط: عدّ، تجميع، أكبر قيمة، راية، بناء نص.",
+    "نقرأ `n` أولاً ثم نكرر n مرة.",
+    "هذي الأنماط هي أساس تحليل السجلات لاحقاً."
+   ]
+  }
+ ]
+}

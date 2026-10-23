@@ -19,7 +19,7 @@ for l in cur['levels']:
 json.dump(cur, open('content/curriculum.json', 'w'), ensure_ascii=False, indent=1)
 
 TYPES = {'intro', 'text', 'terms', 'practice', 'quiz', 'summary', 'terminal', 'passlab', 'phish',
-         'order', 'match', 'cipher', 'webvuln', 'scenario', 'ctf', 'firewall'}
+         'order', 'match', 'cipher', 'webvuln', 'scenario', 'ctf', 'firewall', 'code', 'predict', 'parsons', 'fillcode'}
 errs = []
 for f in sorted(glob.glob('content/lessons/*.json')):
     try:
@@ -42,6 +42,8 @@ for f in sorted(glob.glob('content/lessons/*.json')):
         for tk in s.get('tasks', []):
             if not tk.get('accept') or 'why' not in tk: errs.append((f, i, 'bad task'))
         if ty == 'phish' and not any('bad' in p for p in s['parts']): errs.append((f, i, 'phish without bad part'))
+        if ty == 'predict' and not all(k in s for k in ('code', 'options', 'answer', 'why')): errs.append((f, i, 'predict missing field'))
+        if ty == 'parsons' and len(s.get('lines', [])) < 3: errs.append((f, i, 'parsons too short'))
         if ty == 'order' and len(s['items']) < 3: errs.append((f, i, 'order too short'))
         if ty == 'match' and len(s['pairs']) < 3: errs.append((f, i, 'match too short'))
         if ty == 'firewall' and not all('allow' in p and p.get('why') for p in s['packets']): errs.append((f, i, 'bad packet'))
@@ -52,7 +54,7 @@ for f in sorted(glob.glob('content/lessons/*.json')):
             if s['start'] not in s['nodes']: errs.append((f, i, 'scenario bad start'))
         if ty == 'ctf' and not all(c.get('flag') for c in s['challenges']): errs.append((f, i, 'ctf no flag'))
 # فهارس مولَّدة: المختبرات (تمارين تفاعلية) وربط المصطلحات بالدروس
-LAB = {'terminal', 'passlab', 'phish', 'order', 'match', 'cipher', 'webvuln', 'scenario', 'ctf', 'firewall'}
+LAB = {'terminal', 'passlab', 'phish', 'order', 'match', 'cipher', 'webvuln', 'scenario', 'ctf', 'firewall', 'code', 'predict', 'parsons', 'fillcode'}
 labs, term_lessons = {}, {}
 for f in sorted(glob.glob('content/lessons/*.json'), key=lambda x: [int(p) if p.isdigit() else p for p in re.split(r'(\d+)', x)]):
     d = json.load(open(f)); lid = os.path.basename(f)[:-5]
@@ -73,4 +75,13 @@ ready = sum(m['ready'] for l in cur['levels'] for m in l['modules'])
 total = sum(len(l['modules']) for l in cur['levels'])
 print(f'lessons={n} terms={len(glossary)} ready={ready}/{total}')
 print('errors:', errs if errs else 'none')
+
+# تشغيل تمارين Python فعلياً بـ CPython (يُتخطى بـ --no-run)
+if '--no-run' not in sys.argv:
+    sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+    import validate_python
+    pn, perrs = validate_python.check_lessons()
+    print(f'python exercises verified: {pn}')
+    print('python errors:', perrs if perrs else 'none')
+    errs += perrs
 sys.exit(1 if errs else 0)

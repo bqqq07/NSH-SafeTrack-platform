@@ -1,0 +1,220 @@
+{
+ "title_ar": "الهياكل المتداخلة",
+ "title_en": "Nested Structures",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🪆",
+   "goal": "تضع قوائم داخل قواميس وقواميس داخل قوائم، وهكذا تمثّل بيانات حقيقية مثل المستخدمين والسجلات."
+  },
+  {
+   "type": "text",
+   "title": "هيكل داخل هيكل",
+   "body": [
+    "البيانات الحقيقية نادراً بسيطة: قائمة مستخدمين، وكل مستخدم قاموس ([[nested-structure]]).",
+    "`users = [{\"name\": \"سارة\", \"role\": \"admin\"}, {\"name\": \"خالد\", \"role\": \"user\"}]`",
+    "نصل بالتسلسل: `users[0][\"name\"]` ← أول مستخدم ثم اسمه."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "هذا نفس شكل JSON اللي تستقبله من مواقع الإنترنت.",
+   "code": "users = [\n    {\"name\": \"sara\", \"role\": \"admin\"},\n    {\"name\": \"khalid\", \"role\": \"user\"},\n]\nprint(users[0][\"name\"])\nprint(len(users))"
+  },
+  {
+   "type": "text",
+   "title": "المرور والتجميع",
+   "body": [
+    "نمر على القائمة وكل عنصر قاموس: `for u in users: print(u[\"name\"])`.",
+    "ونفلتر: `admins = [u[\"name\"] for u in users if u[\"role\"] == \"admin\"]`.",
+    "وقاموس قيمه قوائم: `ports = {\"web\": [80, 443], \"ssh\": [22]}`، فـ `ports[\"web\"][1]` تعطي 443."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "اقرأ الوصول من اليسار لليمين خطوة خطوة.",
+   "code": "hosts = {\"web\": [80, 443], \"ssh\": [22]}\nfor name, plist in hosts.items():\n    print(name, len(plist))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "nested-structure",
+    "dict"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "data = {\"web\": [80, 443], \"ssh\": [22]}\nprint(data[\"web\"][1])\n",
+   "options": [
+    "443",
+    "80",
+    "22",
+    "[80, 443]"
+   ],
+   "answer": 0,
+   "why": "`data[\"web\"]` تعطي القائمة، ثم `[1]` تعطي ثاني عنصر: 443."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): قائمة قواميس",
+   "code": "users = [{\"n\": \"a\", \"age\": 20}, {\"n\": \"b\", \"age\": 30}]\nprint(users[1][\"n\"], len(users))\n",
+   "options": [
+    "b 2",
+    "a 2",
+    "b 1",
+    "b 30"
+   ],
+   "answer": 0,
+   "why": "ثاني مستخدم اسمه b، والعدد 2."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الوصول",
+   "code": "users = [{\"name\": \"sara\"}, {\"name\": \"khalid\"}]\nprint(users[____][\"name\"])\n",
+   "blanks": [
+    {
+     "answer": "1"
+    }
+   ],
+   "expect_stdout": "khalid",
+   "show_output": true,
+   "bank": [
+    "1",
+    "0",
+    "2",
+    "-2"
+   ],
+   "intro": "أي فهرس يعطي khalid؟",
+   "explain": "khalid هو العنصر الثاني، فهرسه 1."
+  },
+  {
+   "type": "code",
+   "title": "أسماء المستخدمين",
+   "instructions": [
+    "`users` قائمة قواميس. اطبع كل اسم في سطر."
+   ],
+   "starter": "users = [{\"name\": \"sara\"}, {\"name\": \"khalid\"}, {\"name\": \"nora\"}]\n",
+   "tests": [
+    {
+     "expect_stdout": "sara\nkhalid\nnora",
+     "label": "يطبع الأسماء"
+    }
+   ],
+   "solution": "users = [{\"name\": \"sara\"}, {\"name\": \"khalid\"}, {\"name\": \"nora\"}]\nfor u in users:\n    print(u[\"name\"])\n",
+   "hints": [
+    "`for u in users:`",
+    "اطبع `u[\"name\"]`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "المشرفون فقط",
+   "instructions": [
+    "من القائمة اطبع قائمة بأسماء من دورهم `admin` فقط."
+   ],
+   "starter": "users = [{\"name\": \"sara\", \"role\": \"admin\"}, {\"name\": \"khalid\", \"role\": \"user\"}, {\"name\": \"nora\", \"role\": \"admin\"}]\n",
+   "tests": [
+    {
+     "expect_stdout": "['sara', 'nora']",
+     "label": "يطبع ['sara', 'nora']"
+    }
+   ],
+   "solution": "users = [{\"name\": \"sara\", \"role\": \"admin\"}, {\"name\": \"khalid\", \"role\": \"user\"}, {\"name\": \"nora\", \"role\": \"admin\"}]\nprint([u[\"name\"] for u in users if u[\"role\"] == \"admin\"])\n",
+   "hints": [
+    "قائمة شاملة مع شرط على `u[\"role\"]`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "مجموع المنافذ",
+   "instructions": [
+    "`hosts = {\"web\": [80, 443], \"ssh\": [22], \"db\": [3306]}`. اطبع **عدد المنافذ الكلي** في كل الأجهزة: `4`"
+   ],
+   "starter": "hosts = {\"web\": [80, 443], \"ssh\": [22], \"db\": [3306]}\n",
+   "tests": [
+    {
+     "expect_stdout": "4",
+     "label": "يطبع 4"
+    }
+   ],
+   "solution": "hosts = {\"web\": [80, 443], \"ssh\": [22], \"db\": [3306]}\ntotal = 0\nfor plist in hosts.values():\n    total = total + len(plist)\nprint(total)\n",
+   "hints": [
+    "مرّ على `hosts.values()`.",
+    "اجمع `len` كل قائمة."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: المفتاح الخطأ",
+   "instructions": [
+    "الكود يطلب `[\"Name\"]` والمفتاح الحقيقي `name`، فيعطي `KeyError`. أصلحه ليطبع `sara`."
+   ],
+   "starter": "user = {\"name\": \"sara\", \"role\": \"admin\"}\nprint(user[\"Name\"])\n",
+   "tests": [
+    {
+     "expect_stdout": "sara",
+     "label": "يطبع sara"
+    }
+   ],
+   "solution": "user = {\"name\": \"sara\", \"role\": \"admin\"}\nprint(user[\"name\"])\n",
+   "hints": [
+    "الحروف الكبيرة والصغيرة تفرق.",
+    "استخدم `\"name\"`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش تعطي `data = {\"a\": [1, 2]}` ثم `data[\"a\"][0]`؟",
+     "options": [
+      "1",
+      "2",
+      "[1, 2]"
+     ],
+     "answer": 0,
+     "why": "القائمة أولاً ثم أول عنصر."
+    },
+    {
+     "q": "كيف نصل لاسم أول مستخدم في قائمة قواميس؟",
+     "options": [
+      "users[0][\"name\"]",
+      "users[\"name\"][0]",
+      "users.name"
+     ],
+     "answer": 0,
+     "why": "الفهرس ثم المفتاح."
+    },
+    {
+     "q": "أي شكل بيانات مشابه لما نستقبله من الإنترنت؟",
+     "options": [
+      "قوائم وقواميس متداخلة (JSON)",
+      "متغير نصي واحد",
+      "رقم فقط"
+     ],
+     "answer": 0,
+     "why": "JSON هو قوائم وقواميس متداخلة."
+    },
+    {
+     "q": "وش يصير لو طلبنا مفتاحاً غير موجود؟",
+     "options": [
+      "KeyError",
+      "يرجع None",
+      "يضيفه"
+     ],
+     "answer": 0,
+     "why": "نستخدم get لو ما نضمن وجوده."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "قوائم وقواميس داخل بعضها تمثل بيانات حقيقية.",
+    "نصل بالتسلسل: `users[0][\"name\"]`.",
+    "نمر عليها بحلقات أو قوائم شاملة."
+   ]
+  }
+ ]
+}

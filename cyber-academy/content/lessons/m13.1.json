@@ -1,0 +1,287 @@
+{
+ "title_ar": "القوائم list",
+ "title_en": "Lists",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "📋",
+   "goal": "تخزّن عدة قيم في متغير واحد بـ [[list]] (قائمة)، وتصل لعناصرها وتعدّلها."
+  },
+  {
+   "type": "text",
+   "title": "رف فيه عناصر مرتبة",
+   "body": [
+    "القائمة ([[list]]) مجموعة عناصر مرتبة بين `[ ]` تفصل بينها فاصلة. تقدر تخزن أرقاماً أو نصوصاً أو خليطاً.",
+    "نصل للعنصر بالفهرس (يبدأ من 0 مثل النص): `ports[0]`. و`-1` آخر عنصر. و`len()` عدد العناصر.",
+    "والقائمة **قابلة للتغيير** ([[mutable]]): نقدر نغيّر عنصراً بالفهرس."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "القائمة تشبه النص في الفهرسة، لكن النص ثابت والقائمة تتغير.",
+   "code": "ports = [22, 80, 443]\nprint(ports[0], ports[-1], len(ports))\nports[1] = 8080\nprint(ports)"
+  },
+  {
+   "type": "text",
+   "title": "المرور والفحص",
+   "body": [
+    "`for item in ports:` تمر على كل العناصر مباشرة بدون فهرس.",
+    "`in` تفحص وجود عنصر: `443 in ports`.",
+    "رقم فهرس أكبر من اللازم يعطي `IndexError`. وآخر فهرس صحيح = `len(list) - 1`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "في الأمن: قوائم المنافذ المحظورة وعناوين IP المشبوهة وأسماء المستخدمين.",
+   "code": "blocked = [23, 445, 3389]\nfor p in blocked:\n    print(\"محظور:\", p)\nprint(80 in blocked)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "list",
+    "mutable",
+    "index"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "ports = [22, 80, 443]\nprint(ports[0], ports[-1], len(ports))\n",
+   "options": [
+    "22 443 3",
+    "22 80 3",
+    "80 443 3",
+    "22 443 2"
+   ],
+   "answer": 0,
+   "why": "أول عنصر 22، وآخر عنصر 443، والعدد 3."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): التعديل",
+   "code": "ports = [22, 80, 443]\nports[1] = 8080\nprint(ports)\n",
+   "options": [
+    "[22, 8080, 443]",
+    "[22, 80, 443]",
+    "[22, 8080]",
+    "[8080, 80, 443]"
+   ],
+   "answer": 0,
+   "why": "غيّرنا العنصر رقم 1 (الثاني) إلى 8080."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): in",
+   "code": "blocked = [23, 445, 3389]\nprint(80 in blocked)\nprint(445 in blocked)\n",
+   "options": [
+    "False\nTrue",
+    "True\nTrue",
+    "False\nFalse",
+    "True\nFalse"
+   ],
+   "answer": 0,
+   "why": "80 مو في القائمة، و445 موجود."
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: مرور على القائمة",
+   "lines": [
+    "names = [\"سارة\", \"خالد\"]",
+    "for name in names:",
+    "    print(f\"أهلاً {name}\")"
+   ],
+   "expect_stdout": "أهلاً سارة\nأهلاً خالد",
+   "intro": "رتّب الأسطر.",
+   "explain": "`for name in names` تمر على كل عنصر."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: آخر عنصر",
+   "code": "ports = [22, 80, 443]\nprint(ports[____])\n",
+   "blanks": [
+    {
+     "answer": [
+      "-1",
+      "2"
+     ]
+    }
+   ],
+   "expect_stdout": "443",
+   "show_output": true,
+   "bank": [
+    "-1",
+    "2",
+    "3",
+    "0"
+   ],
+   "intro": "أي رقم يطبع آخر عنصر؟ (فيه جوابين صحيحين).",
+   "explain": "`-1` تعد من النهاية، و`2` هو آخر فهرس صحيح لقائمة من 3 عناصر."
+  },
+  {
+   "type": "code",
+   "title": "أول وآخر",
+   "instructions": [
+    "القائمة `names = [\"سارة\", \"خالد\", \"نورة\", \"عمر\"]`. اطبع **أول** اسم و**آخر** اسم في سطر واحد: `سارة عمر`"
+   ],
+   "starter": "names = [\"سارة\", \"خالد\", \"نورة\", \"عمر\"]\n",
+   "tests": [
+    {
+     "expect_stdout": "سارة عمر",
+     "label": "يطبع: سارة عمر"
+    }
+   ],
+   "solution": "names = [\"سارة\", \"خالد\", \"نورة\", \"عمر\"]\nprint(names[0], names[-1])\n",
+   "hints": [
+    "الفهرس 0 والفهرس -1.",
+    "`print(names[0], names[-1])`"
+   ],
+   "checks": [
+    {
+     "regex": "names\\s*\\[",
+     "msg": "استخدم الفهرس names[...]"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "هل المنفذ محظور؟",
+   "instructions": [
+    "القائمة `blocked = [23, 445, 3389]`. اقرأ رقم منفذ واطبع `True` لو هو محظور وإلا `False`."
+   ],
+   "starter": "blocked = [23, 445, 3389]\n",
+   "tests": [
+    {
+     "expect_stdout": "True",
+     "stdin": [
+      "445"
+     ]
+    },
+    {
+     "expect_stdout": "False",
+     "stdin": [
+      "80"
+     ]
+    },
+    {
+     "expect_stdout": "True",
+     "stdin": [
+      "23"
+     ],
+     "hidden": true
+    },
+    {
+     "expect_stdout": "False",
+     "stdin": [
+      "444"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "blocked = [23, 445, 3389]\nport = int(input())\nprint(port in blocked)\n",
+   "hints": [
+    "حوّل المدخل لرقم.",
+    "استخدم `in`."
+   ],
+   "stdin": [
+    "445"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "مجموع القائمة",
+   "instructions": [
+    "القائمة `nums = [3, 8, 1, 9]`. اطبع مجموع عناصرها باستخدام `for` (بدون `sum`)."
+   ],
+   "starter": "nums = [3, 8, 1, 9]\n",
+   "tests": [
+    {
+     "expect_stdout": "21",
+     "label": "يطبع 21"
+    }
+   ],
+   "solution": "nums = [3, 8, 1, 9]\ntotal = 0\nfor n in nums:\n    total = total + n\nprint(total)\n",
+   "hints": [
+    "متغير تجميع يبدأ 0.",
+    "مر على القائمة بـ `for n in nums`."
+   ],
+   "checks": [
+    {
+     "regex": "\\bfor\\b",
+     "msg": "استخدم for"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: IndexError",
+   "instructions": [
+    "الكود يعطي `IndexError`. القائمة فيها 3 عناصر. اجعله يطبع آخر عنصر `443`."
+   ],
+   "starter": "ports = [22, 80, 443]\nprint(ports[3])\n",
+   "tests": [
+    {
+     "expect_stdout": "443",
+     "label": "يطبع 443"
+    }
+   ],
+   "solution": "ports = [22, 80, 443]\nprint(ports[2])\n",
+   "hints": [
+    "آخر فهرس = عدد العناصر - 1.",
+    "استخدم 2 أو -1."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يطبع `print([5, 6, 7][1])`؟",
+     "options": [
+      "6",
+      "5",
+      "7"
+     ],
+     "answer": 0,
+     "why": "الفهرس 1 هو العنصر الثاني."
+    },
+    {
+     "q": "وش يرجع `len([1, 2, 3, 4])`؟",
+     "options": [
+      "4",
+      "3",
+      "5"
+     ],
+     "answer": 0,
+     "why": "عدد العناصر."
+    },
+    {
+     "q": "وش الفرق بين القائمة والنص؟",
+     "options": [
+      "القائمة قابلة للتغيير والنص لا",
+      "النص قابل للتغيير",
+      "ما فيه فرق"
+     ],
+     "answer": 0,
+     "why": "نقدر نغيّر عنصراً في القائمة."
+    },
+    {
+     "q": "وش تفحص `5 in nums`؟",
+     "options": [
+      "هل الرقم 5 موجود في القائمة",
+      "هل nums فيها 5 عناصر",
+      "تضيف 5"
+     ],
+     "answer": 0,
+     "why": "`in` تفحص الوجود."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "القائمة `[ ]` مجموعة مرتبة قابلة للتغيير.",
+    "الفهرس يبدأ من 0، و`-1` آخر عنصر.",
+    "`for x in list` للمرور و`in` للفحص."
+   ]
+  }
+ ]
+}

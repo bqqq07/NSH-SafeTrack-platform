@@ -1,0 +1,233 @@
+{
+ "title_ar": "المجموعات الثابتة tuple",
+ "title_en": "Tuples",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔒",
+   "goal": "تستخدم [[tuple]] لقيم مرتبطة ما تتغير، وتفك المجموعة في متغيرات ([[unpacking]])."
+  },
+  {
+   "type": "text",
+   "title": "قائمة لا تتغير",
+   "body": [
+    "الـ tuple مثل القائمة لكن بين `( )` و**غير قابلة للتغيير** ([[immutable]]): ما تقدر تعدّل عناصرها بعد الإنشاء.",
+    "نستخدمها لقيم مترابطة ثابتة: إحداثيات `(10, 20)`، أو زوج `(ip, port)`.",
+    "نصل لعناصرها بالفهرس مثل القائمة."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "tuple من عنصر واحد تحتاج فاصلة: `(5,)`.",
+   "code": "server = (\"10.0.0.5\", 22)\nprint(server[0])\nprint(len(server))"
+  },
+  {
+   "type": "text",
+   "title": "فك المجموعة وتبديل القيم",
+   "body": [
+    "**الفك:** `ip, port = server` يوزّع العناصر على متغيرات.",
+    "**التبديل:** `a, b = b, a` يبدّل قيمتي متغيرين بسطر واحد.",
+    "ولو حاولت تغيّر عنصراً يعطي `TypeError`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "الدوال اللي ترجع أكثر من قيمة (نتعلمها قريباً) ترجعها كـ tuple.",
+   "code": "server = (\"10.0.0.5\", 22)\nip, port = server\nprint(ip, port)\na, b = 1, 2\na, b = b, a\nprint(a, b)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "tuple",
+    "immutable",
+    "unpacking"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "server = (\"10.0.0.5\", 22)\nip, port = server\nprint(port, ip)\n",
+   "options": [
+    "22 10.0.0.5",
+    "10.0.0.5 22",
+    "('10.0.0.5', 22)"
+   ],
+   "answer": 0,
+   "why": "الفك: `ip` = أول عنصر، `port` = الثاني. وطبعنا port أولاً."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): التبديل",
+   "code": "a, b = 1, 2\na, b = b, a\nprint(a, b)\n",
+   "options": [
+    "2 1",
+    "1 2",
+    "2 2",
+    "1 1"
+   ],
+   "answer": 0,
+   "why": "التبديل: صار a = 2 و b = 1."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: فك المجموعة",
+   "code": "point = (3, 7)\n____, y = point\nprint(x, y)\n",
+   "blanks": [
+    {
+     "answer": "x"
+    }
+   ],
+   "expect_stdout": "3 7",
+   "show_output": true,
+   "bank": [
+    "x",
+    "point",
+    "y",
+    "tuple"
+   ],
+   "intro": "وش المتغير الأول اللي يستقبل 3؟",
+   "explain": "`x, y = point` توزّع العنصرين."
+  },
+  {
+   "type": "code",
+   "title": "بدّل القيمتين",
+   "instructions": [
+    "`a = 10` و`b = 20`. بدّل قيمتيهما بسطر واحد ثم اطبع `a` و`b` في سطر: `20 10`."
+   ],
+   "starter": "a = 10\nb = 20\n",
+   "tests": [
+    {
+     "expect_stdout": "20 10",
+     "label": "يطبع: 20 10"
+    }
+   ],
+   "solution": "a = 10\nb = 20\na, b = b, a\nprint(a, b)\n",
+   "hints": [
+    "`a, b = b, a`",
+    "ثم اطبعهما."
+   ],
+   "checks": [
+    {
+     "regex": "a\\s*,\\s*b\\s*=\\s*b\\s*,\\s*a",
+     "msg": "استخدم a, b = b, a"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "اتصال خادم",
+   "instructions": [
+    "`server = (\"10.0.0.5\", 22)`. فكّها في `ip` و`port` ثم اطبع: `الاتصال بـ 10.0.0.5 على المنفذ 22`"
+   ],
+   "starter": "server = (\"10.0.0.5\", 22)\n",
+   "tests": [
+    {
+     "expect_stdout": "الاتصال بـ 10.0.0.5 على المنفذ 22",
+     "label": "الجملة صحيحة"
+    }
+   ],
+   "solution": "server = (\"10.0.0.5\", 22)\nip, port = server\nprint(f\"الاتصال بـ {ip} على المنفذ {port}\")\n",
+   "hints": [
+    "`ip, port = server`",
+    "اطبعها بـ f-string."
+   ],
+   "checks": [
+    {
+     "regex": "ip\\s*,\\s*port\\s*=",
+     "msg": "فكّ المجموعة في ip و port"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "الأصغر والأكبر",
+   "instructions": [
+    "`nums = (7, 3, 9, 1)`. اطبع **أصغر** قيمة ثم **أكبر** قيمة في سطر: `1 9`"
+   ],
+   "starter": "nums = (7, 3, 9, 1)\n",
+   "tests": [
+    {
+     "expect_stdout": "1 9",
+     "label": "يطبع: 1 9"
+    }
+   ],
+   "solution": "nums = (7, 3, 9, 1)\nprint(min(nums), max(nums))\n",
+   "hints": [
+    "`min()` و`max()` تشتغل على الـ tuple.",
+    "`print(min(nums), max(nums))`"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: TypeError",
+   "instructions": [
+    "الكود يحاول تغيير عنصر في tuple. حوّل `point` إلى **قائمة** ليشتغل ويطبع `[5, 2]`."
+   ],
+   "starter": "point = (1, 2)\npoint[0] = 5\nprint(point)\n",
+   "tests": [
+    {
+     "expect_stdout": "[5, 2]",
+     "label": "يطبع [5, 2]"
+    }
+   ],
+   "solution": "point = [1, 2]\npoint[0] = 5\nprint(point)\n",
+   "hints": [
+    "الـ tuple غير قابلة للتغيير.",
+    "استخدم `[ ]` بدل `( )`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش الفرق بين tuple والقائمة؟",
+     "options": [
+      "tuple ما تتغير بعد إنشائها",
+      "tuple أطول",
+      "tuple لا تحمل أرقاماً"
+     ],
+     "answer": 0,
+     "why": "tuple غير قابلة للتغيير."
+    },
+    {
+     "q": "وش تسوي `a, b = b, a`؟",
+     "options": [
+      "تبدّل قيمتي a و b",
+      "تحذفهما",
+      "تقارنهما"
+     ],
+     "answer": 0,
+     "why": "تبديل بسطر واحد."
+    },
+    {
+     "q": "وش يصير لو غيّرت عنصراً في tuple؟",
+     "options": [
+      "TypeError",
+      "يتغير عادي",
+      "يتجاهله"
+     ],
+     "answer": 0,
+     "why": "tuple غير قابلة للتغيير."
+    },
+    {
+     "q": "كيف نكتب tuple من عنصر واحد؟",
+     "options": [
+      "(5,)",
+      "(5)",
+      "[5]"
+     ],
+     "answer": 0,
+     "why": "الفاصلة هي اللي تصنع الـ tuple."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "tuple بين `( )` وغير قابلة للتغيير.",
+    "الفك: `x, y = point` والتبديل: `a, b = b, a`.",
+    "تُستخدم للقيم المترابطة الثابتة مثل (ip, port)."
+   ]
+  }
+ ]
+}

@@ -1,0 +1,261 @@
+{
+ "title_ar": "مشروع: دفتر جهات اتصال",
+ "title_en": "Project: Contact Book",
+ "duration_min": 14,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "📇",
+   "goal": "تجمع القوائم والقواميس والحلقات في برنامج كامل: دفتر جهات اتصال يستقبل أوامر من المستخدم."
+  },
+  {
+   "type": "text",
+   "title": "خطة المشروع",
+   "body": [
+    "البرنامج يقرأ **أوامر** في حلقة حتى يكتب المستخدم `exit`:",
+    "`add اسم رقم` يضيف أو يحدّث جهة. `find اسم` يطبع رقمها أو `غير موجود`. `list` يطبع كل الجهات مرتبة. `delete اسم` يحذفها.",
+    "نخزّن الجهات في قاموس `book = {اسم: رقم}`، ونقسم كل سطر بـ `split()`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "سنبني البرنامج على خطوتين: أوامر بسيطة ثم الكامل.",
+   "code": "book = {}\nline = \"add sara 0501\"\nparts = line.split()\nprint(parts[0], parts[1], parts[2])"
+  },
+  {
+   "type": "text",
+   "title": "هيكل حلقة الأوامر",
+   "body": [
+    "نكرر `while True:` ونقرأ `line = input()`. لو `parts[0] == \"exit\"` نخرج بـ `break`.",
+    "نفرّع بـ `if / elif` حسب الأمر. والأمر غير المعروف نتجاهله.",
+    "فكرة تصميم: كل أمر في فرع صغير يسهل قراءته واختباره."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "افترض أن المدخلات سليمة في هذا المشروع؛ نتعلم التعامل مع الأخطاء لاحقاً.",
+   "code": "while True:\n    parts = input().split()\n    if parts[0] == \"exit\":\n        break\n    print(\"أمر:\", parts[0])"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "dict"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع: تقسيم الأمر",
+   "code": "parts = \"add sara 0501\".split()\nprint(len(parts), parts[1])\n",
+   "options": [
+    "3 sara",
+    "2 add",
+    "3 add"
+   ],
+   "answer": 0,
+   "why": "الأمر ثلاث كلمات، والثانية sara."
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: حلقة الأوامر",
+   "lines": [
+    "while True:",
+    "    cmd = input()",
+    "    if cmd == \"exit\":",
+    "        break",
+    "    print(\"تم:\", cmd)"
+   ],
+   "expect_stdout": "a\nتم: a\nb\nتم: b\nexit",
+   "intro": "رتّب حلقة تقرأ أوامر وتتوقف عند exit.",
+   "explain": "نقرأ ثم نفحص الخروج ثم نعالج.",
+   "stdin": [
+    "a",
+    "b",
+    "exit"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "الخطوة 1: إضافة وبحث",
+   "instructions": [
+    "اكتب برنامجاً يقرأ أوامر حتى `exit`. الأمران: `add اسم رقم` (يخزّن) و`find اسم` (يطبع الرقم أو `غير موجود`)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "0501\nغير موجود",
+     "stdin": [
+      "add sara 0501",
+      "find sara",
+      "find omar",
+      "exit"
+     ]
+    },
+    {
+     "expect_stdout": "999",
+     "stdin": [
+      "add a 1",
+      "add a 999",
+      "find a",
+      "exit"
+     ],
+     "hidden": true
+    },
+    {
+     "expect_stdout": "",
+     "stdin": [
+      "exit"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "book = {}\nwhile True:\n    parts = input().split()\n    if parts[0] == \"exit\":\n        break\n    if parts[0] == \"add\":\n        book[parts[1]] = parts[2]\n    elif parts[0] == \"find\":\n        print(book.get(parts[1], \"غير موجود\"))\n",
+   "hints": [
+    "قاموس `book` وحلقة `while True`.",
+    "استخدم `book.get(name, \"غير موجود\")`."
+   ],
+   "stdin": [
+    "add sara 0501",
+    "find sara",
+    "find omar",
+    "exit"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "الخطوة 2: القائمة والحذف",
+   "instructions": [
+    "أضف الأمرين: `list` (يطبع كل جهة بالشكل `اسم: رقم` بترتيب الأسماء) و`delete اسم` (يحذفها لو موجودة بدون خطأ). الأوامر السابقة تبقى."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "omar: 02\nsara: 01",
+     "stdin": [
+      "add sara 01",
+      "add omar 02",
+      "list",
+      "exit"
+     ]
+    },
+    {
+     "expect_stdout": "sara: 01",
+     "stdin": [
+      "add sara 01",
+      "add omar 02",
+      "delete omar",
+      "delete zzz",
+      "list",
+      "exit"
+     ]
+    },
+    {
+     "expect_stdout": "",
+     "stdin": [
+      "list",
+      "exit"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "book = {}\nwhile True:\n    parts = input().split()\n    if parts[0] == \"exit\":\n        break\n    if parts[0] == \"add\":\n        book[parts[1]] = parts[2]\n    elif parts[0] == \"find\":\n        print(book.get(parts[1], \"غير موجود\"))\n    elif parts[0] == \"list\":\n        for name in sorted(book):\n            print(name + \": \" + book[name])\n    elif parts[0] == \"delete\":\n        book.pop(parts[1], None)\n",
+   "hints": [
+    "`sorted(book)` يعطي الأسماء مرتبة.",
+    "`book.pop(name, None)` تحذف بدون خطأ لو ناقصة."
+   ],
+   "stdin": [
+    "add sara 01",
+    "add omar 02",
+    "list",
+    "exit"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "عدّاد الكلمات",
+   "instructions": [
+    "اقرأ سطراً واحداً، واطبع كل كلمة وعدد مرات ظهورها بالشكل `كلمة: عدد` بترتيب أبجدي."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "a: 2\nb: 1",
+     "stdin": [
+      "a b a"
+     ]
+    },
+    {
+     "expect_stdout": "x: 1",
+     "stdin": [
+      "x"
+     ]
+    },
+    {
+     "expect_stdout": "go: 2\nstop: 1",
+     "stdin": [
+      "go stop go"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "counts = {}\nfor w in input().split():\n    counts[w] = counts.get(w, 0) + 1\nfor w in sorted(counts):\n    print(w + \": \" + str(counts[w]))\n",
+   "hints": [
+    "استخدم نمط العدّ بالقاموس.",
+    "مرّ على `sorted(counts)`."
+   ],
+   "stdin": [
+    "a b a"
+   ]
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش أفضل هيكل لتخزين اسم ورقمه؟",
+     "options": [
+      "قاموس",
+      "متغير نصي واحد",
+      "tuple من عنصر"
+     ],
+     "answer": 0,
+     "why": "القاموس يربط المفتاح بقيمته."
+    },
+    {
+     "q": "كيف نخرج من حلقة `while True`؟",
+     "options": [
+      "break",
+      "stop",
+      "return فقط"
+     ],
+     "answer": 0,
+     "why": "`break` توقف الحلقة."
+    },
+    {
+     "q": "وش تسوي `book.pop(name, None)` لو name غير موجود؟",
+     "options": [
+      "لا شيء ولا خطأ",
+      "KeyError",
+      "تضيفه"
+     ],
+     "answer": 0,
+     "why": "القيمة الافتراضية تمنع الخطأ."
+    },
+    {
+     "q": "كيف نقسم \"add sara 0501\" لكلمات؟",
+     "options": [
+      ".split()",
+      ".cut()",
+      ".list()"
+     ],
+     "answer": 0,
+     "why": "`split()` يقسم على المسافات."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "بنيت برنامجاً تفاعلياً كاملاً بحلقة وقاموس.",
+    "قسّم المشكلة لأوامر صغيرة وكل أمر فرع.",
+    "نمط العدّ والقاموس أساس تحليل البيانات."
+   ]
+  }
+ ]
+}

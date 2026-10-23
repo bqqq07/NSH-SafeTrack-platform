@@ -1,0 +1,277 @@
+{
+ "title_ar": "break و continue",
+ "title_en": "break & continue",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🛑",
+   "goal": "تتحكم بالحلقة من داخلها: توقفها بـ `break` ([[break]]) أو تتخطى دورة بـ `continue` ([[continue]])."
+  },
+  {
+   "type": "text",
+   "title": "أوقف أو تخطَّ",
+   "body": [
+    "`break` توقف الحلقة كلها فوراً، ويكمل البرنامج بعدها. نستخدمها لما نلقى اللي نبغاه.",
+    "`continue` تتخطى باقي الدورة الحالية وترجع للدورة اللي بعدها."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "`break` = «كفاية، لقيته». `continue` = «هذا ما يفيد، خل الجاي».",
+   "code": "for n in range(1, 10):\n    if n == 4:\n        break\n    print(n)      # 1 2 3\n\nfor n in range(1, 6):\n    if n == 3:\n        continue\n    print(n)      # 1 2 4 5"
+  },
+  {
+   "type": "text",
+   "title": "نمط البحث و else",
+   "body": [
+    "نمط البحث: نمر على الخيارات، ولما نلقى المطلوب نسوي `break`.",
+    "ولو الحلقة خلصت **بدون** ما تنكسر، نقدر ننفذ `else` اللاحقة بالحلقة نفسها (وهو أسلوب بايثوني).",
+    "مثال أمني: نعطي المستخدم 3 محاولات لإدخال كلمة السر، ولو نجح نوقف."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "`else` هنا تعني «لو ما انكسرت الحلقة»، وليست مربوطة بـ `if`.",
+   "code": "for attempt in range(3):\n    pw = input()\n    if pw == \"secret\":\n        print(\"نجح\")\n        break\nelse:\n    print(\"مقفل\")"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "break",
+    "continue",
+    "loop"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): break",
+   "code": "for n in range(1, 10):\n    if n == 4:\n        break\n    print(n)\n",
+   "options": [
+    "1\n2\n3",
+    "1\n2\n3\n4",
+    "4",
+    "1\n2"
+   ],
+   "answer": 0,
+   "why": "لما n = 4 تنكسر الحلقة قبل ما تطبع 4."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): continue",
+   "code": "for n in range(1, 6):\n    if n == 3:\n        continue\n    print(n)\n",
+   "options": [
+    "1\n2\n4\n5",
+    "1\n2",
+    "1\n2\n3\n4\n5",
+    "3"
+   ],
+   "answer": 0,
+   "why": "لما n = 3 يتخطى الطباعة ويكمل بالباقي."
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: أول مضاعف لـ 7",
+   "lines": [
+    "for n in range(50, 100):",
+    "    if n % 7 == 0:",
+    "        print(n)",
+    "        break"
+   ],
+   "expect_stdout": "56",
+   "intro": "رتّب الأسطر لإيجاد أول مضاعف لـ 7 من 50.",
+   "explain": "نطبع أول واحد ثم نوقف الحلقة بـ `break`."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: أوقف الحلقة",
+   "code": "for n in range(1, 10):\n    if n == 3:\n        ____\n    print(n)\n",
+   "blanks": [
+    {
+     "answer": "break"
+    }
+   ],
+   "expect_stdout": "1\n2",
+   "show_output": true,
+   "bank": [
+    "break",
+    "continue",
+    "stop",
+    "exit"
+   ],
+   "intro": "نبغى نوقف الحلقة كلها لما n = 3.",
+   "explain": "`break` توقف الحلقة."
+  },
+  {
+   "type": "code",
+   "title": "أول مضاعف لـ 7",
+   "instructions": [
+    "اطبع **أول** رقم بعد 50 يقبل القسمة على 7 (مع `break`)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "56",
+     "label": "يطبع 56"
+    }
+   ],
+   "solution": "for n in range(51, 100):\n    if n % 7 == 0:\n        print(n)\n        break\n",
+   "hints": [
+    "ابدأ من 51 وفحص باقي القسمة.",
+    "بعد ما تطبع، اكسر الحلقة."
+   ],
+   "checks": [
+    {
+     "regex": "\\bbreak\\b",
+     "msg": "استخدم break"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "الأعداد الفردية",
+   "instructions": [
+    "اطبع الأعداد الفردية فقط من 1 إلى 9 (كل رقم بسطر) باستخدام `continue` لتخطي الزوجية."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "1\n3\n5\n7\n9",
+     "label": "الفردية فقط"
+    }
+   ],
+   "solution": "for n in range(1, 10):\n    if n % 2 == 0:\n        continue\n    print(n)\n",
+   "hints": [
+    "لو الرقم زوجي: `continue`.",
+    "وإلا اطبعه."
+   ],
+   "checks": [
+    {
+     "regex": "\\bcontinue\\b",
+     "msg": "استخدم continue"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "ثلاث محاولات",
+   "instructions": [
+    "كلمة السر الصحيحة `secret`. اقرأ حتى 3 محاولات: لو أدخل الصحيحة اطبع **نجح** وتوقف، وإذا فشل في الثلاث اطبع **مقفل**."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "نجح",
+     "stdin": [
+      "a",
+      "b",
+      "secret"
+     ]
+    },
+    {
+     "expect_stdout": "مقفل",
+     "stdin": [
+      "a",
+      "b",
+      "c"
+     ]
+    },
+    {
+     "expect_stdout": "نجح",
+     "stdin": [
+      "secret"
+     ]
+    },
+    {
+     "expect_stdout": "نجح",
+     "stdin": [
+      "x",
+      "secret"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "for attempt in range(3):\n    pw = input()\n    if pw == \"secret\":\n        print(\"نجح\")\n        break\nelse:\n    print(\"مقفل\")\n",
+   "hints": [
+    "اقرأ كلمة السر داخل `for` بعدد 3 مرات.",
+    "عند النجاح اطبع ثم `break`، وللمقفل استخدم `else` بعد الحلقة."
+   ],
+   "stdin": [
+    "a",
+    "b",
+    "secret"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: break مكان continue",
+   "instructions": [
+    "الكود يطبع 1 إلى 4 فقط. نبغى يتخطى الرقم 5 فقط ويطبع الباقي: 1 2 3 4 6 7."
+   ],
+   "starter": "for i in range(1, 8):\n    if i == 5:\n        break\n    print(i)\n",
+   "tests": [
+    {
+     "expect_stdout": "1\n2\n3\n4\n6\n7",
+     "label": "يتخطى 5 فقط"
+    }
+   ],
+   "solution": "for i in range(1, 8):\n    if i == 5:\n        continue\n    print(i)\n",
+   "hints": [
+    "`break` توقف الحلقة كلها.",
+    "نبغى نتخطى دورة واحدة: `continue`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش تسوي `break`؟",
+     "options": [
+      "توقف الحلقة كلها",
+      "تتخطى الدورة الحالية",
+      "تعيد الحلقة من أولها"
+     ],
+     "answer": 0,
+     "why": "تخرج من الحلقة فوراً."
+    },
+    {
+     "q": "وش تسوي `continue`؟",
+     "options": [
+      "تتخطى باقي الدورة الحالية",
+      "توقف البرنامج",
+      "تخرج من الدالة"
+     ],
+     "answer": 0,
+     "why": "تنتقل للدورة التالية."
+    },
+    {
+     "q": "متى تنفذ `else` اللي بعد حلقة `for`؟",
+     "options": [
+      "لما الحلقة تخلص بدون break",
+      "دايماً",
+      "لما break تنفذ"
+     ],
+     "answer": 0,
+     "why": "لو ما انكسرت الحلقة."
+    },
+    {
+     "q": "وش يطبع: for n in range(3): if n == 1: continue ; print(n)؟",
+     "options": [
+      "0 و2",
+      "1 فقط",
+      "0 و1 و2"
+     ],
+     "answer": 0,
+     "why": "يتخطى 1."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`break` توقف الحلقة، و`continue` تتخطى دورة.",
+    "نمط البحث: `break` لما نلقى المطلوب.",
+    "`else` بعد الحلقة تنفذ لما ما انكسرت."
+   ]
+  }
+ ]
+}

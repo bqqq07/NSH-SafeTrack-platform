@@ -1,0 +1,4 @@
+Pyodide 314.0.7 (Python 3.14.2 compiled to WebAssembly)
+Copyright (c) Pyodide contributors. Licensed under the Mozilla Public License 2.0 (MPL-2.0).
+Source and license: https://github.com/pyodide/pyodide
+These files are unmodified copies of the official npm package "pyodide".

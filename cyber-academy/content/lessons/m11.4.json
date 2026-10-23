@@ -1,0 +1,293 @@
+{
+ "title_ar": "أساليب النصوص",
+ "title_en": "String Methods",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🧼",
+   "goal": "تستخدم أساليب ([[method]]) النصوص لتنظيف النص وتحويله والبحث فيه، وهي مهارة أساسية في تحليل المدخلات."
+  },
+  {
+   "type": "text",
+   "title": "الأسلوب: دالة تتبع القيمة",
+   "body": [
+    "**الأسلوب** ([[method]]) دالة تُستدعى بنقطة بعد القيمة: `\"abc\".upper()`.",
+    "أساليب النصوص **ما تغيّر** النص الأصلي، بل ترجع نصاً جديداً. تحتاج تخزنه أو تطبعه.",
+    "أهمها: `upper()` `lower()` `strip()` `replace()` `split()` `startswith()` `endswith()` `find()` `count()`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "`strip()` تشيل المسافات من الأطراف، و`split(\",\")` تقسّم النص إلى قائمة.",
+   "code": "name = \"  Ahmed  \"\nprint(name.strip())\nprint(name.upper())\nprint(\"a,b,c\".split(\",\"))"
+  },
+  {
+   "type": "text",
+   "title": "ليش مهمة في الأمن؟",
+   "body": [
+    "المدخلات من المستخدمين فوضوية: مسافات زايدة وحروف كبيرة وصغيرة. قبل المقارنة ننظّفها بـ `strip().lower()`.",
+    "مثال: اسم المستخدم `\" Admin \"` و`\"admin\"` لازم يُعاملان كنفس الاسم.",
+    "وأيضاً نفحص امتداد الملف بـ `endswith(\".exe\")` زي ما تعلمنا في درس الامتدادات."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "تقدر تسلسل الأساليب: `strip().lower()` تنفذ من اليسار لليمين.",
+   "code": "user = \"  Admin \"\nclean = user.strip().lower()\nprint(clean == \"admin\")"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "method",
+    "string"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "s = \"  hello  \"\nprint(s.strip())\nprint(s.upper())\n",
+   "options": [
+    "hello\n  HELLO",
+    "  hello  \nHELLO",
+    "hello\nhello",
+    "hello\nHELLO"
+   ],
+   "answer": 0,
+   "why": "`strip` تشيل المسافات من الأطراف، و`upper` تحوّل للحروف الكبيرة، وما يغيّران `s` نفسه."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): split",
+   "code": "print(\"a,b,c\".split(\",\"))",
+   "options": [
+    "['a', 'b', 'c']",
+    "a b c",
+    "['a,b,c']",
+    "abc"
+   ],
+   "answer": 0,
+   "why": "`split(\",\")` تقسّم النص عند كل فاصلة وترجع قائمة."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): endswith",
+   "code": "f = \"invoice.pdf.exe\"\nprint(f.endswith(\".pdf\"))\nprint(f.endswith(\".exe\"))\n",
+   "options": [
+    "False\nTrue",
+    "True\nTrue",
+    "False\nFalse",
+    "True\nFalse"
+   ],
+   "answer": 0,
+   "why": "الملف ينتهي بـ `.exe` وليس `.pdf`."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: تنظيف المدخل",
+   "code": "email = \"  Sara@Mail.COM \"\nprint(email.____().lower())\n",
+   "blanks": [
+    {
+     "answer": "strip"
+    }
+   ],
+   "expect_stdout": "sara@mail.com",
+   "show_output": true,
+   "bank": [
+    "strip",
+    "split",
+    "upper",
+    "replace"
+   ],
+   "intro": "وش الأسلوب اللي يشيل المسافات من الأطراف؟",
+   "explain": "`strip()` ثم `lower()`."
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: تنظيف اسم مستخدم",
+   "lines": [
+    "user = \"  Admin \"",
+    "clean = user.strip().lower()",
+    "print(clean)"
+   ],
+   "expect_stdout": "admin",
+   "intro": "رتّب الأسطر لتنظيف الاسم ثم طباعته."
+  },
+  {
+   "type": "code",
+   "title": "نظّف الإيميل",
+   "instructions": [
+    "`email = \"  Ahmed@Example.COM  \"`. اطبع الإيميل بعد شيل المسافات وتحويله لحروف صغيرة: `ahmed@example.com`."
+   ],
+   "starter": "email = \"  Ahmed@Example.COM  \"\n",
+   "tests": [
+    {
+     "expect_stdout": "ahmed@example.com",
+     "label": "يطبع الإيميل منظفاً"
+    }
+   ],
+   "solution": "email = \"  Ahmed@Example.COM  \"\nprint(email.strip().lower())\n",
+   "hints": [
+    "استخدم `strip()` و`lower()`.",
+    "`print(email.strip().lower())`"
+   ],
+   "checks": [
+    {
+     "regex": "strip\\s*\\(",
+     "msg": "استخدم strip"
+    },
+    {
+     "regex": "lower\\s*\\(",
+     "msg": "استخدم lower"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "استبدل المسافات",
+   "instructions": [
+    "`name = \"my secret file\"`. اطبعه بعد استبدال كل مسافة بـ `_` ليصير `my_secret_file`."
+   ],
+   "starter": "name = \"my secret file\"\n",
+   "tests": [
+    {
+     "expect_stdout": "my_secret_file",
+     "label": "يطبع my_secret_file"
+    }
+   ],
+   "solution": "name = \"my secret file\"\nprint(name.replace(\" \", \"_\"))\n",
+   "hints": [
+    "الأسلوب `replace(القديم, الجديد)`.",
+    "`name.replace(\" \", \"_\")`"
+   ],
+   "checks": [
+    {
+     "regex": "replace\\s*\\(",
+     "msg": "استخدم replace"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "هل الملف تنفيذي؟",
+   "instructions": [
+    "`filename = \"invoice.pdf.exe\"`. اطبع `True` إذا ينتهي بـ `.exe`، وإلا `False` (اطبع نتيجة الفحص مباشرة)."
+   ],
+   "starter": "filename = \"invoice.pdf.exe\"\n",
+   "tests": [
+    {
+     "expect_stdout": "True",
+     "label": "يطبع True"
+    }
+   ],
+   "solution": "filename = \"invoice.pdf.exe\"\nprint(filename.endswith(\".exe\"))\n",
+   "hints": [
+    "الأسلوب `endswith()`.",
+    "`print(filename.endswith(\".exe\"))`"
+   ],
+   "checks": [
+    {
+     "regex": "endswith\\s*\\(",
+     "msg": "استخدم endswith"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "قسّم النص",
+   "instructions": [
+    "`row = \"Ahmed,Riyadh,25\"`. قسّمه عند الفاصلة واطبع النتيجة (قائمة)."
+   ],
+   "starter": "row = \"Ahmed,Riyadh,25\"\n",
+   "tests": [
+    {
+     "expect_stdout": "['Ahmed', 'Riyadh', '25']",
+     "label": "يطبع القائمة"
+    }
+   ],
+   "solution": "row = \"Ahmed,Riyadh,25\"\nprint(row.split(\",\"))\n",
+   "hints": [
+    "الأسلوب `split(\",\")`.",
+    "اطبع النتيجة مباشرة."
+   ],
+   "checks": [
+    {
+     "regex": "split\\s*\\(",
+     "msg": "استخدم split"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: النص ما تغيّر",
+   "instructions": [
+    "الكود يطبع النص بحروفه الكبيرة والصغيرة كما هو. أصلحه ليطبع: HELLO"
+   ],
+   "starter": "word = \"hello\"\nword.upper()\nprint(word)\n",
+   "tests": [
+    {
+     "expect_stdout": "HELLO",
+     "label": "يطبع HELLO"
+    }
+   ],
+   "solution": "word = \"hello\"\nword = word.upper()\nprint(word)\n",
+   "hints": [
+    "الأساليب ترجع نصاً جديداً ولا تغيّر الأصل.",
+    "خزّن الناتج: `word = word.upper()`"
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يسوي `\"  hi \".strip()`؟",
+     "options": [
+      "يشيل المسافات من الأطراف",
+      "يحذف الحروف",
+      "يضيف مسافات"
+     ],
+     "answer": 0,
+     "why": "strip تنظف الأطراف."
+    },
+    {
+     "q": "وش يرجع `\"a-b\".replace(\"-\", \"+\")`؟",
+     "options": [
+      "a+b",
+      "a-b",
+      "ab"
+     ],
+     "answer": 0,
+     "why": "تستبدل كل `-` بـ `+`."
+    },
+    {
+     "q": "هل `word.upper()` تغيّر `word`؟",
+     "options": [
+      "لا، ترجع نصاً جديداً",
+      "نعم دائماً",
+      "أحياناً"
+     ],
+     "answer": 0,
+     "why": "النصوص ثابتة، والأساليب ترجع نسخة جديدة."
+    },
+    {
+     "q": "ليش ننظّف المدخل بـ strip وlower قبل المقارنة؟",
+     "options": [
+      "عشان المسافات والحروف الكبيرة ما تخرّب المقارنة",
+      "لتسريع الكود",
+      "عشان يطلع أجمل"
+     ],
+     "answer": 0,
+     "why": "مدخلات المستخدم غير منظمة."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "الأساليب تُستدعى بنقطة، وترجع نصاً جديداً.",
+    "`strip` `lower` `upper` `replace` `split` `endswith` من أهمها.",
+    "نظّف المدخلات قبل المقارنة.",
+    "خزّن الناتج في متغير لو تبغاه."
+   ]
+  }
+ ]
+}

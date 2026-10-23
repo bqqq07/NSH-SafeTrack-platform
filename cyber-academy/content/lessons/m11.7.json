@@ -1,0 +1,298 @@
+{
+ "title_ar": "تحويل الأنواع",
+ "title_en": "Type Casting",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔁",
+   "goal": "تحوّل القيم بين الأنواع ([[casting]]) بـ `int()` و`float()` و`str()`، وتفهم أخطاء التحويل."
+  },
+  {
+   "type": "text",
+   "title": "ثلاث دوال للتحويل",
+   "body": [
+    "`int(x)` لعدد صحيح، `float(x)` لعدد عشري، `str(x)` لنص.",
+    "`int(3.9)` تعطي 3 (تقطع الكسر ولا تقرّب).",
+    "ونعرف النوع بـ `type()`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "التحويل يرجع قيمة جديدة، ما يغيّر المتغير الأصلي إلا لو خزّنته.",
+   "code": "print(int(\"5\") + 3)\nprint(float(\"2.5\") * 2)\nprint(str(5) + \"0\")\nprint(type(5))"
+  },
+  {
+   "type": "text",
+   "title": "متى يفشل التحويل؟",
+   "body": [
+    "`int(\"abc\")` يعطي `ValueError` لأن النص مو رقماً. و`int(\"3.7\")` أيضاً يفشل (لأنه نص فيه كسر): نمر عبر `float` أولاً.",
+    "وجمع نص مع رقم يعطي `TypeError`: لازم نحوّل أحدهما.",
+    "في الأمن: نحوّل أرقام المنافذ والتواريخ القادمة من سجلات نصية."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "دايماً توقّع إن المدخل ممكن يكون غلط، وبنتعلم نتعامل معه بـ try/except لاحقاً.",
+   "code": "print(int(float(\"3.7\")))   # 3\nprint(\"عمري \" + str(25))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "casting",
+    "int",
+    "float",
+    "string",
+    "data-type"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "print(int(\"5\") + 3)\nprint(\"5\" + \"3\")\n",
+   "options": [
+    "8\n53",
+    "8\n8",
+    "53\n8",
+    "53\n53"
+   ],
+   "answer": 0,
+   "why": "مع `int` يصير جمع أرقام (8)، وبدونها دمج نصوص (53)."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2)",
+   "code": "print(int(3.9))\nprint(float(\"2.5\") * 2)\nprint(str(5) + \"0\")\n",
+   "options": [
+    "3\n5.0\n50",
+    "4\n5.0\n50",
+    "3\n5\n5",
+    "3\n5\n50"
+   ],
+   "answer": 0,
+   "why": "`int(3.9)` تقطع الكسر (3)، و`float` ترجع عشري (5.0)، و`str(5) + \"0\"` دمج نصوص (50)."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): النوع",
+   "code": "print(type(\"5\"))",
+   "options": [
+    "<class 'str'>",
+    "<class 'int'>",
+    "<class 'float'>",
+    "5"
+   ],
+   "answer": 0,
+   "why": "`\"5\"` بين علامتي اقتباس فهي نص (str)."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: تحويل لرقم",
+   "code": "port = \"443\"\nprint(____(port) + 1)\n",
+   "blanks": [
+    {
+     "answer": "int"
+    }
+   ],
+   "expect_stdout": "444",
+   "show_output": true,
+   "bank": [
+    "int",
+    "str",
+    "float",
+    "len"
+   ],
+   "intro": "وش الدالة اللي تحوّل النص \"443\" لعدد صحيح؟",
+   "explain": "`int(\"443\")` تعطي 443 فنقدر نجمع عليه."
+  },
+  {
+   "type": "code",
+   "title": "رقم المنفذ",
+   "instructions": [
+    "`port_text = \"443\"` (نص قادم من ملف). اطبع الرقم **التالي** (444)."
+   ],
+   "starter": "port_text = \"443\"\n",
+   "tests": [
+    {
+     "expect_stdout": "444",
+     "label": "يطبع 444"
+    }
+   ],
+   "solution": "port_text = \"443\"\nprint(int(port_text) + 1)\n",
+   "hints": [
+    "حوّل النص لرقم أولاً.",
+    "`int(port_text) + 1`"
+   ],
+   "checks": [
+    {
+     "regex": "int\\s*\\(",
+     "msg": "استخدم int()"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "اجمع رقمين",
+   "instructions": [
+    "اقرأ رقمين (سطرين من المدخلات) واطبع **مجموعهما**."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "42",
+     "stdin": [
+      "12",
+      "30"
+     ]
+    },
+    {
+     "expect_stdout": "7",
+     "stdin": [
+      "3",
+      "4"
+     ]
+    },
+    {
+     "expect_stdout": "101",
+     "stdin": [
+      "100",
+      "1"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "a = int(input())\nb = int(input())\nprint(a + b)\n",
+   "hints": [
+    "المدخلات نصوص، حوّلها بـ `int`.",
+    "ثم اجمعهما واطبع."
+   ],
+   "checks": [
+    {
+     "regex": "int\\s*\\(",
+     "msg": "حوّل بـ int()"
+    }
+   ],
+   "stdin": [
+    "12",
+    "30"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "عمرك بعد سنة",
+   "instructions": [
+    "`age_text = \"24\"`. اطبع: **عمرك بعد سنة: 25**"
+   ],
+   "starter": "age_text = \"24\"\n",
+   "tests": [
+    {
+     "expect_stdout": "عمرك بعد سنة: 25",
+     "label": "الجملة صحيحة"
+    }
+   ],
+   "solution": "age_text = \"24\"\nprint(f\"عمرك بعد سنة: {int(age_text) + 1}\")\n",
+   "hints": [
+    "حوّل `age_text` لرقم وزد 1.",
+    "استخدم f-string."
+   ],
+   "checks": [
+    {
+     "regex": "int\\s*\\(",
+     "msg": "استخدم int()"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: TypeError",
+   "instructions": [
+    "الكود يعطي `TypeError` لأنه يجمع نصاً مع رقم. أصلحه ليطبع: **عمري 25**"
+   ],
+   "starter": "age = 25\nprint(\"عمري \" + age)\n",
+   "tests": [
+    {
+     "expect_stdout": "عمري 25",
+     "label": "يطبع: عمري 25"
+    }
+   ],
+   "solution": "age = 25\nprint(\"عمري \" + str(age))\n",
+   "hints": [
+    "لازم يكون الاثنين نصوص.",
+    "حوّل `age` بـ `str()`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "code",
+   "title": "أصلح: ValueError",
+   "instructions": [
+    "`int(\"3.7\")` تفشل. أصلحه ليطبع **3**."
+   ],
+   "starter": "x = int(\"3.7\")\nprint(x)\n",
+   "tests": [
+    {
+     "expect_stdout": "3",
+     "label": "يطبع 3"
+    }
+   ],
+   "solution": "x = int(float(\"3.7\"))\nprint(x)\n",
+   "hints": [
+    "النص فيه كسر: حوّله لعشري أولاً.",
+    "`int(float(\"3.7\"))`"
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يطبع `print(int(\"7\") + 1)`؟",
+     "options": [
+      "8",
+      "71",
+      "خطأ"
+     ],
+     "answer": 0,
+     "why": "تحويل ثم جمع أرقام."
+    },
+    {
+     "q": "وش يرجع `int(5.9)`؟",
+     "options": [
+      "5",
+      "6",
+      "5.9"
+     ],
+     "answer": 0,
+     "why": "`int` تقطع الكسر ولا تقرّب."
+    },
+    {
+     "q": "وش نتيجة `\"عمري \" + 25`؟",
+     "options": [
+      "TypeError",
+      "عمري 25",
+      "25"
+     ],
+     "answer": 0,
+     "why": "ما تجمع نصاً مع رقم مباشرة."
+    },
+    {
+     "q": "كيف تحوّل \"3.7\" لعدد صحيح؟",
+     "options": [
+      "int(float(\"3.7\"))",
+      "int(\"3.7\")",
+      "str(\"3.7\")"
+     ],
+     "answer": 0,
+     "why": "نمر عبر float لأن int ما تقبل نصاً فيه كسر."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`int()` `float()` `str()` للتحويل، و`type()` للنوع.",
+    "`int` تقطع الكسر ولا تقرّب.",
+    "جمع نص مع رقم يعطي TypeError: حوّل أحدهما.",
+    "مدخلات `input()` نصوص: حوّلها قبل الحساب."
+   ]
+  }
+ ]
+}

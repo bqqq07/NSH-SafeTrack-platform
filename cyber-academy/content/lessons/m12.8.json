@@ -1,0 +1,283 @@
+{
+ "title_ar": "مشروع: لعبة تخمين الرقم",
+ "title_en": "Project: Number Guessing Game",
+ "duration_min": 12,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🎮",
+   "goal": "تبني لعبة **تخمين الرقم** باستخدام الشروط والحلقات: البرنامج يحتفظ برقم سري، وأنت تحاول تخمّنه وتقول لك أقل أو أكثر."
+  },
+  {
+   "type": "text",
+   "title": "خطة المشروع",
+   "body": [
+    "الرقم السري عندنا ثابت `secret = 42` (عشان نقدر نفحص الكود).",
+    "1. خمّن مرة وحدة ويرد: `صح!` أو `أقل` أو `أكثر`.",
+    "2. كرر لين يخمّن صح.",
+    "3. اعدّ المحاولات واطبعها.",
+    "4. حدّد 5 محاولات فقط."
+   ],
+   "layer": "المشروع",
+   "emoji": "🎯",
+   "callout": "info",
+   "note": "`أقل` معناها: خمّنك أكبر من السري فجرّب أقل. و`أكثر` العكس."
+  },
+  {
+   "type": "code",
+   "title": "الخطوة 1: تخمينة وحدة",
+   "instructions": [
+    "اقرأ تخميناً (رقم). اطبع: **صح!** لو يساوي 42، **أقل** لو أكبر من 42، **أكثر** لو أصغر من 42."
+   ],
+   "starter": "secret = 42\n",
+   "tests": [
+    {
+     "expect_stdout": "صح!",
+     "stdin": [
+      "42"
+     ]
+    },
+    {
+     "expect_stdout": "أقل",
+     "stdin": [
+      "50"
+     ]
+    },
+    {
+     "expect_stdout": "أكثر",
+     "stdin": [
+      "10"
+     ]
+    },
+    {
+     "expect_stdout": "أكثر",
+     "stdin": [
+      "41"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "secret = 42\nguess = int(input())\nif guess == secret:\n    print(\"صح!\")\nelif guess > secret:\n    print(\"أقل\")\nelse:\n    print(\"أكثر\")\n",
+   "hints": [
+    "استخدم `if` / `elif` / `else`.",
+    "التخمين الأكبر من السري → `أقل`."
+   ],
+   "stdin": [
+    "42"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "الخطوة 2: كرر لين يصيب",
+   "instructions": [
+    "حوّلها لحلقة: استمر في القراءة والتلميح لين يخمّن صح، وبعد الصح اطبع **صح!** وتوقف."
+   ],
+   "starter": "secret = 42\nguess = int(input())\nif guess == secret:\n    print(\"صح!\")\nelif guess > secret:\n    print(\"أقل\")\nelse:\n    print(\"أكثر\")\n",
+   "tests": [
+    {
+     "expect_stdout": "أكثر\nأقل\nصح!",
+     "stdin": [
+      "10",
+      "50",
+      "42"
+     ]
+    },
+    {
+     "expect_stdout": "صح!",
+     "stdin": [
+      "42"
+     ]
+    },
+    {
+     "expect_stdout": "أقل\nأقل\nأكثر\nصح!",
+     "stdin": [
+      "90",
+      "60",
+      "30",
+      "42"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "secret = 42\nguess = int(input())\nwhile guess != secret:\n    if guess > secret:\n        print(\"أقل\")\n    else:\n        print(\"أكثر\")\n    guess = int(input())\nprint(\"صح!\")\n",
+   "hints": [
+    "اقرأ تخميناً قبل الحلقة وداخلها.",
+    "اطبع التلميح داخل الحلقة و`صح!` بعدها."
+   ],
+   "checks": [
+    {
+     "regex": "\\bwhile\\b",
+     "msg": "استخدم while"
+    }
+   ],
+   "stdin": [
+    "10",
+    "50",
+    "42"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "الخطوة 3: عدّاد المحاولات",
+   "instructions": [
+    "اطبع بعد **صح!** سطراً: `عدد المحاولات: N`"
+   ],
+   "starter": "secret = 42\nguess = int(input())\nwhile guess != secret:\n    if guess > secret:\n        print(\"أقل\")\n    else:\n        print(\"أكثر\")\n    guess = int(input())\nprint(\"صح!\")\n",
+   "tests": [
+    {
+     "expect_stdout": "أكثر\nأقل\nصح!\nعدد المحاولات: 3",
+     "stdin": [
+      "10",
+      "50",
+      "42"
+     ]
+    },
+    {
+     "expect_stdout": "صح!\nعدد المحاولات: 1",
+     "stdin": [
+      "42"
+     ]
+    },
+    {
+     "expect_stdout": "أقل\nأقل\nأكثر\nصح!\nعدد المحاولات: 4",
+     "stdin": [
+      "90",
+      "60",
+      "30",
+      "42"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "secret = 42\nattempts = 1\nguess = int(input())\nwhile guess != secret:\n    if guess > secret:\n        print(\"أقل\")\n    else:\n        print(\"أكثر\")\n    guess = int(input())\n    attempts = attempts + 1\nprint(\"صح!\")\nprint(f\"عدد المحاولات: {attempts}\")\n",
+   "hints": [
+    "ابدأ العدّاد بـ 1 (التخمينة الأولى).",
+    "زده مع كل تخمينة جديدة داخل الحلقة."
+   ],
+   "stdin": [
+    "10",
+    "50",
+    "42"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "الخطوة 4: خمس محاولات فقط",
+   "instructions": [
+    "حدّد **5 محاولات**. لو خمّن صح اطبع `صح!` وتوقف. ولو فشل في الخمس اطبع `انتهت المحاولات. الرقم كان 42` (استخدم `for` و`break` و`else`)."
+   ],
+   "starter": "secret = 42\nfor attempt in range(5):\n    guess = int(input())\n    if guess == secret:\n        print(\"صح!\")\n        break\n",
+   "tests": [
+    {
+     "expect_stdout": "أكثر\nأقل\nصح!",
+     "stdin": [
+      "10",
+      "50",
+      "42"
+     ]
+    },
+    {
+     "expect_stdout": "أقل\nأقل\nأقل\nأقل\nأقل\nانتهت المحاولات. الرقم كان 42",
+     "stdin": [
+      "90",
+      "80",
+      "70",
+      "60",
+      "50"
+     ]
+    },
+    {
+     "expect_stdout": "صح!",
+     "stdin": [
+      "42"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "secret = 42\nfor attempt in range(5):\n    guess = int(input())\n    if guess == secret:\n        print(\"صح!\")\n        break\n    elif guess > secret:\n        print(\"أقل\")\n    else:\n        print(\"أكثر\")\nelse:\n    print(f\"انتهت المحاولات. الرقم كان {secret}\")\n",
+   "hints": [
+    "استخدم `for attempt in range(5)` بدل while.",
+    "ما تنكسر الحلقة لو فشل الجميع فتنفذ `else`."
+   ],
+   "explain": "مبروك! لعبتك كاملة: شروط وحلقات وعدّاد ومحاولات محدودة. 🎉",
+   "stdin": [
+    "10",
+    "50",
+    "42"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "إضافة: مولّد جدول الضرب",
+   "instructions": [
+    "**مشروع إضافي:** اقرأ رقماً `n` واطبع جدول ضربه من 1 إلى 10 (كل سطر بالشكل `n x i = النتيجة`)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "3 x 1 = 3\n3 x 2 = 6\n3 x 3 = 9\n3 x 4 = 12\n3 x 5 = 15\n3 x 6 = 18\n3 x 7 = 21\n3 x 8 = 24\n3 x 9 = 27\n3 x 10 = 30",
+     "stdin": [
+      "3"
+     ]
+    },
+    {
+     "expect_stdout": "12 x 1 = 12\n12 x 2 = 24\n12 x 3 = 36\n12 x 4 = 48\n12 x 5 = 60\n12 x 6 = 72\n12 x 7 = 84\n12 x 8 = 96\n12 x 9 = 108\n12 x 10 = 120",
+     "stdin": [
+      "12"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "n = int(input())\nfor i in range(1, 11):\n    print(f\"{n} x {i} = {n * i}\")\n",
+   "hints": [
+    "حلقة من 1 إلى 10.",
+    "f-string لكل سطر."
+   ],
+   "stdin": [
+    "3"
+   ]
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش اخترنا `for` + `break` + `else` في الخطوة الأخيرة؟",
+     "options": [
+      "لأن عدد المحاولات محدد ونحتاج نعرف إذا ما أصاب أبداً",
+      "لأنها أسرع",
+      "لأن while ما تشتغل"
+     ],
+     "answer": 0,
+     "why": "`else` تنفذ لما تنتهي الحلقة بدون break."
+    },
+    {
+     "q": "كيف عرفنا نعطي تلميح «أقل»؟",
+     "options": [
+      "لما التخمين أكبر من السري",
+      "لما أصغر",
+      "عشوائياً"
+     ],
+     "answer": 0,
+     "why": "نقارن التخمين بالسري."
+    },
+    {
+     "q": "وش الفرق بين الخطوة 2 والخطوة 4؟",
+     "options": [
+      "الخطوة 4 تحدد عدد المحاولات",
+      "الخطوة 4 أبطأ",
+      "ما فيه فرق"
+     ],
+     "answer": 0,
+     "why": "while تكرر حتى الصح، وfor يحدد العدد."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "بنيت لعبة كاملة بالشروط والحلقات والعدّادات.",
+    "مستوى التحكم بالتدفق انتهى. الجاي: هياكل البيانات (القوائم والقواميس) 🗃️"
+   ]
+  }
+ ]
+}
