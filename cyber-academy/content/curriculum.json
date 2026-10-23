@@ -776,49 +776,49 @@
      "id": "m14.1",
      "title_ar": "تعريف دالة def",
      "title_en": "Defining Functions",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m14.2",
      "title_ar": "المعاملات والقيمة المرجعة",
      "title_en": "Parameters & Return",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m14.3",
      "title_ar": "القيم الافتراضية",
      "title_en": "Default Arguments",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m14.4",
      "title_ar": "النطاق Scope",
      "title_en": "Scope",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m14.5",
      "title_ar": "*args و **kwargs",
      "title_en": "*args & **kwargs",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m14.6",
      "title_ar": "lambda و map/filter",
      "title_en": "Lambda",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m14.7",
      "title_ar": "التوثيق وتلميحات الأنواع",
      "title_en": "Docstrings & Type Hints",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m14.8",
      "title_ar": "مشروع: مكتبة دوال",
      "title_en": "Project: Utility Library",
-     "ready": false
+     "ready": true
     }
    ]
   },

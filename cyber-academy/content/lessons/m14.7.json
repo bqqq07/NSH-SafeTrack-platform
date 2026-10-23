@@ -1,0 +1,258 @@
+{
+ "title_ar": "التوثيق وتلميحات الأنواع",
+ "title_en": "Docstrings & Type Hints",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "📝",
+   "goal": "تجعل دوالك مفهومة للآخرين (ولنفسك بعد شهر) بـ [[docstring]] و[[type-hint]]."
+  },
+  {
+   "type": "text",
+   "title": "وثّق دالتك",
+   "body": [
+    "نص بين ثلاث علامات اقتباس أول جسم الدالة يشرح وظيفتها: يسمى [[docstring]].",
+    "يقرأه `help(f)` وأدوات المحرر. نكتب فيه وش تسوي الدالة، ومدخلاتها، وما ترجعه.",
+    "التعليق `#` يشرح **لماذا** في سطر معين، والـ docstring يشرح **ماذا** تفعل الدالة."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "سطر واحد واضح يكفي في الغالب.",
+   "code": "def add(a, b):\n    \"\"\"ترجع مجموع a و b.\"\"\"\n    return a + b\n\nprint(add.__doc__)"
+  },
+  {
+   "type": "text",
+   "title": "تلميحات الأنواع",
+   "body": [
+    "نكتب نوع المعامل والنتيجة للتوضيح: `def add(a: int, b: int) -> int:`.",
+    "هذه [[type-hint]] **للقراءة والأدوات فقط**؛ Python ما يمنعك من تمرير نوع آخر وقت التشغيل.",
+    "أنواع شائعة: `int`, `str`, `float`, `bool`, `list`, `dict`، و`list[int]` قائمة أرقام."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "أدوات مثل mypy تفحص التلميحات قبل التشغيل.",
+   "code": "def greet(name: str) -> str:\n    return \"hi \" + name\n\nprint(greet(\"a\"))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "docstring",
+    "type-hint"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "def f():\n    \"\"\"وصف\"\"\"\n    return 1\n\nprint(f.__doc__)\n",
+   "options": [
+    "وصف",
+    "1",
+    "None"
+   ],
+   "answer": 0,
+   "why": "`__doc__` يرجع نص التوثيق."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): التلميحات لا تمنع",
+   "code": "def f(x: int) -> int:\n    return x\n\nprint(f(\"a\"))\n",
+   "options": [
+    "a",
+    "خطأ TypeError",
+    "0"
+   ],
+   "answer": 0,
+   "why": "التلميح لا يفرض النوع، فتمر \"a\" وتُرجَع."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: النتيجة",
+   "code": "def f(x: int) ____ int:\n    return x + 1\nprint(f(1))\n",
+   "blanks": [
+    {
+     "answer": "->"
+    }
+   ],
+   "expect_stdout": "2",
+   "show_output": true,
+   "bank": [
+    "->",
+    "=>",
+    ":",
+    "="
+   ],
+   "intro": "وش العلامة اللي تسبق نوع النتيجة؟",
+   "explain": "نكتب `-> int` بعد الأقواس."
+  },
+  {
+   "type": "code",
+   "title": "وثّق الدالة",
+   "instructions": [
+    "عرّف `area(w, h)` ترجع مساحة المستطيل، وأضف docstring لها (أي نص) في أول الجسم."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "area(3, 4)",
+     "expect": 12
+    },
+    {
+     "call": "area(5, 5)",
+     "expect": 25
+    },
+    {
+     "call": "area.__doc__ is not None",
+     "expect": true,
+     "label": "فيها docstring"
+    }
+   ],
+   "solution": "def area(w, h):\n    \"\"\"ترجع مساحة المستطيل.\"\"\"\n    return w * h\n",
+   "hints": [
+    "ضع نصاً بين `\"\"\"` أول الدالة."
+   ],
+   "checks": [
+    {
+     "regex": "\"\"\"|\\'\\'\\'",
+     "msg": "أضف docstring"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تلميحات الأنواع",
+   "instructions": [
+    "عرّف `is_adult(age: int) -> bool` ترجع `True` لو `age >= 18`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "is_adult(20)",
+     "expect": true
+    },
+    {
+     "call": "is_adult(10)",
+     "expect": false
+    },
+    {
+     "call": "is_adult(18)",
+     "expect": true,
+     "hidden": true
+    }
+   ],
+   "solution": "def is_adult(age: int) -> bool:\n    return age >= 18\n",
+   "hints": [
+    "`age: int` و`-> bool`."
+   ],
+   "checks": [
+    {
+     "regex": "->\\s*bool",
+     "msg": "أضف -> bool"
+    },
+    {
+     "regex": "age\\s*:\\s*int",
+     "msg": "أضف age: int"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تنظيف الاسم",
+   "instructions": [
+    "عرّف `clean(name: str) -> str` ترجع الاسم بدون مسافات زائدة من الطرفين وبحروف صغيرة، مع docstring."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "clean(\"  Sara \")",
+     "expect": "sara"
+    },
+    {
+     "call": "clean(\"ALI\")",
+     "expect": "ali"
+    },
+    {
+     "call": "clean.__doc__ is not None",
+     "expect": true,
+     "label": "فيها docstring"
+    }
+   ],
+   "solution": "def clean(name: str) -> str:\n    \"\"\"ينظف الاسم ويحوله لحروف صغيرة.\"\"\"\n    return name.strip().lower()\n",
+   "hints": [
+    "`strip()` ثم `lower()`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: السلسلة",
+   "instructions": [
+    "الـ docstring مفتوح بثلاث علامات ومقفل بعلامتين فيعطي `SyntaxError`. أصلحه ليطبع `3`."
+   ],
+   "starter": "def f():\n    \"\"\"وصف\"\"\n    return 3\n\nprint(f())\n",
+   "tests": [
+    {
+     "expect_stdout": "3",
+     "label": "يطبع 3"
+    }
+   ],
+   "solution": "def f():\n    \"\"\"وصف\"\"\"\n    return 3\n\nprint(f())\n",
+   "hints": [
+    "لازم تقفله بثلاث علامات."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وين نكتب docstring؟",
+     "options": [
+      "أول جسم الدالة",
+      "آخر الملف",
+      "قبل def"
+     ],
+     "answer": 0,
+     "why": "أول سطر في الجسم."
+    },
+    {
+     "q": "هل type hints تمنع تمرير نوع خاطئ وقت التشغيل؟",
+     "options": [
+      "لا، للتوضيح والأدوات",
+      "نعم دائماً",
+      "فقط للأرقام"
+     ],
+     "answer": 0,
+     "why": "ما تفرض النوع."
+    },
+    {
+     "q": "وش يعني `-> str`؟",
+     "options": [
+      "الدالة ترجع نصاً",
+      "الدالة تقبل نصاً",
+      "الدالة تطبع نصاً"
+     ],
+     "answer": 0,
+     "why": "نوع القيمة المرجعة."
+    },
+    {
+     "q": "وش يسوي `f.__doc__`؟",
+     "options": [
+      "يرجع نص التوثيق",
+      "ينفّذ f",
+      "يحذف f"
+     ],
+     "answer": 0,
+     "why": "يقرأ الـ docstring."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "الـ docstring يشرح ماذا تفعل الدالة.",
+    "`def f(a: int) -> int` تلميحات للقراءة والأدوات.",
+    "Python لا يفرض الأنواع وقت التشغيل."
+   ]
+  }
+ ]
+}

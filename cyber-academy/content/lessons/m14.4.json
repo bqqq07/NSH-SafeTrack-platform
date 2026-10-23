@@ -1,0 +1,246 @@
+{
+ "title_ar": "النطاق Scope",
+ "title_en": "Scope",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔭",
+   "goal": "تفهم وين يعيش المتغير: داخل الدالة ([[scope]] محلي) أو خارجها (عام)، وتتجنب أخطاء شائعة."
+  },
+  {
+   "type": "text",
+   "title": "غرفة الدالة",
+   "body": [
+    "المتغير المعرّف داخل الدالة **محلي**: يعيش أثناء تنفيذها فقط ويختفي بعدها.",
+    "من خارج الدالة ما تقدر توصل له: `NameError`.",
+    "المتغير المعرّف خارج الدوال [[global-variable]] (عام) نقدر نقرأه من داخل الدوال."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "النطاق يحميك: متغيرات دالة ما تخرب متغيرات غيرها.",
+   "code": "def f():\n    secret = 42\n    print(secret)\n\nf()\n# print(secret)  # NameError"
+  },
+  {
+   "type": "text",
+   "title": "التعديل والتظليل",
+   "body": [
+    "لو كتبت `x = 5` داخل الدالة فهذا متغير **جديد** محلي حتى لو فيه x عام بنفس الاسم.",
+    "لتعديل العام من داخل الدالة نكتب `global x` (لكن الأفضل تمرر قيمة وترجع نتيجة).",
+    "الأفضل: الدالة تستقبل ما تحتاجه عبر المعاملات وتخرج بـ `return`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "استخدام `global` كثيراً علامة تصميم ضعيف.",
+   "code": "count = 0\n\ndef add():\n    global count\n    count = count + 1\n\nadd()\nadd()\nprint(count)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "scope",
+    "global-variable"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "x = 10\ndef f():\n    x = 5\n    return x\n\nprint(f(), x)\n",
+   "options": [
+    "5 10",
+    "5 5",
+    "10 10"
+   ],
+   "answer": 0,
+   "why": "x داخل الدالة محلي ولا يغيّر العام."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): global",
+   "code": "n = 0\ndef inc():\n    global n\n    n = n + 1\n\ninc()\ninc()\nprint(n)\n",
+   "options": [
+    "2",
+    "0",
+    "1"
+   ],
+   "answer": 0,
+   "why": "global سمح بتعديل n العام مرتين."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): قراءة العام",
+   "code": "limit = 3\ndef check(v):\n    return v > limit\n\nprint(check(5), check(1))\n",
+   "options": [
+    "True False",
+    "False True",
+    "True True"
+   ],
+   "answer": 0,
+   "why": "الدالة تقرأ limit العام بدون مشكلة."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: global",
+   "code": "total = 0\ndef add(n):\n    ____ total\n    total = total + n\nadd(5)\nprint(total)\n",
+   "blanks": [
+    {
+     "answer": "global"
+    }
+   ],
+   "expect_stdout": "5",
+   "show_output": true,
+   "bank": [
+    "global",
+    "local",
+    "nonlocal",
+    "def"
+   ],
+   "intro": "وش الكلمة اللي تسمح بتعديل متغير عام؟",
+   "explain": "`global total` قبل التعديل."
+  },
+  {
+   "type": "code",
+   "title": "أصلح: UnboundLocalError",
+   "instructions": [
+    "الدالة تعدّل `counter` العام بدون `global` فتعطي خطأ. أصلحها لتطبع `3`."
+   ],
+   "starter": "counter = 0\ndef inc():\n    counter = counter + 1\ninc()\ninc()\ninc()\nprint(counter)\n",
+   "tests": [
+    {
+     "expect_stdout": "3",
+     "label": "يطبع 3"
+    }
+   ],
+   "solution": "counter = 0\ndef inc():\n    global counter\n    counter = counter + 1\ninc()\ninc()\ninc()\nprint(counter)\n",
+   "hints": [
+    "أضف `global counter` أول الدالة."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "code",
+   "title": "الأفضل: return",
+   "instructions": [
+    "أعد كتابة العداد بدون `global`: عرّف `inc(n)` ترجع `n + 1`، ثم `c = 0` وكرر `c = inc(c)` ثلاث مرات واطبع `3`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "3",
+     "label": "يطبع 3"
+    }
+   ],
+   "solution": "def inc(n):\n    return n + 1\n\nc = 0\nc = inc(c)\nc = inc(c)\nc = inc(c)\nprint(c)\n",
+   "hints": [
+    "الدالة ترجع القيمة الجديدة.",
+    "خزنها في `c`."
+   ],
+   "checks": [
+    {
+     "regex": "global",
+     "must": false,
+     "msg": "لا تستخدم global"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "حد المحاولات",
+   "instructions": [
+    "`MAX = 3` معرّف في الأعلى. عرّف `locked(fails)` ترجع `True` لو `fails >= MAX` (تقرأ MAX العام)."
+   ],
+   "starter": "MAX = 3\n",
+   "tests": [
+    {
+     "call": "locked(3)",
+     "expect": true
+    },
+    {
+     "call": "locked(1)",
+     "expect": false
+    },
+    {
+     "call": "locked(10)",
+     "expect": true,
+     "hidden": true
+    }
+   ],
+   "solution": "MAX = 3\ndef locked(fails):\n    return fails >= MAX\n",
+   "hints": [
+    "الدالة تقرأ MAX بدون global."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "خارج الدالة",
+   "instructions": [
+    "الكود يطبع متغيراً معرّفاً داخل دالة. غيّره لتطبع `42` عن طريق `return`."
+   ],
+   "starter": "def f():\n    secret = 42\nf()\nprint(secret)\n",
+   "tests": [
+    {
+     "expect_stdout": "42",
+     "label": "يطبع 42"
+    }
+   ],
+   "solution": "def f():\n    secret = 42\n    return secret\nprint(f())\n",
+   "hints": [
+    "ارجع `secret` من الدالة.",
+    "اطبع `f()`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وين يعيش متغير معرّف داخل دالة؟",
+     "options": [
+      "داخلها فقط",
+      "في كل البرنامج",
+      "في الملف التالي"
+     ],
+     "answer": 0,
+     "why": "محلي للدالة."
+    },
+    {
+     "q": "وش يحل UnboundLocalError عند تعديل عام؟",
+     "options": [
+      "global",
+      "local",
+      "del"
+     ],
+     "answer": 0,
+     "why": "نصرّح `global`."
+    },
+    {
+     "q": "هل نقدر نقرأ متغيراً عاماً داخل دالة؟",
+     "options": [
+      "نعم",
+      "لا أبداً",
+      "فقط بـ global"
+     ],
+     "answer": 0,
+     "why": "القراءة مسموحة."
+    },
+    {
+     "q": "أفضل أسلوب لمشاركة بيانات مع دالة؟",
+     "options": [
+      "معاملات وreturn",
+      "متغيرات عامة كثيرة",
+      "ملفات"
+     ],
+     "answer": 0,
+     "why": "يجعل الكود أوضح."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "المتغير داخل الدالة محلي ويختفي بعدها.",
+    "نقرأ العام بحرية، ونعدّله بـ `global` (والأفضل return).",
+    "مرّر ما تحتاجه عبر المعاملات."
+   ]
+  }
+ ]
+}

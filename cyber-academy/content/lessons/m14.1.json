@@ -1,0 +1,244 @@
+{
+ "title_ar": "تعريف دالة def",
+ "title_en": "Defining Functions",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🧰",
+   "goal": "تكتب كودك مرة وحدة وتستدعيه متى ما بغيت باستخدام [[function]] (دالة)."
+  },
+  {
+   "type": "text",
+   "title": "وصفة تستدعيها",
+   "body": [
+    "لو كررت نفس الأسطر في أكثر من مكان فالأفضل تضعها في **دالة**: كتلة كود لها اسم.",
+    "نعرّفها بـ `def` واسم وأقواس ونقطتين، والجسم بمسافة بادئة. والتعريف وحده ما ينفّذ شيء.",
+    "ننفّذها بـ**استدعائها**: `say_hi()`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "عرّف أولاً ثم استدعِ. استدعاء دالة قبل تعريفها يعطي NameError.",
+   "code": "def say_hi():\n    print(\"هلا\")\n    print(\"نورت\")\n\nsay_hi()\nsay_hi()"
+  },
+  {
+   "type": "text",
+   "title": "لماذا الدوال؟",
+   "body": [
+    "**منع التكرار:** تعدّل الدالة مرة وحدة بدل عشرة أماكن.",
+    "**الوضوح:** `check_port()` أوضح من عشرة أسطر.",
+    "**الاختبار:** تختبر كل دالة لحالها.",
+    "قاعدة: دالة وحدة = مهمة وحدة."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "اسم الدالة فعل واضح بحروف صغيرة: `print_report`.",
+   "code": "def banner():\n    print(\"=\" * 10)\n\nbanner()\nprint(\"تقرير\")\nbanner()"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "function"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "def hi():\n    print(\"a\")\n    print(\"b\")\n\nhi()\nhi()\n",
+   "options": [
+    "a\nb\na\nb",
+    "a\nb",
+    "a\nb\nb",
+    "a\na\nb\nb"
+   ],
+   "answer": 0,
+   "why": "استدعينا الدالة مرتين فتتكرر طباعة a ثم b مرتين."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): تعريف فقط",
+   "code": "def hi():\n    print(\"a\")\n\nprint(\"b\")\n",
+   "options": [
+    "b",
+    "a\nb",
+    "a",
+    "b\na"
+   ],
+   "answer": 0,
+   "why": "التعريف لا ينفّذ الجسم، فنطبع b فقط."
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: دالة",
+   "lines": [
+    "def welcome():",
+    "    print(\"أهلاً\")",
+    "    print(\"بك\")",
+    "welcome()"
+   ],
+   "expect_stdout": "أهلاً\nبك",
+   "intro": "رتّب الأسطر: تعريف الدالة ثم استدعاؤها.",
+   "explain": "نعرّف أولاً ثم نستدعي."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: التعريف",
+   "code": "____ greet():\n    print(\"hi\")\ngreet()\n",
+   "blanks": [
+    {
+     "answer": "def"
+    }
+   ],
+   "expect_stdout": "hi",
+   "show_output": true,
+   "bank": [
+    "def",
+    "func",
+    "function",
+    "return"
+   ],
+   "intro": "وش الكلمة اللي نعرّف بها دالة؟",
+   "explain": "نبدأ التعريف بـ `def`."
+  },
+  {
+   "type": "code",
+   "title": "دالة التحية",
+   "instructions": [
+    "عرّف دالة `hello` تطبع `مرحباً بالمتدرب`، ثم استدعها **مرتين**."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "مرحباً بالمتدرب\nمرحباً بالمتدرب",
+     "label": "يطبع الجملة مرتين"
+    }
+   ],
+   "solution": "def hello():\n    print(\"مرحباً بالمتدرب\")\n\nhello()\nhello()\n",
+   "hints": [
+    "`def hello():` ثم الجسم بمسافة.",
+    "استدعها بكتابة `hello()` مرتين."
+   ],
+   "checks": [
+    {
+     "regex": "def\\s+hello\\s*\\(\\s*\\)",
+     "msg": "عرّف الدالة hello"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "الفاصل",
+   "instructions": [
+    "عرّف دالة `line` تطبع `-----` (خمس شرطات). استدعها قبل كلمة `تقرير` وبعدها."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "-----\nتقرير\n-----",
+     "label": "فاصل قبل وبعد"
+    }
+   ],
+   "solution": "def line():\n    print(\"-----\")\n\nline()\nprint(\"تقرير\")\nline()\n",
+   "hints": [
+    "عرّف `line` أولاً.",
+    "ثم: `line()` ثم `print` ثم `line()`."
+   ],
+   "checks": [
+    {
+     "regex": "def\\s+line",
+     "msg": "عرّف الدالة line"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تنبيه أمني",
+   "instructions": [
+    "عرّف دالة `alert` تطبع سطرين: `تنبيه!` ثم `راجع السجلات`. استدعها مرة وحدة."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "تنبيه!\nراجع السجلات",
+     "label": "يطبع سطرين"
+    }
+   ],
+   "solution": "def alert():\n    print(\"تنبيه!\")\n    print(\"راجع السجلات\")\n\nalert()\n",
+   "hints": [
+    "سطرا الطباعة داخل الدالة بمسافة."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: NameError",
+   "instructions": [
+    "الكود يستدعي الدالة قبل تعريفها. رتّبه ليطبع `جاهز`."
+   ],
+   "starter": "start()\ndef start():\n    print(\"جاهز\")\n",
+   "tests": [
+    {
+     "expect_stdout": "جاهز",
+     "label": "يطبع جاهز"
+    }
+   ],
+   "solution": "def start():\n    print(\"جاهز\")\nstart()\n",
+   "hints": [
+    "لازم التعريف قبل الاستدعاء."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش الكلمة اللي تعرّف دالة؟",
+     "options": [
+      "def",
+      "func",
+      "fn"
+     ],
+     "answer": 0,
+     "why": "نستخدم `def`."
+    },
+    {
+     "q": "هل تعريف الدالة ينفّذ جسمها؟",
+     "options": [
+      "لا، الاستدعاء هو اللي ينفّذه",
+      "نعم دائماً",
+      "مرتين"
+     ],
+     "answer": 0,
+     "why": "التعريف يحفظ الكود فقط."
+    },
+    {
+     "q": "وش فايدة الدوال؟",
+     "options": [
+      "منع التكرار وتنظيم الكود",
+      "تسريع الإنترنت",
+      "تغيير ألوان الشاشة"
+     ],
+     "answer": 0,
+     "why": "نكتب مرة ونستدعي كثيراً."
+    },
+    {
+     "q": "كيف نستدعي دالة اسمها scan؟",
+     "options": [
+      "scan()",
+      "call scan",
+      "def scan"
+     ],
+     "answer": 0,
+     "why": "اسمها وأقواس."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`def اسم():` ثم جسم بمسافة بادئة.",
+    "التعريف لا ينفّذ، الاستدعاء هو اللي ينفّذ.",
+    "عرّف قبل ما تستدعي، ودالة وحدة لمهمة وحدة."
+   ]
+  }
+ ]
+}

@@ -17,14 +17,17 @@ export const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', 
 //   `أمر`    ← كود داخل السطر
 // plain=true: بدون أزرار (للاستخدام داخل أزرار ثانية مثل خيارات الأسئلة)
 export function rich(text, plain = false) {
-  return esc(text)
+  // الكود داخل `` يُستخرج أولاً حتى لا تتحول النجوم فيه (مثل **kwargs) إلى خط عريض
+  const codes = [];
+  const src = esc(text).replace(/`(.+?)`/g, (_, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
+  return src
     .replace(/\[\[([a-z0-9-]+)\]\]/g, (_, id) => {
       const t = terms[id];
       if (plain) return t ? `<span class="en">${esc(t.en)}</span>` : id;
       return t ? `<button class="term en" data-term="${id}">${esc(t.en)}</button>` : id;
     })
     .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
-    .replace(/`(.+?)`/g, '<code class="en">$1</code>');
+    .replace(/\u0000(\d+)\u0000/g, (_, i) => `<code class="en">${codes[i]}</code>`);
 }
 
 // نطق المصطلح بالإنجليزي (Web Speech API) — يعتمد على دعم الجهاز

@@ -1,0 +1,217 @@
+{
+ "title_ar": "مشروع: مكتبة دوال",
+ "title_en": "Project: Utility Library",
+ "duration_min": 14,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🧩",
+   "goal": "تبني مكتبة دوال صغيرة قابلة لإعادة الاستخدام: تحقق من رقم هوية، وقوة كلمة المرور، وتنظيف المدخلات."
+  },
+  {
+   "type": "text",
+   "title": "خطة المشروع",
+   "body": [
+    "كل مهمة دالة مستقلة صغيرة مع اختباراتها: `is_valid_id`، ثم `password_score`، ثم `summarize`.",
+    "نفكر: وش المدخل؟ وش المخرج؟ وش الحالات الحدية (فاضي، قصير، حروف غريبة)؟",
+    "الدوال النقية (تعتمد على مدخلاتها فقط وترجع نتيجة) أسهل اختباراً."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "`isdigit()` تفحص أن النص كله أرقام.",
+   "code": "def is_digits(s):\n    return s.isdigit()\n\nprint(is_digits(\"123\"))\nprint(is_digits(\"12a\"))"
+  },
+  {
+   "type": "text",
+   "title": "الحالات الحدية",
+   "body": [
+    "جرّب دالتك على: نص فاضي، طول ناقص، طول زائد، حروف بدل أرقام.",
+    "اكتب شروطك واحداً واحداً بوضوح بدل شرط طويل واحد.",
+    "أي دالة تبنيها هنا تقدر تستخدمها في مشاريع قادمة."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "نبدأ بالشروط التي ترفض، وآخر شيء نقبل.",
+   "code": "def is_ok(s):\n    if len(s) != 4:\n        return False\n    return s.isdigit()\n\nprint(is_ok(\"\"), is_ok(\"123\"), is_ok(\"1234\"))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "function"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع: حالة حدية",
+   "code": "def ok(s):\n    if len(s) != 4:\n        return False\n    return s.isdigit()\n\nprint(ok(\"12a4\"), ok(\"1234\"))\n",
+   "options": [
+    "False True",
+    "True True",
+    "True False"
+   ],
+   "answer": 0,
+   "why": "\"12a4\" طوله 4 لكن فيه حرف، فترجع False؛ و\"1234\" True."
+  },
+  {
+   "type": "code",
+   "title": "1) رقم الهوية",
+   "instructions": [
+    "عرّف `is_valid_id(s)` ترجع `True` لو النص **10 أرقام بالضبط** وتبدأ بـ `1` أو `2`، وإلا `False`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "is_valid_id(\"1234567890\")",
+     "expect": true
+    },
+    {
+     "call": "is_valid_id(\"2123456789\")",
+     "expect": true
+    },
+    {
+     "call": "is_valid_id(\"3123456789\")",
+     "expect": false
+    },
+    {
+     "call": "is_valid_id(\"123\")",
+     "expect": false
+    },
+    {
+     "call": "is_valid_id(\"12345678ab\")",
+     "expect": false,
+     "hidden": true
+    },
+    {
+     "call": "is_valid_id(\"\")",
+     "expect": false,
+     "hidden": true
+    }
+   ],
+   "solution": "def is_valid_id(s):\n    if len(s) != 10 or not s.isdigit():\n        return False\n    return s[0] in \"12\"\n",
+   "hints": [
+    "تحقق من الطول والأرقام أولاً.",
+    "ثم الرقم الأول."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "2) قوة كلمة المرور",
+   "instructions": [
+    "عرّف `password_score(p)` ترجع عدد القواعد المتحققة من 4: الطول 8+، فيها رقم، فيها حرف كبير، فيها حرف صغير."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "password_score(\"abc\")",
+     "expect": 1
+    },
+    {
+     "call": "password_score(\"Abcdefg1\")",
+     "expect": 4
+    },
+    {
+     "call": "password_score(\"abcdefgh\")",
+     "expect": 2
+    },
+    {
+     "call": "password_score(\"\")",
+     "expect": 0,
+     "hidden": true
+    },
+    {
+     "call": "password_score(\"ABC123\")",
+     "expect": 2,
+     "hidden": true
+    }
+   ],
+   "solution": "def password_score(p):\n    score = 0\n    if len(p) >= 8:\n        score = score + 1\n    if any(c.isdigit() for c in p):\n        score = score + 1\n    if any(c.isupper() for c in p):\n        score = score + 1\n    if any(c.islower() for c in p):\n        score = score + 1\n    return score\n",
+   "hints": [
+    "زد النقاط لكل قاعدة.",
+    "`any(c.isdigit() for c in p)`"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "3) ملخص الأرقام",
+   "instructions": [
+    "عرّف `summarize(*nums)` ترجع قاموساً فيه `count` و`total` و`max`. لو ما فيه أرقام فالقيمة العظمى `None`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "summarize(3, 5, 1)",
+     "expect": {
+      "count": 3,
+      "total": 9,
+      "max": 5
+     }
+    },
+    {
+     "call": "summarize(7)",
+     "expect": {
+      "count": 1,
+      "total": 7,
+      "max": 7
+     }
+    },
+    {
+     "call": "summarize()",
+     "expect": {
+      "count": 0,
+      "total": 0,
+      "max": null
+     },
+     "hidden": true
+    }
+   ],
+   "solution": "def summarize(*nums):\n    return {\n        \"count\": len(nums),\n        \"total\": sum(nums),\n        \"max\": max(nums) if nums else None,\n    }\n",
+   "hints": [
+    "`*nums` تجمع القيم.",
+    "`max` على فاضي يعطي خطأ، فتحقق منه."
+   ]
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش الدالة \"النقية\"؟",
+     "options": [
+      "تعتمد على مدخلاتها وترجع نتيجة",
+      "تطبع فقط",
+      "تعدّل متغيرات عامة"
+     ],
+     "answer": 0,
+     "why": "أسهل في الاختبار."
+    },
+    {
+     "q": "ليش نجرب الحالات الحدية؟",
+     "options": [
+      "لأن الأخطاء تظهر فيها غالباً",
+      "لتسريع الكود",
+      "لا حاجة"
+     ],
+     "answer": 0,
+     "why": "مثل الفاضي والقصير."
+    },
+    {
+     "q": "أفضل تنظيم لكود التحقق؟",
+     "options": [
+      "شروط صغيرة واضحة",
+      "شرط طويل واحد",
+      "بدون شروط"
+     ],
+     "answer": 0,
+     "why": "الوضوح أولاً."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "بنيت دوالاً صغيرة قابلة للاختبار.",
+    "فكّر في المدخلات والمخرجات والحالات الحدية.",
+    "أنت جاهز لقراءة الملفات في المرحلة القادمة."
+   ]
+  }
+ ]
+}

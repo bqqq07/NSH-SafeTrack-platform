@@ -1,0 +1,305 @@
+{
+ "title_ar": "المعاملات والقيمة المرجعة",
+ "title_en": "Parameters & Return",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔁",
+   "goal": "تعطي الدالة بيانات عبر [[parameter]] (معاملات)، وتستلم نتيجة منها عبر [[return-value]] (return)."
+  },
+  {
+   "type": "text",
+   "title": "مدخلات الدالة",
+   "body": [
+    "المعامل متغير بين القوسين يستقبل قيمة عند الاستدعاء: `def greet(name):`.",
+    "القيمة اللي نمررها وقت الاستدعاء اسمها **وسيط** ([[argument]]): `greet(\"سارة\")`.",
+    "نقدر نمرر أكثر من واحد بالترتيب: `add(2, 3)`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "المعامل اسم داخل التعريف، والوسيط القيمة وقت الاستدعاء.",
+   "code": "def greet(name):\n    print(\"هلا\", name)\n\ngreet(\"سارة\")\ngreet(\"خالد\")"
+  },
+  {
+   "type": "text",
+   "title": "ترجيع النتيجة",
+   "body": [
+    "`print` تعرض للشاشة فقط، أما `return` فترجع قيمة للي استدعى الدالة ونقدر نخزنها ونستخدمها.",
+    "عند تنفيذ `return` تنتهي الدالة فوراً، وأي سطر بعده ما ينفّذ.",
+    "الدالة بدون `return` ترجع `None`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "خطأ شائع: نكتب print داخل الدالة وننتظر منها قيمة. استخدم return.",
+   "code": "def add(a, b):\n    return a + b\n\ntotal = add(2, 3)\nprint(total)\nprint(add(10, 5) * 2)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "parameter",
+    "argument",
+    "return-value"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "def double(n):\n    return n * 2\n\nprint(double(4))\n",
+   "options": [
+    "8",
+    "4",
+    "2",
+    "16"
+   ],
+   "answer": 0,
+   "why": "الدالة ترجع n*2 أي 8."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): بدون return",
+   "code": "def f():\n    x = 5\n\nprint(f())\n",
+   "options": [
+    "None",
+    "5",
+    "x",
+    "0"
+   ],
+   "answer": 0,
+   "why": "الدالة بدون return ترجع None."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): بعد return",
+   "code": "def f():\n    return 1\n    print(\"hi\")\n\nprint(f())\n",
+   "options": [
+    "1",
+    "hi\n1",
+    "hi",
+    "1 hi"
+   ],
+   "answer": 0,
+   "why": "بعد return تنتهي الدالة ولا يطبع hi."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الترجيع",
+   "code": "def square(n):\n    ____ n * n\n\nprint(square(5))\n",
+   "blanks": [
+    {
+     "answer": "return"
+    }
+   ],
+   "expect_stdout": "25",
+   "show_output": true,
+   "bank": [
+    "return",
+    "print",
+    "def",
+    "give"
+   ],
+   "intro": "وش الكلمة اللي ترجع القيمة؟",
+   "explain": "`return` ترجع النتيجة للمستدعي."
+  },
+  {
+   "type": "code",
+   "title": "دالة الجمع",
+   "instructions": [
+    "عرّف `add(a, b)` ترجع مجموعهما."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "add(2, 3)",
+     "expect": 5
+    },
+    {
+     "call": "add(-1, 1)",
+     "expect": 0
+    },
+    {
+     "call": "add(10, 20)",
+     "expect": 30,
+     "hidden": true
+    }
+   ],
+   "solution": "def add(a, b):\n    return a + b\n",
+   "hints": [
+    "`def add(a, b):`",
+    "ارجع `a + b`."
+   ],
+   "checks": [
+    {
+     "regex": "return",
+     "msg": "استخدم return"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "هل المنفذ مسموح؟",
+   "instructions": [
+    "عرّف `is_allowed(port)` ترجع `True` لو المنفذ `80` أو `443` وإلا `False`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "is_allowed(80)",
+     "expect": true
+    },
+    {
+     "call": "is_allowed(443)",
+     "expect": true
+    },
+    {
+     "call": "is_allowed(22)",
+     "expect": false
+    },
+    {
+     "call": "is_allowed(8080)",
+     "expect": false,
+     "hidden": true
+    }
+   ],
+   "solution": "def is_allowed(port):\n    return port == 80 or port == 443\n",
+   "hints": [
+    "الدالة ترجع نتيجة مقارنة.",
+    "`port == 80 or port == 443`"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "اختيار الأكبر",
+   "instructions": [
+    "عرّف `bigger(a, b)` ترجع الرقم الأكبر (بدون استخدام `max`)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "bigger(3, 9)",
+     "expect": 9
+    },
+    {
+     "call": "bigger(10, 2)",
+     "expect": 10
+    },
+    {
+     "call": "bigger(4, 4)",
+     "expect": 4,
+     "hidden": true
+    }
+   ],
+   "solution": "def bigger(a, b):\n    if a > b:\n        return a\n    return b\n",
+   "hints": [
+    "استخدم `if`.",
+    "ارجع a لو أكبر وإلا b."
+   ],
+   "checks": [
+    {
+     "regex": "(?<![A-Za-z_])max\\s*\\(",
+     "must": false,
+     "msg": "لا تستخدم max"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "جملة ترحيب",
+   "instructions": [
+    "عرّف `welcome(name)` ترجع النص `أهلاً يا ` ثم الاسم. مثال: `welcome(\"سارة\")` ← `أهلاً يا سارة`"
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "welcome(\"سارة\")",
+     "expect": "أهلاً يا سارة"
+    },
+    {
+     "call": "welcome(\"x\")",
+     "expect": "أهلاً يا x",
+     "hidden": true
+    }
+   ],
+   "solution": "def welcome(name):\n    return \"أهلاً يا \" + name\n",
+   "hints": [
+    "اجمع النصين بـ `+`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: النتيجة None",
+   "instructions": [
+    "الدالة تطبع المجموع بدل ما ترجعه، فتعطي `None` عند استخدام النتيجة. أصلحها لترجع القيمة."
+   ],
+   "starter": "def add(a, b):\n    print(a + b)\n",
+   "tests": [
+    {
+     "call": "add(2, 3)",
+     "expect": 5
+    },
+    {
+     "call": "add(1, 1)",
+     "expect": 2
+    }
+   ],
+   "solution": "def add(a, b):\n    return a + b\n",
+   "hints": [
+    "استبدل `print` بـ `return`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "الفرق بين print و return؟",
+     "options": [
+      "return ترجع قيمة تُستخدم، وprint تعرض فقط",
+      "ما فيه فرق",
+      "print أسرع"
+     ],
+     "answer": 0,
+     "why": "return تعطي القيمة للمستدعي."
+    },
+    {
+     "q": "وش ترجع دالة بدون return؟",
+     "options": [
+      "None",
+      "0",
+      "نص فاضي"
+     ],
+     "answer": 0,
+     "why": "None."
+    },
+    {
+     "q": "وش يصير بعد تنفيذ return؟",
+     "options": [
+      "تنتهي الدالة",
+      "تكمل الأسطر",
+      "تتكرر"
+     ],
+     "answer": 0,
+     "why": "تنتهي فوراً."
+    },
+    {
+     "q": "في `def f(a, b)` وش هما a و b؟",
+     "options": [
+      "معاملات",
+      "وسطاء",
+      "دوال"
+     ],
+     "answer": 0,
+     "why": "المعاملات هي الأسماء في التعريف."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "المعاملات تستقبل القيم، والوسطاء هي القيم الممررة.",
+    "`return` ترجع قيمة وتنهي الدالة.",
+    "بدون return ترجع None."
+   ]
+  }
+ ]
+}

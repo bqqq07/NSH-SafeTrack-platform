@@ -1,0 +1,264 @@
+{
+ "title_ar": "*args و **kwargs",
+ "title_en": "*args & **kwargs",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🎒",
+   "goal": "تكتب دالة تقبل أي عدد من الوسطاء بـ [[args-kwargs]]."
+  },
+  {
+   "type": "text",
+   "title": "عدد غير محدد من القيم",
+   "body": [
+    "أحياناً ما نعرف كم قيمة بتجي: `total(1, 2)` أو `total(1, 2, 3, 4)`. نكتب `*args` فتُجمع كل القيم الإضافية في **tuple**.",
+    "الاسم `args` عرف وليس إجبارياً، لكن النجمة هي المهمة.",
+    "نمر عليها بـ `for` عادي."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "`print(...)` نفسها تقبل أي عدد من الوسطاء بهالطريقة.",
+   "code": "def total(*args):\n    s = 0\n    for n in args:\n        s = s + n\n    return s\n\nprint(total(1, 2))\nprint(total(1, 2, 3, 4))"
+  },
+  {
+   "type": "text",
+   "title": "الوسطاء المسماة **kwargs",
+   "body": [
+    "`**kwargs` تجمع الوسطاء المسماة في **قاموس**: `f(name=\"a\", age=3)` ← `{\"name\": \"a\", \"age\": 3}`.",
+    "ونقدر \"نفك\" قائمة أو قاموس عند الاستدعاء: `f(*nums)` و`f(**opts)`.",
+    "الترتيب في التعريف: عادي، ثم `*args`، ثم `**kwargs`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "`print(*nums)` تفك القائمة إلى وسطاء منفصلة.",
+   "code": "def show(**kwargs):\n    for k in kwargs:\n        print(k, kwargs[k])\n\nshow(host=\"a.com\", port=22)\nnums = [1, 2, 3]\nprint(*nums)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "args-kwargs",
+    "tuple",
+    "dict"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "def f(*args):\n    return len(args)\n\nprint(f(5, 6, 7))\n",
+   "options": [
+    "3",
+    "1",
+    "2"
+   ],
+   "answer": 0,
+   "why": "args فيها ثلاث قيم."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): kwargs",
+   "code": "def f(**kw):\n    return sorted(kw)\n\nprint(f(b=1, a=2))\n",
+   "options": [
+    "['a', 'b']",
+    "['b', 'a']",
+    "[1, 2]"
+   ],
+   "answer": 0,
+   "why": "kw قاموس مفاتيحه a وb مرتبة."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): فك",
+   "code": "nums = [1, 2, 3]\nprint(*nums)\n",
+   "options": [
+    "1 2 3",
+    "[1, 2, 3]",
+    "1, 2, 3"
+   ],
+   "answer": 0,
+   "why": "النجمة تفك القائمة إلى وسطاء، و`print` تفصل بمسافة."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: عدد غير محدد",
+   "code": "def count(____):\n    return len(args)\nprint(count(1, 2, 3))\n",
+   "blanks": [
+    {
+     "answer": "*args"
+    }
+   ],
+   "expect_stdout": "3",
+   "show_output": true,
+   "bank": [
+    "*args",
+    "**args",
+    "args",
+    "&args"
+   ],
+   "intro": "كيف نستقبل أي عدد من القيم؟",
+   "explain": "`*args` تجمع القيم في tuple."
+  },
+  {
+   "type": "code",
+   "title": "مجموع أي عدد",
+   "instructions": [
+    "عرّف `total(*args)` ترجع مجموع كل القيم (والمجموع 0 لو ما فيه قيم)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "total(1, 2)",
+     "expect": 3
+    },
+    {
+     "call": "total(1, 2, 3, 4)",
+     "expect": 10
+    },
+    {
+     "call": "total()",
+     "expect": 0,
+     "hidden": true
+    }
+   ],
+   "solution": "def total(*args):\n    s = 0\n    for n in args:\n        s = s + n\n    return s\n",
+   "hints": [
+    "ابدأ بـ s = 0.",
+    "مرّ على args."
+   ],
+   "checks": [
+    {
+     "regex": "\\*\\s*args",
+     "msg": "استخدم *args"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أكبر قيمة",
+   "instructions": [
+    "عرّف `biggest(*nums)` ترجع أكبر قيمة (استخدم `max`)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "biggest(3, 9, 2)",
+     "expect": 9
+    },
+    {
+     "call": "biggest(5)",
+     "expect": 5
+    },
+    {
+     "call": "biggest(-1, -5)",
+     "expect": -1,
+     "hidden": true
+    }
+   ],
+   "solution": "def biggest(*nums):\n    return max(nums)\n",
+   "hints": [
+    "`max` تقبل tuple."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "وصف الإعدادات",
+   "instructions": [
+    "عرّف `describe(**opts)` ترجع نصاً بالشكل `key=value` لكل إعداد مفصولة بفاصلة ومسافة، بترتيب الأسماء. مثلاً `describe(port=22, host=\"a\")` ← `host=a, port=22`"
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "describe(port=22, host=\"a\")",
+     "expect": "host=a, port=22"
+    },
+    {
+     "call": "describe(x=1)",
+     "expect": "x=1"
+    },
+    {
+     "call": "describe()",
+     "expect": "",
+     "hidden": true
+    }
+   ],
+   "solution": "def describe(**opts):\n    parts = []\n    for k in sorted(opts):\n        parts.append(k + \"=\" + str(opts[k]))\n    return \", \".join(parts)\n",
+   "hints": [
+    "مرّ على `sorted(opts)`.",
+    "اجمعها بـ `\", \".join(...)`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: عدد الوسطاء",
+   "instructions": [
+    "الكود يعطي `TypeError` لأن الدالة تقبل وسيطين فقط. غيّرها لتقبل أي عدد وترجع العدد."
+   ],
+   "starter": "def count(a, b):\n    return 2\n\nprint(count(1, 2, 3))\n",
+   "tests": [
+    {
+     "expect_stdout": "3",
+     "label": "يطبع 3"
+    }
+   ],
+   "solution": "def count(*args):\n    return len(args)\n\nprint(count(1, 2, 3))\n",
+   "hints": [
+    "استخدم `*args`.",
+    "ارجع `len(args)`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش تجمع args بنجمة واحدة؟",
+     "options": [
+      "القيم الإضافية في tuple",
+      "المفاتيح في قاموس",
+      "النصوص فقط"
+     ],
+     "answer": 0,
+     "why": "النجمة الواحدة تجمع في tuple."
+    },
+    {
+     "q": "وش تجمع kwargs بنجمتين؟",
+     "options": [
+      "الوسطاء المسماة في قاموس",
+      "الأرقام فقط",
+      "tuple"
+     ],
+     "answer": 0,
+     "why": "النجمتين تجمع في قاموس."
+    },
+    {
+     "q": "وش تسوي `f(*nums)` عند الاستدعاء؟",
+     "options": [
+      "تفك القائمة إلى وسطاء",
+      "تضرب القائمة",
+      "تحذفها"
+     ],
+     "answer": 0,
+     "why": "الفك عند الاستدعاء."
+    },
+    {
+     "q": "وش الترتيب الصحيح في التعريف؟",
+     "options": [
+      "العادية ثم args ثم kwargs",
+      "kwargs أولاً",
+      "لا يهم"
+     ],
+     "answer": 0,
+     "why": "هذا الترتيب المطلوب."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`*args` تجمع القيم في tuple.",
+    "`**kwargs` تجمع المسماة في قاموس.",
+    "النجمة عند الاستدعاء تفك القائمة أو القاموس."
+   ]
+  }
+ ]
+}

@@ -1,0 +1,255 @@
+{
+ "title_ar": "القيم الافتراضية",
+ "title_en": "Default Arguments",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🎚️",
+   "goal": "تعطي المعامل [[default-argument]] (قيمة افتراضية) ليكون الوسيط اختيارياً."
+  },
+  {
+   "type": "text",
+   "title": "معامل اختياري",
+   "body": [
+    "لو بعض المعاملات غالباً ثابتة، نعطيها قيمة افتراضية: `def scan(host, port=80):`.",
+    "لو استدعينا `scan(\"a\")` تؤخذ port=80، ولو مررنا `scan(\"a\", 22)` تتغير.",
+    "المعاملات ذات القيمة الافتراضية تُكتب **بعد** المعاملات العادية."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "مثل إعدادات التطبيق: قيمة جاهزة تغيّرها لو احتجت.",
+   "code": "def scan(host, port=80):\n    print(\"فحص\", host, \"منفذ\", port)\n\nscan(\"a.com\")\nscan(\"a.com\", 22)"
+  },
+  {
+   "type": "text",
+   "title": "الوسطاء المسماة",
+   "body": [
+    "نقدر نمرر وسيطاً باسمه: `scan(\"a\", port=22)` فلا يهم الترتيب ويوضح القصد.",
+    "مفيد لما تكثر المعاملات: `connect(host=\"a\", timeout=5)`.",
+    "**تحذير:** لا تستخدم قائمة أو قاموساً فاضياً كقيمة افتراضية (`items=[]`)؛ يُشارَك بين الاستدعاءات. استخدم `None` ثم أنشئه داخل الدالة."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "الافتراضي القابل للتغيير فخ مشهور في Python.",
+   "code": "def connect(host, port=80, timeout=5):\n    print(host, port, timeout)\n\nconnect(\"a\", timeout=10)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "default-argument",
+    "parameter"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "def f(x, y=10):\n    return x + y\n\nprint(f(1))\n",
+   "options": [
+    "11",
+    "1",
+    "10"
+   ],
+   "answer": 0,
+   "why": "y أخذت القيمة الافتراضية 10."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): تجاوز الافتراضي",
+   "code": "def f(x, y=10):\n    return x + y\n\nprint(f(1, 2))\n",
+   "options": [
+    "3",
+    "11",
+    "12"
+   ],
+   "answer": 0,
+   "why": "مررنا y=2 فتجاوز الافتراضي."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): مسماة",
+   "code": "def f(a, b=2):\n    return a - b\n\nprint(f(b=1, a=5))\n",
+   "options": [
+    "4",
+    "3",
+    "-4"
+   ],
+   "answer": 0,
+   "why": "a=5 و b=1 فالناتج 4."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: افتراضي",
+   "code": "def greet(name, msg____\"هلا\"):\n    print(msg, name)\ngreet(\"سارة\")\n",
+   "blanks": [
+    {
+     "answer": "="
+    }
+   ],
+   "expect_stdout": "هلا سارة",
+   "show_output": true,
+   "bank": [
+    "=",
+    ":",
+    "==",
+    "->"
+   ],
+   "intro": "وش العلامة اللي تعطي المعامل قيمة افتراضية؟",
+   "explain": "نكتب `msg=\"هلا\"` في التعريف."
+  },
+  {
+   "type": "code",
+   "title": "تحية افتراضية",
+   "instructions": [
+    "عرّف `greet(name, greeting=\"هلا\")` ترجع `greeting` ثم مسافة ثم الاسم. مثال: `greet(\"سارة\")` ← `هلا سارة`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "greet(\"سارة\")",
+     "expect": "هلا سارة"
+    },
+    {
+     "call": "greet(\"خالد\", \"مرحبا\")",
+     "expect": "مرحبا خالد"
+    },
+    {
+     "call": "greet(\"x\", greeting=\"hi\")",
+     "expect": "hi x",
+     "hidden": true
+    }
+   ],
+   "solution": "def greet(name, greeting=\"هلا\"):\n    return greeting + \" \" + name\n",
+   "hints": [
+    "`greeting=\"هلا\"` في التعريف.",
+    "ارجع `greeting + \" \" + name`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "فحص المنفذ",
+   "instructions": [
+    "عرّف `check(host, port=443)` ترجع النص `host:port`. مثال: `check(\"a.com\")` ← `a.com:443`"
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "check(\"a.com\")",
+     "expect": "a.com:443"
+    },
+    {
+     "call": "check(\"b.com\", 22)",
+     "expect": "b.com:22"
+    },
+    {
+     "call": "check(\"c\", port=8080)",
+     "expect": "c:8080",
+     "hidden": true
+    }
+   ],
+   "solution": "def check(host, port=443):\n    return host + \":\" + str(port)\n",
+   "hints": [
+    "حوّل المنفذ لنص بـ `str()`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "قوة التكرار",
+   "instructions": [
+    "عرّف `power(base, exp=2)` ترجع `base ** exp`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "power(3)",
+     "expect": 9
+    },
+    {
+     "call": "power(2, 3)",
+     "expect": 8
+    },
+    {
+     "call": "power(5, exp=0)",
+     "expect": 1,
+     "hidden": true
+    }
+   ],
+   "solution": "def power(base, exp=2):\n    return base ** exp\n",
+   "hints": [
+    "الافتراضي `exp=2`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: ترتيب المعاملات",
+   "instructions": [
+    "الكود يعطي `SyntaxError` لأن المعامل الاختياري قبل العادي. أصلحه بحيث `f(1)` ترجع 11."
+   ],
+   "starter": "def f(y=10, x):\n    return x + y\n",
+   "tests": [
+    {
+     "call": "f(1)",
+     "expect": 11
+    }
+   ],
+   "solution": "def f(x, y=10):\n    return x + y\n",
+   "hints": [
+    "الاختياري يجي في الآخر."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش معنى `def f(x, y=5)`؟",
+     "options": [
+      "y اختياري وقيمته 5 إن لم تُمرَّر",
+      "y إجباري",
+      "x ثابت"
+     ],
+     "answer": 0,
+     "why": "الافتراضي لما نهمل الوسيط."
+    },
+    {
+     "q": "وين نكتب المعاملات الاختيارية؟",
+     "options": [
+      "بعد المعاملات العادية",
+      "قبلها",
+      "لا فرق"
+     ],
+     "answer": 0,
+     "why": "وإلا SyntaxError."
+    },
+    {
+     "q": "وش فايدة الوسيط المسمى؟",
+     "options": [
+      "يوضح القصد ويتجاوز الترتيب",
+      "يسرّع البرنامج",
+      "يحذف المعامل"
+     ],
+     "answer": 0,
+     "why": "مثل `port=22`."
+    },
+    {
+     "q": "وش الأفضل كقيمة افتراضية لقائمة؟",
+     "options": [
+      "None ثم ننشئها داخل الدالة",
+      "[] مباشرة",
+      "{}"
+     ],
+     "answer": 0,
+     "why": "لتجنب مشاركة الكائن بين الاستدعاءات."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`def f(x, y=5)` تجعل y اختيارياً.",
+    "الاختيارية تأتي في الآخر، ونقدر نمرر بالاسم.",
+    "تجنب القوائم الفاضية كقيمة افتراضية."
+   ]
+  }
+ ]
+}
