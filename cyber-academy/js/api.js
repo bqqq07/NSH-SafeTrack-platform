@@ -1,9 +1,9 @@
-// تواصل مع واجهة الحسابات (PHP). إذا الاستضافة ما تدعم PHP (مثلاً تشغيل محلي) نرجع null ونكمل كضيف.
+// تواصل مع واجهة الحسابات (PHP). إذا الاستضافة ما تدعم PHP (مثلاً تشغيل محلي) نرجع unavailable ونكمل كضيف.
 const BASE = 'api/index.php';
 
-async function call(action, { method = 'GET', body } = {}) {
+async function call(action, { method = 'GET', body, query = '' } = {}) {
   try {
-    const res = await fetch(`${BASE}?a=${action}`, {
+    const res = await fetch(`${BASE}?a=${action}${query}`, {
       method,
       credentials: 'same-origin',
       headers: method === 'POST' ? { 'Content-Type': 'application/json', 'X-CA': '1' } : {},
@@ -16,10 +16,24 @@ async function call(action, { method = 'GET', body } = {}) {
     return { unavailable: true }; // لا نت أو لا سيرفر
   }
 }
+const post = (action, body) => call(action, { method: 'POST', body });
 
+export const publicInfo = () => call('public');
+export const setupAdmin = (setup_key, username, password) => post('setup_admin', { setup_key, username, password });
 export const me = () => call('me');
-export const register = (username, password) => call('register', { method: 'POST', body: { username, password } });
-export const login = (username, password) => call('login', { method: 'POST', body: { username, password } });
-export const logout = () => call('logout', { method: 'POST' });
+export const register = (username, password) => post('register', { username, password });
+export const login = (username, password) => post('login', { username, password });
+export const logout = () => post('logout');
 export const pullProgress = () => call('progress');
-export const pushProgress = (progress) => call('progress', { method: 'POST', body: { progress } });
+export const pushProgress = (progress) => post('progress', { progress });
+
+// لوحة المشرف
+export const adminList = () => call('admin_list');
+export const adminUser = (id) => call('admin_user', { query: `&id=${id}` });
+export const adminUpdate = (id, fields) => post('admin_update', { id, ...fields });
+export const adminPassword = (id, password) => post('admin_password', { id, password });
+export const adminReset = (id, level = null) => post('admin_reset', { id, level });
+export const adminCreate = (username, password, full_name) => post('admin_create', { username, password, full_name });
+export const adminDelete = (id) => post('admin_delete', { id });
+export const adminSettings = (fields) => post('admin_settings', fields);
+export const adminBulk = (status, note = '', ids = 'all') => post('admin_bulk', { status, note, ids });

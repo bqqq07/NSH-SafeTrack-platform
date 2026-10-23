@@ -7,6 +7,8 @@ const DEFAULTS = {
   lastDay: null,           // آخر يوم تعلّم فيه (YYYY-MM-DD)
   lessons: {},             // { 'm0.1': { done, score, slide } }
   review: {},              // { 'phishing': { box, due } } للتكرار المتباعد
+  epoch: 0,                // يزيد لما المشرف يصفّر التقدم، فنستبدل المحلي بحالة السيرفر
+  owner: null,             // اسم الحساب اللي ينتمي له التقدم المحلي (عشان ما يتسرب بين حسابين على نفس الجهاز)
   settings: { theme: 'auto', font: 1 }
 };
 
@@ -65,6 +67,29 @@ export function mergeRemote(remote) {
   if ((remote.lastDay || '') > (state.lastDay || '')) { state.lastDay = remote.lastDay; state.streak = remote.streak || 0; }
   else if (remote.lastDay === state.lastDay) state.streak = Math.max(state.streak, remote.streak || 0);
   state.xp = totalXp();
+  save();
+}
+
+// بعد تصفير المشرف: نستبدل التقدم المحلي بالكامل بحالة السيرفر (بدون دمج، وإلا يرجع القديم)
+export function replaceProgress(remote, epoch) {
+  state.lessons = (remote && remote.lessons) || {};
+  state.review = (remote && remote.review) || {};
+  state.streak = (remote && remote.streak) || 0;
+  state.lastDay = (remote && remote.lastDay) || null;
+  state.epoch = epoch;
+  state.xp = totalXp();
+  save();
+}
+
+// مسح التقدم المحلي (تبقى الإعدادات): عند تسجيل الخروج أو تبديل الحساب على نفس الجهاز
+export function wipe() {
+  state.lessons = {}; state.review = {}; state.streak = 0; state.lastDay = null; state.xp = 0; state.epoch = 0; state.owner = null;
+  save();
+}
+// أول ما يدخل حساب: لو التقدم المحلي لحساب ثاني نمسحه، ولو كان تقدم ضيف (بدون مالك) نتبناه
+export function adopt(username) {
+  if (state.owner && state.owner !== username) wipe();
+  state.owner = username;
   save();
 }
 

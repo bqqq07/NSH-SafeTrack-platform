@@ -3,6 +3,8 @@ import * as store from './store.js';
 import { loadGlossary, initTermEvents, allTerms, getTerm, speak, esc, closeSheet } from './glossary.js';
 import { playLesson } from './player.js';
 import * as sync from './sync.js';
+import * as api from './api.js';
+import { adminHome, adminUserPage, setupPage } from './admin.js';
 
 const view = document.getElementById('view');
 const nav = document.getElementById('nav');
@@ -14,9 +16,33 @@ const isDone = (id) => !!store.get().lessons[id]?.done;
 // الدرس اللي انتهى سابقاً يبقى مفتوحاً للمراجعة.
 const readyList = () => lessonsOf().filter((m) => m.ready);
 const prevOf = (id) => { const l = readyList(); const i = l.findIndex((m) => m.id === id); return i > 0 ? l[i - 1] : null; };
-const isUnlocked = (id) => { const p = prevOf(id); return !p || isDone(id) || isDone(p.id); };
-// الدرس التالي = أول درس جاهز ما انحل
-const nextLesson = () => lessonsOf().find((m) => m.ready && !isDone(m.id));
+// تحكم المشرف: إيقاف التدريب، وسقف للمستوى، وفتح كل الدروس
+const me = () => sync.currentUser();
+const isSuspended = () => me()?.status === 'suspended';
+const levelOf = (id) => +id.match(/^m(\d+)\./)[1];
+const overCap = (id) => { const c = me()?.max_level; return c !== null && c !== undefined && levelOf(id) > c; };
+const isUnlocked = (id) => {
+  if (isSuspended() || overCap(id)) return false;
+  if (me()?.free_access) return true;
+  const p = prevOf(id);
+  return !p || isDone(id) || isDone(p.id);
+};
+// الدرس التالي = أول درس جاهز ما انحل وضمن السقف المسموح
+const nextLesson = () => lessonsOf().find((m) => m.ready && !isDone(m.id) && !overCap(m.id));
+
+// شاشة الإيقاف: يوقفها المشرف ويكتب فيها رسالة للمتدرب
+function suspendedScreen() {
+  nav.classList.remove('hidden');
+  view.innerHTML = `<div class="card result"><div class="big">⏸️</div><h2>تدريبك موقوف حالياً</h2>
+    <p>${esc(me()?.note || 'أوقف المشرف تدريبك مؤقتاً.')}</p>
+    <p class="muted">تواصل مع مشرفك لاستئناف التدريب.</p>
+    <button class="btn" id="chk">🔄 تحقق من الحالة</button><br>
+    <a class="btn ghost" href="#/profile">حسابي</a></div>`;
+  // نسأل السيرفر فوراً: ممكن المشرف استأنف التدريب
+  const recheck = async () => { if (await sync.refresh()) route(); };
+  view.querySelector('#chk').addEventListener('click', recheck);
+  recheck();
+}
 
 /* ---------------- الشاشات ---------------- */
 
@@ -44,7 +70,9 @@ function home() {
         <h2>${esc(next.title_ar)}</h2>
         <p class="muted en">${esc(next.title_en)}</p>
         <div class="btn">${st.lessons[next.id] ? 'كمّل' : 'ابدأ'} ←</div>
-      </a>` : `<div class="card"><h2>🎉 خلصت كل الدروس المتاحة</h2><p>دروس جديدة جاية قريب.</p></div>`}
+      </a>` : me()?.max_level != null && ready.some((m) => !isDone(m.id))
+        ? `<div class="card"><h2>🏁 وصلت للحد المسموح</h2><p>أنهيت كل دروس المستويات المفتوحة لك. تواصل مع مشرفك لفتح المستوى التالي.</p></div>`
+        : `<div class="card"><h2>🎉 خلصت كل الدروس المتاحة</h2><p>دروس جديدة جاية قريب.</p></div>`}
     <div class="card soft">
       <div class="row between"><b>تقدمك</b><span class="muted">${done}/${ready.length} دروس</span></div>
       <div class="bar" style="margin-top:8px"><i style="width:${ready.length ? (done / ready.length) * 100 : 0}%"></i></div>
@@ -70,7 +98,7 @@ function path() {
       </div>
       ${l.modules.map((m) => {
         if (!m.ready) return `<div class="mod locked"><span class="dot">⏳</span><span><b>${esc(m.title_ar)}</b><br><small class="muted en">${esc(m.title_en)}</small><br><small class="muted">قريباً</small></span></div>`;
-        if (!isUnlocked(m.id)) return `<div class="mod locked"><span class="dot">🔒</span><span><b>${esc(m.title_ar)}</b><br><small class="muted en">${esc(m.title_en)}</small><br><small class="muted">أكمل الدرس السابق لفتحه</small></span></div>`;
+        if (!isUnlocked(m.id)) return `<div class="mod locked"><span class="dot">🔒</span><span><b>${esc(m.title_ar)}</b><br><small class="muted en">${esc(m.title_en)}</small><br><small class="muted">${overCap(m.id) ? 'هذا المستوى غير مفتوح لك حالياً (حدده المشرف)' : 'أكمل الدرس السابق لفتحه'}</small></span></div>`;
         const cls = isDone(m.id) ? 'done' : next?.id === m.id ? 'next' : '';
         return `<a class="mod ${cls}" href="#/lesson/${m.id}">
           <span class="dot">${isDone(m.id) ? '✓' : '▶'}</span>
@@ -84,6 +112,12 @@ async function lesson(id, query) {
   const startAt = query && /s=(\d+)/.test(query) ? +query.match(/s=(\d+)/)[1] : null;
   const meta = lessonsOf().find((m) => m.id === id);
   if (!meta?.ready) return (location.hash = '#/path');
+  if (me()) await sync.refresh(); // نتأكد أن المشرف ما أوقف التدريب أو غيّر السقف
+  if (isSuspended()) return suspendedScreen();
+  if (overCap(id)) {
+    view.innerHTML = `<div class="card result"><div class="big">🔒</div><h2>هذا المستوى غير مفتوح لك</h2><p>حدد المشرف أقصى مستوى لك حالياً. تواصل معه لفتحه.</p><a class="btn" href="#/path">المسار</a></div>`;
+    return;
+  }
   if (!isUnlocked(id)) {
     const p = prevOf(id), nx = nextLesson();
     view.innerHTML = `<div class="card result"><div class="big">🔒</div><h2>هذا الدرس مقفل</h2>
@@ -187,11 +221,13 @@ function profile() {
       <div class="setting"><span>المظهر</span>${seg('theme', [['auto', 'تلقائي'], ['light', '☀️'], ['dark', '🌙']])}</div>
       <div class="setting"><span>حجم الخط</span>${seg('font', [[0.9, 'أ-'], [1, 'أ'], [1.15, 'أ+']])}</div>
     </div>
+    ${me()?.role === 'admin' ? '<a class="card" style="display:block;text-decoration:none;color:inherit;border-color:var(--blue)" href="#/admin"><b>🛠️ لوحة المشرف</b><p class="muted" style="margin:0">تابع المتدربين وتحكم بتدريبهم.</p></a>' : ''}
+    ${isSuspended() ? `<div class="callout warn"><span class="label">⏸️ تدريبك موقوف</span>${esc(me().note || 'أوقف المشرف تدريبك مؤقتاً.')}</div>` : ''}
     ${sync.currentUser()
-      ? `<div class="card"><b>👋 ${esc(sync.currentUser().username)}</b><p class="muted">تقدمك محفوظ في حسابك ويتزامن بين أجهزتك.</p><button class="btn ghost small" id="out">تسجيل الخروج</button></div>`
+      ? `<div class="card"><b>👋 ${esc(me().name || me().username)}</b>${me().role === 'admin' ? ' <span class="badge">مشرف</span>' : ''}<p class="muted">تقدمك محفوظ في حسابك ويتزامن بين أجهزتك.${me().max_level != null ? ` · أقصى مستوى مفتوح لك: ${me().max_level}` : ''}</p><button class="btn ghost small" id="out">تسجيل الخروج</button></div>`
       : `<div class="card"><b>احفظ تقدمك</b><p class="muted">سجّل حساب عشان ما يضيع تقدمك وتكمل من أي جهاز.</p><a class="btn blue small" href="#/login">دخول / حساب جديد</a></div>`}
     <button class="btn ghost" id="reset">مسح التقدم من هذا الجهاز</button>`;
-  view.querySelector('#out')?.addEventListener('click', async () => { await sync.signOut(); profile(); });
+  view.querySelector('#out')?.addEventListener('click', async () => { await sync.signOut(); route(); });
   view.querySelectorAll('[data-set]').forEach((b) => b.addEventListener('click', () => {
     const v = b.dataset.val;
     store.setSetting(b.dataset.set, b.dataset.set === 'font' ? +v : v);
@@ -202,15 +238,17 @@ function profile() {
   });
 }
 
-function login() {
+async function login() {
   let mode = 'login';
+  const info = await api.publicInfo(); // هل التسجيل الذاتي مفتوح؟ وهل المشرف ما أُنشئ بعد؟
+  const canRegister = info.unavailable || info.registration_open !== false;
   const draw = (msg = '') => {
     view.innerHTML = `
       <h1>${mode === 'login' ? '🔑 تسجيل الدخول' : '✨ حساب جديد'}</h1>
-      <div class="seg" style="margin-bottom:14px">
+      ${canRegister ? `<div class="seg" style="margin-bottom:14px">
         <button data-m="login" class="${mode === 'login' ? 'on' : ''}">دخول</button>
         <button data-m="register" class="${mode === 'register' ? 'on' : ''}">حساب جديد</button>
-      </div>
+      </div>` : '<p class="muted">التسجيل الذاتي مغلق. حسابك ينشئه لك المشرف.</p>'}
       <form class="card" id="af">
         <label>اسم المستخدم <small class="muted">(إنجليزي، 3-30)</small></label>
         <input class="search en" name="u" dir="ltr" autocomplete="username" autocapitalize="off" required minlength="3" maxlength="30" pattern="[A-Za-z0-9_]+">
@@ -219,7 +257,8 @@ function login() {
         <div id="msg" class="feedback no" ${msg ? '' : 'hidden'}>${esc(msg)}</div>
         <button class="btn" type="submit">${mode === 'login' ? 'دخول' : 'إنشاء الحساب'}</button>
       </form>
-      <p class="muted">بدون حساب تقدر تتعلم عادي، لكن تقدمك بيبقى على هذا الجهاز فقط.</p>`;
+      <p class="muted">بدون حساب تقدر تتعلم عادي، لكن تقدمك بيبقى على هذا الجهاز فقط.</p>
+      ${info.setup_needed ? '<p><a href="#/setup">🛠️ إنشاء حساب المشرف (أول مرة)</a></p>' : ''}`;
     view.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => { mode = b.dataset.m; draw(); }));
     view.querySelector('#af').addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -243,8 +282,20 @@ const routes = [
   [/^#\/review$/, 'review', review],
   [/^#\/glossary$/, 'glossary', glossary],
   [/^#\/profile$/, 'profile', profile],
-  [/^#\/login$/, 'profile', login]
+  [/^#\/login$/, 'profile', login],
+  [/^#\/setup$/, 'profile', () => setupPage(view, () => { location.hash = '#/admin'; })],
+  [/^#\/admin$/, 'admin', () => adminGuard(() => adminHome(view, curriculum))],
+  [/^#\/admin\/u\/(\d+)$/, 'admin', (id) => adminGuard(() => adminUserPage(view, curriculum, id))]
 ];
+
+// صفحات المشرف: ننتظر معرفة هوية المستخدم أول، وغير المشرف يرجع للرئيسية (والسيرفر يتحقق بكل طلب أيضاً)
+let ready = Promise.resolve();
+async function adminGuard(fn) {
+  view.innerHTML = '<p class="muted">جاري التحميل...</p>';
+  await ready;
+  if (me()?.role !== 'admin') { location.hash = '#/'; return; }
+  fn();
+}
 
 function route() {
   closeSheet();
@@ -253,6 +304,8 @@ function route() {
   for (const [re, tab, fn] of routes) {
     const m = hash.match(re);
     if (!m) continue;
+    nav.querySelector('[data-tab=admin]').hidden = me()?.role !== 'admin';
+    if (isSuspended() && tab !== 'profile') return suspendedScreen();
     nav.classList.toggle('hidden', !tab);
     nav.querySelectorAll('a').forEach((a) => a.classList.toggle('active', a.dataset.tab === tab));
     window.scrollTo(0, 0);
@@ -266,8 +319,13 @@ async function start() {
   initTermEvents();
   [curriculum] = await Promise.all([fetch('content/curriculum.json').then((r) => r.json()), loadGlossary()]);
   window.addEventListener('hashchange', route);
+  ready = sync.init();
   route();
-  sync.init().then(() => route()); // بعد المزامنة نحدّث الشاشة بالتقدم المدموج
+  ready.then(() => route()); // بعد المزامنة نحدّث الشاشة بالتقدم المدموج
+  // نتابع قرارات المشرف (إيقاف، سقف، فتح) كل دقيقتين وعند الرجوع للتطبيق
+  const recheck = async () => { if (me() && await sync.refresh()) route(); };
+  setInterval(recheck, 120000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) recheck(); });
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
