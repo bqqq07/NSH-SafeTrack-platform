@@ -1,0 +1,250 @@
+{
+ "title_ar": "الخصائص والأساليب",
+ "title_en": "Attributes & Methods",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "⚙️",
+   "goal": "تضيف سلوكاً لكائناتك بـ [[method]] (أساليب) وتحمي بياناتها."
+  },
+  {
+   "type": "text",
+   "title": "أساليب تعدّل الحالة",
+   "body": [
+    "الأسلوب ([[method]]) دالة داخل الصنف أول معامل لها `self`، وتقدر تقرأ وتعدّل خصائص الكائن.",
+    "مثال: حساب بنكي فيه `deposit(amount)` تزيد الرصيد، و`withdraw(amount)` تنقصه.",
+    "نستدعيها بنقطة: `acc.deposit(100)`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "الأسلوب يتذكر حالة كائنه بين الاستدعاءات.",
+   "code": "class Account:\n    def __init__(self, owner):\n        self.owner = owner\n        self.balance = 0\n\n    def deposit(self, amount):\n        self.balance = self.balance + amount\n\nacc = Account(\"sara\")\nacc.deposit(100)\nacc.deposit(50)\nprint(acc.balance)"
+  },
+  {
+   "type": "text",
+   "title": "الحماية والتحقق",
+   "body": [
+    "نرفع خطأ لو المدخل غير صالح بدل ما نخرب الحالة: `if amount > self.balance: raise ValueError(...)`.",
+    "اصطلاح: الاسم الذي يبدأ بشرطة سفلية `_balance` يعني «داخلي، لا تلمسه من الخارج» ([[encapsulation]]). Python لا تمنعه بالقوة لكنه اتفاق.",
+    "خصائص محسوبة بـ `@property`: تقرأ كأنها خاصية لكنها تُحسب: `acc.summary`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "نكشف القراءة عبر property ونمنع التعديل المباشر.",
+   "code": "class Account:\n    def __init__(self):\n        self._balance = 0\n\n    def deposit(self, amount):\n        if amount <= 0:\n            raise ValueError(\"amount must be positive\")\n        self._balance = self._balance + amount\n\n    @property\n    def balance(self):\n        return self._balance\n\na = Account()\na.deposit(10)\nprint(a.balance)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "method",
+    "attribute",
+    "encapsulation"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "class C:\n    def __init__(self):\n        self.n = 0\n    def inc(self):\n        self.n = self.n + 1\n\nc = C()\nc.inc()\nc.inc()\nprint(c.n)\n",
+   "options": [
+    "2",
+    "0",
+    "1"
+   ],
+   "answer": 0,
+   "why": "استدعينا inc مرتين فزاد n مرتين."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): كائنان",
+   "code": "class C:\n    def __init__(self):\n        self.n = 0\n    def inc(self):\n        self.n = self.n + 1\n\na = C()\nb = C()\na.inc()\nprint(a.n, b.n)\n",
+   "options": [
+    "1 0",
+    "1 1",
+    "0 0"
+   ],
+   "answer": 0,
+   "why": "لكل كائن حالته."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: المعامل",
+   "code": "class C:\n    def hi(____):\n        return \"hi\"\n\nprint(C().hi())\n",
+   "blanks": [
+    {
+     "answer": "self"
+    }
+   ],
+   "expect_stdout": "hi",
+   "show_output": true,
+   "bank": [
+    "self",
+    "this",
+    "cls",
+    "me"
+   ],
+   "intro": "وش أول معامل في أي أسلوب؟",
+   "explain": "`self`."
+  },
+  {
+   "type": "code",
+   "title": "حساب بنكي",
+   "instructions": [
+    "أكمل الصنف `Account`: `deposit(amount)` تزيد `balance` و`withdraw(amount)` تنقصه. بعد `deposit(100)` ثم `withdraw(30)` اطبع الرصيد `70`."
+   ],
+   "starter": "class Account:\n    def __init__(self):\n        self.balance = 0\n\n    # أضف deposit و withdraw\n\nacc = Account()\nacc.deposit(100)\nacc.withdraw(30)\nprint(acc.balance)\n",
+   "tests": [
+    {
+     "expect_stdout": "70"
+    }
+   ],
+   "solution": "class Account:\n    def __init__(self):\n        self.balance = 0\n\n    def deposit(self, amount):\n        self.balance = self.balance + amount\n\n    def withdraw(self, amount):\n        self.balance = self.balance - amount\n\nacc = Account()\nacc.deposit(100)\nacc.withdraw(30)\nprint(acc.balance)\n",
+   "hints": [
+    "كل أسلوب أول معامل له `self`.",
+    "عدّل `self.balance`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "منع السحب الزائد",
+   "instructions": [
+    "`Account.withdraw(amount)` لازم ترفع `ValueError(\"رصيد غير كاف\")` لو المبلغ أكبر من الرصيد. اقرأ مبلغ سحب من المدخلات (الرصيد 50) واطبع الرصيد الجديد أو رسالة الخطأ."
+   ],
+   "starter": "class Account:\n    def __init__(self, balance):\n        self.balance = balance\n\n    def withdraw(self, amount):\n        self.balance = self.balance - amount\n\nacc = Account(50)\n",
+   "tests": [
+    {
+     "expect_stdout": "20",
+     "stdin": [
+      "30"
+     ]
+    },
+    {
+     "expect_stdout": "رصيد غير كاف",
+     "stdin": [
+      "80"
+     ]
+    },
+    {
+     "expect_stdout": "0",
+     "stdin": [
+      "50"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "class Account:\n    def __init__(self, balance):\n        self.balance = balance\n\n    def withdraw(self, amount):\n        if amount > self.balance:\n            raise ValueError(\"رصيد غير كاف\")\n        self.balance = self.balance - amount\n\nacc = Account(50)\ntry:\n    acc.withdraw(int(input()))\n    print(acc.balance)\nexcept ValueError as e:\n    print(e)\n",
+   "hints": [
+    "افحص الشرط قبل التعديل.",
+    "امسك الخطأ في الكود الرئيسي."
+   ],
+   "checks": [
+    {
+     "regex": "raise\\s+ValueError",
+     "msg": "ارفع ValueError داخل withdraw"
+    }
+   ],
+   "stdin": [
+    "30"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "سجل المحاولات",
+   "instructions": [
+    "عرّف `LoginTracker` فيها `fail()` تزيد عداد الفشل، و`is_locked()` ترجع `True` لو الفشل 3 فأكثر."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "(lambda t: [t.fail(), t.fail(), t.is_locked()][-1])(LoginTracker())",
+     "expect": false
+    },
+    {
+     "call": "(lambda t: [t.fail(), t.fail(), t.fail(), t.is_locked()][-1])(LoginTracker())",
+     "expect": true
+    },
+    {
+     "call": "LoginTracker().is_locked()",
+     "expect": false,
+     "hidden": true
+    }
+   ],
+   "solution": "class LoginTracker:\n    def __init__(self):\n        self.fails = 0\n\n    def fail(self):\n        self.fails = self.fails + 1\n\n    def is_locked(self):\n        return self.fails >= 3\n",
+   "hints": [
+    "عداد في `__init__`.",
+    "`is_locked` ترجع مقارنة."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: نسيان self.",
+   "instructions": [
+    "الأسلوب يزيد متغيراً محلياً بدل خاصية الكائن فلا يتغير شيء. أصلحه ليطبع `2`."
+   ],
+   "starter": "class C:\n    def __init__(self):\n        self.n = 0\n\n    def inc(self):\n        n = self.n + 1\n\nc = C()\nc.inc()\nc.inc()\nprint(c.n)\n",
+   "tests": [
+    {
+     "expect_stdout": "2"
+    }
+   ],
+   "solution": "class C:\n    def __init__(self):\n        self.n = 0\n\n    def inc(self):\n        self.n = self.n + 1\n\nc = C()\nc.inc()\nc.inc()\nprint(c.n)\n",
+   "hints": [
+    "خزّن في `self.n`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش الأسلوب (method)؟",
+     "options": [
+      "دالة داخل صنف",
+      "متغير",
+      "ملف"
+     ],
+     "answer": 0,
+     "why": "أول معامل self."
+    },
+    {
+     "q": "وش يعني اسم يبدأ بـ _ ؟",
+     "options": [
+      "داخلي، لا تعدّله من الخارج",
+      "ثابت",
+      "ممنوع"
+     ],
+     "answer": 0,
+     "why": "اصطلاح."
+    },
+    {
+     "q": "ليش نتحقق داخل الأسلوب؟",
+     "options": [
+      "لحماية حالة الكائن",
+      "لتسريعه",
+      "لا حاجة"
+     ],
+     "answer": 0,
+     "why": "مثل منع الرصيد السالب."
+    },
+    {
+     "q": "وش يسوي @property؟",
+     "options": [
+      "يقرأ الأسلوب كأنه خاصية",
+      "يحذف الخاصية",
+      "يخفي الكائن"
+     ],
+     "answer": 0,
+     "why": "بدون أقواس."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "الأساليب دوال داخل الصنف تعدّل حالة الكائن.",
+    "تحقق من المدخلات وارفع الأخطاء.",
+    "`_name` اصطلاح للخاصية الداخلية."
+   ]
+  }
+ ]
+}

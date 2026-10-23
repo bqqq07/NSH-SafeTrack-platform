@@ -21,6 +21,7 @@ import math
 import os
 import re
 import shutil
+import sys
 import tempfile
 import traceback
 
@@ -85,6 +86,8 @@ def _execute(code, stdin=None, files=None, expr=None, echo=True):
     tmp = tempfile.mkdtemp(prefix="pyex_")
     try:
         os.chdir(tmp)
+        sys.path.insert(0, tmp)  # لتعمل import لملفات التمرين (مثل helpers.py)
+        before = set(sys.modules)
         for name, content in (files or {}).items():
             safe = os.path.basename(name)
             with open(safe, "w", encoding="utf-8", newline="") as fh:
@@ -106,6 +109,11 @@ def _execute(code, stdin=None, files=None, expr=None, echo=True):
             result["error"] = _err_info(e, code)
     finally:
         os.chdir(old_cwd)
+        if tmp in sys.path:
+            sys.path.remove(tmp)
+        for m in set(sys.modules) - before:  # ننظف الوحدات اللي استوردها كود المتعلم
+            if getattr(sys.modules[m], "__file__", None) and str(sys.modules[m].__file__).startswith(tmp):
+                del sys.modules[m]
         shutil.rmtree(tmp, ignore_errors=True)
         result["stdout"] = out.getvalue()
     return result

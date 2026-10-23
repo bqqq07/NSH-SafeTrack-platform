@@ -1,0 +1,254 @@
+{
+ "title_ar": "الوحدات import",
+ "title_en": "Modules",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🧩",
+   "goal": "تستخدم كود غيرك (وكودك في ملفات منفصلة) عبر [[module]] و[[import]]."
+  },
+  {
+   "type": "text",
+   "title": "ملف = وحدة",
+   "body": [
+    "أي ملف `.py` هو **وحدة** ([[module]]). نستوردها بـ `import اسم_الملف` بدون `.py`، ونستخدم محتواها بنقطة: `helpers.add(1, 2)`.",
+    "ثلاث صيغ: `import math` ثم `math.sqrt(9)`. أو `from math import sqrt` ثم `sqrt(9)` مباشرة. أو `import math as m` باسم مختصر.",
+    "تجنب `from x import *` لأنه يغرق مساحة الأسماء ويصعّب معرفة مصدر الدالة."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "في بعض التمارين يوجد ملف مساعد جاهز بجانب كودك (مثل helpers.py) تستورده.",
+   "code": "import math\nfrom math import pi\nimport math as m\n\nprint(math.sqrt(16))\nprint(round(pi, 2))\nprint(m.floor(2.9))"
+  },
+  {
+   "type": "text",
+   "title": "كتابة وحدة والتشغيل المباشر",
+   "body": [
+    "عندما تنفذ ملفاً مباشرة يكون `__name__ == \"__main__\"`، وعندما يُستورد يكون `__name__` اسم الوحدة.",
+    "لهذا نكتب `if __name__ == \"__main__\":` لنفصل الكود التجريبي عن الدوال القابلة لإعادة الاستخدام.",
+    "يبحث Python عن الوحدات في مجلد البرنامج ثم المكتبة القياسية ثم الحزم المثبتة."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "استيراد وحدة ينفّذ كودها مرة واحدة فقط.",
+   "code": "def greet(name):\n    return \"hi \" + name\n\nif __name__ == \"__main__\":\n    print(greet(\"sara\"))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "module",
+    "import",
+    "standard-library"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "import math\nprint(math.floor(3.9), math.ceil(3.1))\n",
+   "options": [
+    "3 4",
+    "4 3",
+    "3 3"
+   ],
+   "answer": 0,
+   "why": "floor تقرب للأسفل وceil للأعلى."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): as",
+   "code": "import math as m\nprint(m.sqrt(25))\n",
+   "options": [
+    "5.0",
+    "5",
+    "25"
+   ],
+   "answer": 0,
+   "why": "sqrt ترجع float دائماً."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: from",
+   "code": "____ math import sqrt\nprint(sqrt(49))\n",
+   "blanks": [
+    {
+     "answer": "from"
+    }
+   ],
+   "expect_stdout": "7.0",
+   "show_output": true,
+   "bank": [
+    "from",
+    "import",
+    "use",
+    "include"
+   ],
+   "intro": "كيف نستورد دالة واحدة من وحدة؟",
+   "explain": "`from math import sqrt`."
+  },
+  {
+   "type": "code",
+   "title": "استخدم وحدة مساعدة",
+   "instructions": [
+    "الملف `helpers.py` موجود بجانب كودك وفيه دالة `double(n)`. استوردها واطبع `double(21)`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "42"
+    }
+   ],
+   "solution": "import helpers\n\nprint(helpers.double(21))\n",
+   "hints": [
+    "`import helpers`",
+    "استدع `helpers.double(21)`."
+   ],
+   "checks": [
+    {
+     "regex": "import\\s+helpers|from\\s+helpers\\s+import",
+     "msg": "استورد helpers"
+    }
+   ],
+   "files": {
+    "helpers.py": "def double(n):\n    return n * 2\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "from ... import",
+   "instructions": [
+    "استورد من `helpers` الدالتين `add` و`mul` مباشرة (بصيغة from) واطبع `add(2, 3)` ثم `mul(2, 3)`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "5\n6"
+    }
+   ],
+   "solution": "from helpers import add, mul\n\nprint(add(2, 3))\nprint(mul(2, 3))\n",
+   "hints": [
+    "`from helpers import add, mul`"
+   ],
+   "checks": [
+    {
+     "regex": "from\\s+helpers\\s+import",
+     "msg": "استخدم from helpers import"
+    }
+   ],
+   "files": {
+    "helpers.py": "def add(a, b):\n    return a + b\n\ndef mul(a, b):\n    return a * b\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "دوال math",
+   "instructions": [
+    "اقرأ رقماً موجباً `n` واطبع جذره التربيعي مقرباً لرقمين عشريين، ثم أرضيته (floor) في سطر `جذر أرضية`. مثال لـ 10: `3.16 3`"
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "3.16 3",
+     "stdin": [
+      "10"
+     ]
+    },
+    {
+     "expect_stdout": "5.0 5",
+     "stdin": [
+      "25"
+     ]
+    },
+    {
+     "expect_stdout": "1.41 1",
+     "stdin": [
+      "2"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import math\nn = float(input())\nroot = math.sqrt(n)\nprint(round(root, 2), math.floor(root))\n",
+   "hints": [
+    "`math.sqrt` ثم `round`.",
+    "`math.floor`."
+   ],
+   "stdin": [
+    "10"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: ModuleNotFoundError",
+   "instructions": [
+    "الكود يستورد اسماً خاطئاً للوحدة. الوحدة اسمها `helpers`. أصلح ليطبع `7`."
+   ],
+   "starter": "import helper\nprint(helper.seven())\n",
+   "tests": [
+    {
+     "expect_stdout": "7"
+    }
+   ],
+   "solution": "import helpers\nprint(helpers.seven())\n",
+   "hints": [
+    "اسم الوحدة هو اسم الملف بدون `.py`."
+   ],
+   "variant": "bugfix",
+   "files": {
+    "helpers.py": "def seven():\n    return 7\n"
+   }
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش الوحدة؟",
+     "options": [
+      "ملف Python يمكن استيراده",
+      "نوع بيانات",
+      "أمر طرفية"
+     ],
+     "answer": 0,
+     "why": "أي ملف py."
+    },
+    {
+     "q": "وش يسوي `from math import sqrt`؟",
+     "options": [
+      "يستورد sqrt فقط لنستخدمها مباشرة",
+      "يحذف math",
+      "يستورد كل شيء"
+     ],
+     "answer": 0,
+     "why": "بدون كتابة math."
+    },
+    {
+     "q": "متى يكون __name__ مساوياً \"__main__\"؟",
+     "options": [
+      "لما ننفذ الملف مباشرة",
+      "لما نستورده",
+      "دائماً"
+     ],
+     "answer": 0,
+     "why": "مهم لفصل الكود التجريبي."
+    },
+    {
+     "q": "ليش نتجنب `from x import *`؟",
+     "options": [
+      "يخلط الأسماء ويخفي مصدرها",
+      "يبطئ الإنترنت",
+      "ممنوع"
+     ],
+     "answer": 0,
+     "why": "الوضوح أولاً."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`import` يجلب وحدة، و`from ... import` يجلب جزءاً منها.",
+    "`if __name__ == \"__main__\":` تفصل التجربة عن المكتبة.",
+    "تجنب `import *`."
+   ]
+  }
+ ]
+}

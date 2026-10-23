@@ -944,49 +944,49 @@
      "id": "m17.1",
      "title_ar": "الوحدات import",
      "title_en": "Modules",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m17.2",
      "title_ar": "المكتبة القياسية",
      "title_en": "Standard Library",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m17.3",
      "title_ar": "الفئات والكائنات",
      "title_en": "Classes",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m17.4",
      "title_ar": "الخصائص والأساليب",
      "title_en": "Attributes & Methods",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m17.5",
      "title_ar": "الوراثة",
      "title_en": "Inheritance",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m17.6",
      "title_ar": "الأساليب الخاصة",
      "title_en": "Dunder Methods",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m17.7",
      "title_ar": "dataclass",
      "title_en": "dataclass",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m17.8",
      "title_ar": "مشروع: إدارة الحسابات",
      "title_en": "Project: Account Manager",
-     "ready": false
+     "ready": true
     }
    ]
   },

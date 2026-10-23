@@ -2364,5 +2364,96 @@
   "ar": "ملف المتطلبات",
   "simple": "ملف يسرد حزم المشروع ونسخها ليقدر أي شخص يثبتها بأمر واحد.",
   "example": "requests==2.32.0"
+ },
+ "module": {
+  "en": "Module",
+  "say": "مودول",
+  "ar": "الوحدة",
+  "simple": "ملف Python فيه دوال ومتغيرات تقدر تستوردها وتستخدمها في ملف ثاني.",
+  "example": "import math"
+ },
+ "import": {
+  "en": "import",
+  "say": "إمبورت",
+  "ar": "الاستيراد",
+  "simple": "أمر يجلب وحدة أو جزءاً منها لتستخدمه في برنامجك.",
+  "example": "from math import sqrt"
+ },
+ "standard-library": {
+  "en": "Standard library",
+  "say": "ستاندرد لايبرري",
+  "ar": "المكتبة القياسية",
+  "simple": "مجموعة وحدات جاهزة تأتي مع Python بدون تثبيت، مثل os وjson وdatetime.",
+  "example": "import datetime"
+ },
+ "class": {
+  "en": "Class",
+  "say": "كلاس",
+  "ar": "الصنف أو الفئة",
+  "simple": "قالب يعرّف شكل الكائنات وسلوكها: ما تملكه من بيانات وما تقدر تسويه.",
+  "example": "class Account: ..."
+ },
+ "object": {
+  "en": "Object (instance)",
+  "say": "أوبجكت",
+  "ar": "الكائن",
+  "simple": "نسخة فعلية مصنوعة من صنف، لها بياناتها الخاصة.",
+  "example": "acc = Account(\"sara\")"
+ },
+ "attribute": {
+  "en": "Attribute",
+  "say": "أتريبيوت",
+  "ar": "الخاصية",
+  "simple": "متغير يخص كائناً معيناً ويُقرأ بنقطة.",
+  "example": "acc.balance"
+ },
+ "constructor": {
+  "en": "Constructor (__init__)",
+  "say": "كونستركتر",
+  "ar": "دالة البناء",
+  "simple": "الدالة الخاصة __init__ اللي تنفذ عند إنشاء الكائن لتجهز خصائصه.",
+  "example": "def __init__(self, name): ..."
+ },
+ "self": {
+  "en": "self",
+  "say": "سيلف",
+  "ar": "الكائن الحالي",
+  "simple": "المعامل الأول في أساليب الصنف، يشير للكائن الذي استدعى الأسلوب.",
+  "example": "self.balance = 0"
+ },
+ "inheritance": {
+  "en": "Inheritance",
+  "say": "إنهيريتانس",
+  "ar": "الوراثة",
+  "simple": "أن يأخذ صنف جديد خصائص وأساليب صنف موجود ويضيف عليه أو يعدّل.",
+  "example": "class Admin(User): ..."
+ },
+ "polymorphism": {
+  "en": "Polymorphism",
+  "say": "بوليمورفيزم",
+  "ar": "تعدد الأشكال",
+  "simple": "أن تتعامل مع أنواع مختلفة بنفس الطريقة لأن كل نوع ينفذ نفس الأسلوب بطريقته.",
+  "example": "كل صنف عنده area() بمعنى مختلف."
+ },
+ "dunder": {
+  "en": "Dunder method",
+  "say": "دندر",
+  "ar": "الأساليب الخاصة",
+  "simple": "أساليب بين شرطتين سفليتين مزدوجتين تتحكم في سلوك الكائن مع العمليات الأساسية.",
+  "example": "__str__, __eq__, __len__"
+ },
+ "dataclass": {
+  "en": "dataclass",
+  "say": "داتا كلاس",
+  "ar": "صنف البيانات",
+  "simple": "مزخرف يولّد __init__ و__repr__ و__eq__ تلقائياً للأصناف التي تخزن بيانات.",
+  "example": "@dataclass class Point: x: int; y: int"
+ },
+ "encapsulation": {
+  "en": "Encapsulation",
+  "say": "إنكابسوليشن",
+  "ar": "التغليف",
+  "simple": "إخفاء تفاصيل الكائن الداخلية وإتاحة طرق محددة للتعامل معه.",
+  "example": "self._balance مع deposit()"
  }
 }

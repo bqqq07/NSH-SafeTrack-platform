@@ -1,0 +1,224 @@
+{
+ "title_ar": "الأساليب الخاصة",
+ "title_en": "Dunder Methods",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "✨",
+   "goal": "تجعل كائناتك تتصرف مثل الأنواع المدمجة بـ [[dunder]] (الأساليب الخاصة)."
+  },
+  {
+   "type": "text",
+   "title": "كائنك يطبع نفسه",
+   "body": [
+    "أساليب بين شرطتين مزدوجتين تتحكم في سلوك كائنك مع العمليات المدمجة.",
+    "`__str__` تحدد ما يظهر عند `print(obj)`. و`__repr__` تمثيل للمطور (يظهر في القوائم والمفسر).",
+    "بدونها يظهر شيء مثل `<__main__.User object at 0x...>` غير مفيد."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "`__str__` للقراءة البشرية، `__repr__` للتصحيح.",
+   "code": "class User:\n    def __init__(self, name):\n        self.name = name\n    def __str__(self):\n        return \"User(\" + self.name + \")\"\n\nprint(User(\"sara\"))"
+  },
+  {
+   "type": "text",
+   "title": "المقارنة والطول والجمع",
+   "body": [
+    "`__eq__(self, other)` تحدد معنى `==` بين كائنين، بدونها تقارن الهوية.",
+    "`__len__` تجعل `len(obj)` تعمل. و`__add__` تجعل `a + b` تعمل. و`__contains__` لـ `in`.",
+    "استخدمها بحكمة: عند وجود معنى طبيعي فقط."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "لو عرّفت `__eq__` فكر أيضاً في `__hash__` لو بغيت تحط الكائن في set أو مفتاح قاموس.",
+   "code": "class Bag:\n    def __init__(self, items):\n        self.items = items\n    def __len__(self):\n        return len(self.items)\n    def __eq__(self, other):\n        return self.items == other.items\n\nprint(len(Bag([1, 2])), Bag([1]) == Bag([1]))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "dunder",
+    "object"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "class P:\n    def __str__(self):\n        return \"I am P\"\n\nprint(P())\n",
+   "options": [
+    "I am P",
+    "<P>",
+    "P"
+   ],
+   "answer": 0,
+   "why": "print تستدعي __str__."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): len",
+   "code": "class Q:\n    def __len__(self):\n        return 7\n\nprint(len(Q()))\n",
+   "options": [
+    "7",
+    "0",
+    "1"
+   ],
+   "answer": 0,
+   "why": "`len` تستدعي __len__."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): eq",
+   "code": "class P:\n    def __init__(self, x):\n        self.x = x\n    def __eq__(self, o):\n        return self.x == o.x\n\nprint(P(1) == P(1), P(1) == P(2))\n",
+   "options": [
+    "True False",
+    "False False",
+    "True True"
+   ],
+   "answer": 0,
+   "why": "عرّفنا المساواة على x."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الطباعة",
+   "code": "class P:\n    def ____(self):\n        return \"ok\"\n\nprint(P())\n",
+   "blanks": [
+    {
+     "answer": "__str__"
+    }
+   ],
+   "expect_stdout": "ok",
+   "show_output": true,
+   "bank": [
+    "__str__",
+    "__len__",
+    "__init__",
+    "__eq__"
+   ],
+   "intro": "أي أسلوب يحدد نص print؟",
+   "explain": "`__str__`."
+  },
+  {
+   "type": "code",
+   "title": "طباعة أنيقة",
+   "instructions": [
+    "أضف `__str__` لصنف `Server` ليطبع `host:port`. أنشئ `Server(\"a.com\", 80)` واطبعه: `a.com:80`."
+   ],
+   "starter": "class Server:\n    def __init__(self, host, port):\n        self.host = host\n        self.port = port\n\n    # أضف __str__\n\nprint(Server(\"a.com\", 80))\n",
+   "tests": [
+    {
+     "expect_stdout": "a.com:80"
+    }
+   ],
+   "solution": "class Server:\n    def __init__(self, host, port):\n        self.host = host\n        self.port = port\n\n    def __str__(self):\n        return self.host + \":\" + str(self.port)\n\nprint(Server(\"a.com\", 80))\n",
+   "hints": [
+    "ارجع نصاً من `__str__`.",
+    "حوّل port بـ `str()`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "المساواة",
+   "instructions": [
+    "أضف `__eq__` لصنف `IP` بحيث يتساوى كائنان لو نصهما `addr` متساوٍ. اطبع `IP(\"1.1.1.1\") == IP(\"1.1.1.1\")` ثم مع `IP(\"2.2.2.2\")`: `True` ثم `False`."
+   ],
+   "starter": "class IP:\n    def __init__(self, addr):\n        self.addr = addr\n\n    # أضف __eq__\n\nprint(IP(\"1.1.1.1\") == IP(\"1.1.1.1\"))\nprint(IP(\"1.1.1.1\") == IP(\"2.2.2.2\"))\n",
+   "tests": [
+    {
+     "expect_stdout": "True\nFalse"
+    }
+   ],
+   "solution": "class IP:\n    def __init__(self, addr):\n        self.addr = addr\n\n    def __eq__(self, other):\n        return self.addr == other.addr\n\nprint(IP(\"1.1.1.1\") == IP(\"1.1.1.1\"))\nprint(IP(\"1.1.1.1\") == IP(\"2.2.2.2\"))\n",
+   "hints": [
+    "قارن `self.addr` مع `other.addr`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "len و in",
+   "instructions": [
+    "أضف `__len__` لصنف `Playlist` يرجع عدد الأغاني، واطبع `len(Playlist([\"a\", \"b\", \"c\"]))` ← `3`."
+   ],
+   "starter": "class Playlist:\n    def __init__(self, songs):\n        self.songs = songs\n\n    # أضف __len__\n\nprint(len(Playlist([\"a\", \"b\", \"c\"])))\n",
+   "tests": [
+    {
+     "expect_stdout": "3"
+    }
+   ],
+   "solution": "class Playlist:\n    def __init__(self, songs):\n        self.songs = songs\n\n    def __len__(self):\n        return len(self.songs)\n\nprint(len(Playlist([\"a\", \"b\", \"c\"])))\n",
+   "hints": [
+    "`return len(self.songs)`"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: __str__ ترجع نصاً",
+   "instructions": [
+    "`__str__` ترجع رقماً فيعطي `TypeError`. أصلحها ليطبع `5`."
+   ],
+   "starter": "class N:\n    def __str__(self):\n        return 5\n\nprint(N())\n",
+   "tests": [
+    {
+     "expect_stdout": "5"
+    }
+   ],
+   "solution": "class N:\n    def __str__(self):\n        return \"5\"\n\nprint(N())\n",
+   "hints": [
+    "لازم ترجع نصاً."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يحدد ما تطبعه print(obj)؟",
+     "options": [
+      "__str__",
+      "__init__",
+      "__len__"
+     ],
+     "answer": 0,
+     "why": "للقراءة البشرية."
+    },
+    {
+     "q": "وش يحدد معنى ==؟",
+     "options": [
+      "__eq__",
+      "__add__",
+      "__repr__"
+     ],
+     "answer": 0,
+     "why": "بدونه تقارن الهوية."
+    },
+    {
+     "q": "وش تفعل __len__؟",
+     "options": [
+      "تجعل len(obj) تعمل",
+      "تحسب الذاكرة",
+      "تطبع"
+     ],
+     "answer": 0,
+     "why": "ترجع رقماً."
+    },
+    {
+     "q": "ما الفرق بين __str__ و __repr__؟",
+     "options": [
+      "الأول للقراءة والثاني للمطور",
+      "لا فرق",
+      "العكس"
+     ],
+     "answer": 0,
+     "why": "repr للتصحيح."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "الأساليب الخاصة تتحكم بسلوك الكائن مع العمليات المدمجة.",
+    "`__str__` للطباعة، `__eq__` للمساواة، `__len__` للطول.",
+    "استخدمها لما يكون لها معنى طبيعي."
+   ]
+  }
+ ]
+}

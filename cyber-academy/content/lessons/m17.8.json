@@ -1,0 +1,199 @@
+{
+ "title_ar": "مشروع: إدارة الحسابات",
+ "title_en": "Project: Account Manager",
+ "duration_min": 16,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🏦",
+   "goal": "تجمع الأصناف والوراثة والأخطاء في نظام صغير لإدارة حسابات المستخدمين بصلاحيات مختلفة."
+  },
+  {
+   "type": "text",
+   "title": "تصميم النظام",
+   "body": [
+    "نحتاج: صنف `User` (اسم، كلمة مرور مخزنة كـ hash مبسط، عدد محاولات فشل) وصنف `Admin` يرثه بصلاحيات إضافية، وصنف `UserStore` يدير مجموعة المستخدمين.",
+    "قواعد: لا اسم مكرر، وبعد 3 فشل متتالية يُقفل الحساب، والمشرف فقط يفتح المقفل.",
+    "لن نخزن كلمة المرور نصاً صريحاً أبداً؛ سنستخدم `hashlib` للتبسيط (في الواقع نستخدم bcrypt/argon2 مع salt)."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "warn",
+   "note": "SHA-256 وحده غير كافٍ لكلمات المرور في الأنظمة الحقيقية؛ استخدم خوارزميات بطيئة مخصصة.",
+   "code": "import hashlib\n\ndef h(pw):\n    return hashlib.sha256(pw.encode(\"utf-8\")).hexdigest()\n\nprint(len(h(\"secret\")))\nprint(h(\"a\") == h(\"a\"))"
+  },
+  {
+   "type": "text",
+   "title": "خطوات البناء",
+   "body": [
+    "(1) `User` مع `check(pw)` تتحقق وتعدّ الفشل. (2) `UserStore` مع `add` و`login`. (3) `Admin.unlock(user)`.",
+    "ارفع أخطاء واضحة: `ValueError` لاسم مكرر، و`PermissionError` لمن يحاول فتح حساب بدون صلاحية.",
+    "اختبر كل خطوة قبل الانتقال للتالية."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "خاصية `locked` محسوبة من fails، فلا نخزنها مرتين.",
+   "code": "class User:\n    def __init__(self, name, pw_hash):\n        self.name = name\n        self.pw_hash = pw_hash\n        self.fails = 0\n\n    @property\n    def locked(self):\n        return self.fails >= 3\n\nu = User(\"a\", \"x\")\nu.fails = 3\nprint(u.locked)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "inheritance",
+    "class"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "1) صنف User",
+   "instructions": [
+    "`h(pw)` معرفة. عرّف `User` بـ `__init__(self, name, pw)` (يخزن `pw_hash = h(pw)` و`fails = 0`) والأسلوب `check(pw)`: لو الحساب مقفل (fails ≥ 3) يرفع `PermissionError(\"locked\")`؛ لو الكلمة صحيحة يصفر `fails` ويرجع `True`؛ وإلا يزيد `fails` ويرجع `False`."
+   ],
+   "starter": "import hashlib\n\ndef h(pw):\n    return hashlib.sha256(pw.encode(\"utf-8\")).hexdigest()\n\n# اكتب User هنا\n",
+   "tests": [
+    {
+     "call": "User(\"a\", \"pw\").check(\"pw\")",
+     "expect": true
+    },
+    {
+     "call": "User(\"a\", \"pw\").check(\"x\")",
+     "expect": false
+    },
+    {
+     "call": "(lambda u: [u.check(\"x\"), u.check(\"x\"), u.check(\"pw\"), u.fails][-1])(User(\"a\", \"pw\"))",
+     "expect": 0,
+     "label": "النجاح يصفر العداد"
+    },
+    {
+     "call": "(lambda u: [u.check(\"x\"), u.check(\"x\"), u.check(\"x\"), u.fails][-1])(User(\"a\", \"pw\"))",
+     "expect": 3,
+     "label": "ثلاث محاولات فاشلة",
+     "hidden": true
+    }
+   ],
+   "solution": "import hashlib\n\ndef h(pw):\n    return hashlib.sha256(pw.encode(\"utf-8\")).hexdigest()\n\nclass User:\n    def __init__(self, name, pw):\n        self.name = name\n        self.pw_hash = h(pw)\n        self.fails = 0\n\n    def check(self, pw):\n        if self.fails >= 3:\n            raise PermissionError(\"locked\")\n        if h(pw) == self.pw_hash:\n            self.fails = 0\n            return True\n        self.fails = self.fails + 1\n        return False\n",
+   "hints": [
+    "خزّن hash لا النص.",
+    "افحص القفل أول شيء."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "2) المخزن",
+   "instructions": [
+    "أكمل الكود السابق: عرّف `UserStore` فيه قاموس `users`، و`add(name, pw)` ترفع `ValueError(\"exists\")` لو الاسم موجود، و`login(name, pw)` ترجع `True/False` (وترفع `KeyError` لو الاسم غير موجود). الاختبار يستخدم برنامجاً صغيراً بالأوامر."
+   ],
+   "starter": "import hashlib\n\ndef h(pw):\n    return hashlib.sha256(pw.encode(\"utf-8\")).hexdigest()\n\nclass User:\n    def __init__(self, name, pw):\n        self.name = name\n        self.pw_hash = h(pw)\n        self.fails = 0\n\n    def check(self, pw):\n        if self.fails >= 3:\n            raise PermissionError(\"locked\")\n        if h(pw) == self.pw_hash:\n            self.fails = 0\n            return True\n        self.fails = self.fails + 1\n        return False\n\n# عرّف UserStore هنا\n\nstore = UserStore()\nwhile True:\n    parts = input().split()\n    if parts[0] == \"exit\":\n        break\n    try:\n        if parts[0] == \"add\":\n            store.add(parts[1], parts[2])\n            print(\"added\")\n        elif parts[0] == \"login\":\n            print(\"ok\" if store.login(parts[1], parts[2]) else \"bad\")\n    except ValueError as e:\n        print(\"error\", e)\n    except KeyError:\n        print(\"no user\")\n    except PermissionError as e:\n        print(e)\n",
+   "tests": [
+    {
+     "expect_stdout": "added\nok\nbad\nerror exists\nno user",
+     "stdin": [
+      "add sara pw",
+      "login sara pw",
+      "login sara x",
+      "add sara z",
+      "login nora z",
+      "exit"
+     ]
+    },
+    {
+     "expect_stdout": "added\nbad\nbad\nbad\nlocked",
+     "stdin": [
+      "add a 1",
+      "login a x",
+      "login a x",
+      "login a x",
+      "login a 1",
+      "exit"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import hashlib\n\ndef h(pw):\n    return hashlib.sha256(pw.encode(\"utf-8\")).hexdigest()\n\nclass User:\n    def __init__(self, name, pw):\n        self.name = name\n        self.pw_hash = h(pw)\n        self.fails = 0\n\n    def check(self, pw):\n        if self.fails >= 3:\n            raise PermissionError(\"locked\")\n        if h(pw) == self.pw_hash:\n            self.fails = 0\n            return True\n        self.fails = self.fails + 1\n        return False\n\nclass UserStore:\n    def __init__(self):\n        self.users = {}\n\n    def add(self, name, pw):\n        if name in self.users:\n            raise ValueError(\"exists\")\n        self.users[name] = User(name, pw)\n\n    def login(self, name, pw):\n        return self.users[name].check(pw)\n\nstore = UserStore()\nwhile True:\n    parts = input().split()\n    if parts[0] == \"exit\":\n        break\n    try:\n        if parts[0] == \"add\":\n            store.add(parts[1], parts[2])\n            print(\"added\")\n        elif parts[0] == \"login\":\n            print(\"ok\" if store.login(parts[1], parts[2]) else \"bad\")\n    except ValueError as e:\n        print(\"error\", e)\n    except KeyError:\n        print(\"no user\")\n    except PermissionError as e:\n        print(e)\n",
+   "hints": [
+    "`self.users` قاموس اسم ← User.",
+    "`self.users[name]` يرفع KeyError تلقائياً."
+   ],
+   "stdin": [
+    "add sara pw",
+    "login sara pw",
+    "exit"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "3) المشرف",
+   "instructions": [
+    "أضف `Admin(User)` فيه `unlock(user)` يصفر `fails` للمستخدم. ثم الاختبار: بعد 3 فشل يقفل الحساب، والمشرف يفتحه فينجح الدخول."
+   ],
+   "starter": "import hashlib\n\ndef h(pw):\n    return hashlib.sha256(pw.encode(\"utf-8\")).hexdigest()\n\nclass User:\n    def __init__(self, name, pw):\n        self.name = name\n        self.pw_hash = h(pw)\n        self.fails = 0\n\n    def check(self, pw):\n        if self.fails >= 3:\n            raise PermissionError(\"locked\")\n        if h(pw) == self.pw_hash:\n            self.fails = 0\n            return True\n        self.fails = self.fails + 1\n        return False\n\n# عرّف Admin هنا\n\nu = User(\"sara\", \"pw\")\nfor _ in range(3):\n    u.check(\"x\")\ntry:\n    u.check(\"pw\")\nexcept PermissionError:\n    print(\"locked\")\nadmin = Admin(\"root\", \"r\")\nadmin.unlock(u)\nprint(u.check(\"pw\"))\n",
+   "tests": [
+    {
+     "expect_stdout": "locked\nTrue"
+    }
+   ],
+   "solution": "import hashlib\n\ndef h(pw):\n    return hashlib.sha256(pw.encode(\"utf-8\")).hexdigest()\n\nclass User:\n    def __init__(self, name, pw):\n        self.name = name\n        self.pw_hash = h(pw)\n        self.fails = 0\n\n    def check(self, pw):\n        if self.fails >= 3:\n            raise PermissionError(\"locked\")\n        if h(pw) == self.pw_hash:\n            self.fails = 0\n            return True\n        self.fails = self.fails + 1\n        return False\n\nclass Admin(User):\n    def unlock(self, user):\n        user.fails = 0\n\nu = User(\"sara\", \"pw\")\nfor _ in range(3):\n    u.check(\"x\")\ntry:\n    u.check(\"pw\")\nexcept PermissionError:\n    print(\"locked\")\nadmin = Admin(\"root\", \"r\")\nadmin.unlock(u)\nprint(u.check(\"pw\"))\n",
+   "hints": [
+    "`class Admin(User):`",
+    "الأسلوب يصفر `user.fails`."
+   ],
+   "checks": [
+    {
+     "regex": "class\\s+Admin\\s*\\(\\s*User\\s*\\)",
+     "msg": "Admin يرث User"
+    }
+   ]
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نخزن hash لكلمة المرور؟",
+     "options": [
+      "حتى لا تُخزن كلمة السر صريحة",
+      "لتسريع الدخول",
+      "لتقصير الكلمة"
+     ],
+     "answer": 0,
+     "why": "وفي الواقع نستخدم خوارزميات مخصصة مع salt."
+    },
+    {
+     "q": "ليش Admin يرث User؟",
+     "options": [
+      "Admin هو نوع من User",
+      "لتوفير الذاكرة فقط",
+      "ضرورة لغوية"
+     ],
+     "answer": 0,
+     "why": "علاقة «هو نوع من»."
+    },
+    {
+     "q": "ليش نرفع PermissionError؟",
+     "options": [
+      "للإعلان عن عملية غير مسموحة بوضوح",
+      "لإنهاء البرنامج",
+      "لا فرق"
+     ],
+     "answer": 0,
+     "why": "خطأ مناسب المعنى."
+    },
+    {
+     "q": "وش فايدة فصل UserStore؟",
+     "options": [
+      "تنظيم: كل صنف مسؤولية واحدة",
+      "تسريع",
+      "تقليل الأسطر دائماً"
+     ],
+     "answer": 0,
+     "why": "مبدأ المسؤولية الواحدة."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "بنيت نظام حسابات بأصناف ووراثة وأخطاء مخصصة.",
+    "لا تخزن كلمات المرور صريحة؛ استخدم hash مخصص مع salt.",
+    "كل صنف مسؤولية واحدة واضحة."
+   ]
+  }
+ ]
+}

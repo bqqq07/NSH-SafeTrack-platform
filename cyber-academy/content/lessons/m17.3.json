@@ -1,0 +1,233 @@
+{
+ "title_ar": "الفئات والكائنات",
+ "title_en": "Classes",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🏗️",
+   "goal": "تصمم أنواعك الخاصة بـ [[class]] وتنشئ منها [[object]] لكل واحد بياناته."
+  },
+  {
+   "type": "text",
+   "title": "قالب وكائنات",
+   "body": [
+    "[[class]] مثل **مخطط بيت**، والـ [[object]] هو البيت الفعلي المبني منه. من نفس المخطط تبني كثير بيوت، ولكل بيت بياناته.",
+    "نعرّف الصنف بـ `class Name:` وننشئ كائناً بـ `Name()`. اسم الصنف بحروف PascalCase.",
+    "ليش نحتاجه؟ لما يكون عندك بيانات وسلوك مرتبطان (حساب مصرفي: رصيد + إيداع + سحب) فنجمعهما في مكان واحد."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "الخصائص تُضاف للكائن بنقطة، وكل كائن له خصائصه.",
+   "code": "class Dog:\n    pass\n\na = Dog()\nb = Dog()\na.name = \"rex\"\nb.name = \"max\"\nprint(a.name, b.name)\nprint(type(a).__name__)"
+  },
+  {
+   "type": "text",
+   "title": "__init__ و self",
+   "body": [
+    "[[constructor]] هو `__init__`: يُنفَّذ تلقائياً عند إنشاء الكائن ليجهز خصائصه.",
+    "المعامل الأول في أي أسلوب هو [[self]] ويشير للكائن الحالي: `self.name = name`.",
+    "عند الإنشاء ما نمرر self بأنفسنا: `Dog(\"rex\")`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "لو نسيت `self` في التعريف يعطي TypeError بخصوص عدد الوسطاء.",
+   "code": "class Dog:\n    def __init__(self, name):\n        self.name = name\n\nd = Dog(\"rex\")\nprint(d.name)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "class",
+    "object",
+    "constructor",
+    "self"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "class P:\n    def __init__(self, x):\n        self.x = x\n\na = P(1)\nb = P(2)\nprint(a.x, b.x)\n",
+   "options": [
+    "1 2",
+    "2 1",
+    "1 1"
+   ],
+   "answer": 0,
+   "why": "لكل كائن خاصيته الخاصة."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): نفس الكائن",
+   "code": "class P:\n    pass\n\na = P()\nb = a\nb.v = 5\nprint(a.v)\n",
+   "options": [
+    "5",
+    "خطأ AttributeError",
+    "0"
+   ],
+   "answer": 0,
+   "why": "a وb يشيران لنفس الكائن، فالتعديل يظهر في الاثنين."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: المنشئ",
+   "code": "class User:\n    def ____(self, name):\n        self.name = name\n\nprint(User(\"ali\").name)\n",
+   "blanks": [
+    {
+     "answer": "__init__"
+    }
+   ],
+   "expect_stdout": "ali",
+   "show_output": true,
+   "bank": [
+    "__init__",
+    "__new__",
+    "init",
+    "__main__"
+   ],
+   "intro": "وش اسم دالة البناء؟",
+   "explain": "`__init__`."
+  },
+  {
+   "type": "code",
+   "title": "صنف المستخدم",
+   "instructions": [
+    "عرّف صنف `User` له `__init__(self, name, role)` يحفظ الاسم والدور. أنشئ `User(\"sara\", \"admin\")` واطبع `sara admin` من خصائصه."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "sara admin"
+    }
+   ],
+   "solution": "class User:\n    def __init__(self, name, role):\n        self.name = name\n        self.role = role\n\nu = User(\"sara\", \"admin\")\nprint(u.name, u.role)\n",
+   "hints": [
+    "احفظ كل قيمة في `self.`",
+    "اقرأ الخصائص بنقطة."
+   ],
+   "checks": [
+    {
+     "regex": "class\\s+User",
+     "msg": "عرّف الصنف User"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "كائنات متعددة",
+   "instructions": [
+    "عرّف `Server(host, port)`. أنشئ ثلاثة خوادم من قائمة `data` واطبع `host:port` لكل واحد."
+   ],
+   "starter": "data = [(\"a.com\", 80), (\"b.com\", 443), (\"c.com\", 22)]\n",
+   "tests": [
+    {
+     "expect_stdout": "a.com:80\nb.com:443\nc.com:22"
+    }
+   ],
+   "solution": "data = [(\"a.com\", 80), (\"b.com\", 443), (\"c.com\", 22)]\n\nclass Server:\n    def __init__(self, host, port):\n        self.host = host\n        self.port = port\n\nservers = [Server(h, p) for h, p in data]\nfor s in servers:\n    print(s.host + \":\" + str(s.port))\n",
+   "hints": [
+    "أنشئ كائناً لكل عنصر.",
+    "اقرأ `s.host` و`s.port`."
+   ],
+   "checks": [
+    {
+     "regex": "class\\s+Server",
+     "msg": "عرّف الصنف Server"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "قيمة افتراضية",
+   "instructions": [
+    "عرّف `Counter2` بـ `__init__(self)` يبدأ `self.count = 0`. أنشئ كائناً واطبع `count`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "0"
+    }
+   ],
+   "solution": "class Counter2:\n    def __init__(self):\n        self.count = 0\n\nc = Counter2()\nprint(c.count)\n",
+   "hints": [
+    "القيمة الأولية داخل `__init__`."
+   ],
+   "checks": [
+    {
+     "regex": "class\\s+Counter2",
+     "msg": "عرّف Counter2"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: نسيان self",
+   "instructions": [
+    "الكود يعطي `TypeError` لأن `__init__` بدون `self`. أصلحه ليطبع `rex`."
+   ],
+   "starter": "class Dog:\n    def __init__(name):\n        self.name = name\n\nprint(Dog(\"rex\").name)\n",
+   "tests": [
+    {
+     "expect_stdout": "rex"
+    }
+   ],
+   "solution": "class Dog:\n    def __init__(self, name):\n        self.name = name\n\nprint(Dog(\"rex\").name)\n",
+   "hints": [
+    "أول معامل لازم `self`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "الفرق بين الصنف والكائن؟",
+     "options": [
+      "الصنف قالب والكائن نسخة منه",
+      "نفس الشيء",
+      "الكائن قالب"
+     ],
+     "answer": 0,
+     "why": "مخطط وبيت."
+    },
+    {
+     "q": "متى يُنفَّذ __init__؟",
+     "options": [
+      "عند إنشاء الكائن",
+      "عند حذفه",
+      "عند طباعته"
+     ],
+     "answer": 0,
+     "why": "تلقائياً."
+    },
+    {
+     "q": "وش هو self؟",
+     "options": [
+      "الكائن الحالي",
+      "اسم الصنف",
+      "متغير عام"
+     ],
+     "answer": 0,
+     "why": "يربط الخصائص بالكائن."
+    },
+    {
+     "q": "كيف ننشئ كائناً من الصنف User؟",
+     "options": [
+      "User()",
+      "new User",
+      "create User"
+     ],
+     "answer": 0,
+     "why": "نستدعيه كدالة."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "الصنف قالب والكائن نسخة بخصائص خاصة.",
+    "`__init__(self, ...)` يجهز الكائن.",
+    "`self.x = x` تحفظ الخصائص."
+   ]
+  }
+ ]
+}

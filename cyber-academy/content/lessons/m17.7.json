@@ -1,0 +1,234 @@
+{
+ "title_ar": "dataclass",
+ "title_en": "dataclass",
+ "duration_min": 8,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "📦",
+   "goal": "تكتب أصنافاً للبيانات باختصار بـ [[dataclass]] وتتخلص من الكود المتكرر."
+  },
+  {
+   "type": "text",
+   "title": "بدون كتابة __init__",
+   "body": [
+    "كثير من الأصناف مجرد حاويات بيانات. `@dataclass` يولّد لك `__init__` و`__repr__` و`__eq__` تلقائياً من التعريفات.",
+    "نكتب الخصائص بأنواعها فقط: `name: str`، ويمكن قيمة افتراضية: `role: str = \"user\"`.",
+    "`from dataclasses import dataclass` ثم `@dataclass` فوق الصنف."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "الطباعة تلقائية: `User(name='sara', role='user')`.",
+   "code": "from dataclasses import dataclass\n\n@dataclass\nclass User:\n    name: str\n    role: str = \"user\"\n\nu = User(\"sara\")\nprint(u)\nprint(u == User(\"sara\"))"
+  },
+  {
+   "type": "text",
+   "title": "خيارات مفيدة",
+   "body": [
+    "`@dataclass(frozen=True)` يجعل الكائن غير قابل للتعديل (والأفضل للبيانات اللي ما تتغير).",
+    "القوائم كقيمة افتراضية تحتاج `field(default_factory=list)` وليس `[]` مباشرة.",
+    "`dataclasses.asdict(obj)` تحول الكائن لقاموس (مفيد مع json)."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "`ports: list = []` مرفوضة لأنها ستُشارَك بين الكائنات.",
+   "code": "from dataclasses import dataclass, field, asdict\n\n@dataclass\nclass Host:\n    name: str\n    ports: list = field(default_factory=list)\n\nh = Host(\"a\")\nh.ports.append(22)\nprint(asdict(h))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "dataclass"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "from dataclasses import dataclass\n\n@dataclass\nclass P:\n    x: int\n    y: int\n\nprint(P(1, 2))\n",
+   "options": [
+    "P(x=1, y=2)",
+    "P(1, 2)",
+    "<P>"
+   ],
+   "answer": 0,
+   "why": "repr تلقائي بأسماء الحقول."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): المساواة",
+   "code": "from dataclasses import dataclass\n\n@dataclass\nclass P:\n    x: int\n\nprint(P(1) == P(1))\n",
+   "options": [
+    "True",
+    "False",
+    "None"
+   ],
+   "answer": 0,
+   "why": "المقارنة تلقائية على الحقول."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): frozen",
+   "code": "from dataclasses import dataclass\n\n@dataclass(frozen=True)\nclass P:\n    x: int\n\np = P(1)\ntry:\n    p.x = 2\nexcept Exception as e:\n    print(type(e).__name__)\n",
+   "options": [
+    "FrozenInstanceError",
+    "AttributeError",
+    "TypeError"
+   ],
+   "answer": 0,
+   "why": "الكائن المجمد يرفع FrozenInstanceError."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: المزخرف",
+   "code": "from dataclasses import dataclass\n\n____\nclass P:\n    x: int\n\nprint(P(5).x)\n",
+   "blanks": [
+    {
+     "answer": "@dataclass"
+    }
+   ],
+   "expect_stdout": "5",
+   "show_output": true,
+   "bank": [
+    "@dataclass",
+    "@property",
+    "@static",
+    "dataclass"
+   ],
+   "intro": "وش المزخرف؟",
+   "explain": "`@dataclass` فوق الصنف."
+  },
+  {
+   "type": "code",
+   "title": "صنف بيانات",
+   "instructions": [
+    "عرّف `Alert` بـ `@dataclass` له `ip: str` و`level: int`. أنشئ `Alert(\"1.1.1.1\", 3)` واطبعه."
+   ],
+   "starter": "# اكتب كودك هنا\nfrom dataclasses import dataclass\n",
+   "tests": [
+    {
+     "expect_stdout": "Alert(ip='1.1.1.1', level=3)"
+    }
+   ],
+   "solution": "from dataclasses import dataclass\n\n@dataclass\nclass Alert:\n    ip: str\n    level: int\n\nprint(Alert(\"1.1.1.1\", 3))\n",
+   "hints": [
+    "اكتب الحقول بأنواعها بدون __init__."
+   ],
+   "checks": [
+    {
+     "regex": "@dataclass",
+     "msg": "استخدم @dataclass"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "قيمة افتراضية",
+   "instructions": [
+    "عرّف `Account` بـ dataclass: `owner: str` و`balance: int = 0`. اطبع `Account(\"sara\").balance` ← `0`."
+   ],
+   "starter": "# اكتب كودك هنا\nfrom dataclasses import dataclass\n",
+   "tests": [
+    {
+     "expect_stdout": "0"
+    }
+   ],
+   "solution": "from dataclasses import dataclass\n\n@dataclass\nclass Account:\n    owner: str\n    balance: int = 0\n\nprint(Account(\"sara\").balance)\n",
+   "hints": [
+    "الحقول ذات الافتراضي بعد العادية."
+   ],
+   "checks": [
+    {
+     "regex": "@dataclass",
+     "msg": "استخدم @dataclass"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "ترتيب كائنات",
+   "instructions": [
+    "عندك `servers`. اطبع أسماء الخوادم مرتبة حسب `load` (من الأصغر): `['b', 'c', 'a']`"
+   ],
+   "starter": "from dataclasses import dataclass\n\n@dataclass\nclass Server:\n    name: str\n    load: int\n\nservers = [Server(\"a\", 90), Server(\"b\", 10), Server(\"c\", 50)]\n",
+   "tests": [
+    {
+     "expect_stdout": "['b', 'c', 'a']"
+    }
+   ],
+   "solution": "from dataclasses import dataclass\n\n@dataclass\nclass Server:\n    name: str\n    load: int\n\nservers = [Server(\"a\", 90), Server(\"b\", 10), Server(\"c\", 50)]\nordered = sorted(servers, key=lambda s: s.load)\nprint([s.name for s in ordered])\n",
+   "hints": [
+    "`sorted(..., key=lambda s: s.load)`"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: قائمة افتراضية",
+   "instructions": [
+    "الكود يرفض `[]` كقيمة افتراضية (`ValueError`). أصلحه باستخدام `field(default_factory=list)` ليطبع `[]`."
+   ],
+   "starter": "from dataclasses import dataclass, field\n\n@dataclass\nclass H:\n    ports: list = []\n\nprint(H().ports)\n",
+   "tests": [
+    {
+     "expect_stdout": "[]"
+    }
+   ],
+   "solution": "from dataclasses import dataclass, field\n\n@dataclass\nclass H:\n    ports: list = field(default_factory=list)\n\nprint(H().ports)\n",
+   "hints": [
+    "`field(default_factory=list)`"
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يولّد @dataclass؟",
+     "options": [
+      "__init__ و__repr__ و__eq__",
+      "ملفات",
+      "قواعد بيانات"
+     ],
+     "answer": 0,
+     "why": "تلقائياً."
+    },
+    {
+     "q": "كيف نمنع تعديل الكائن؟",
+     "options": [
+      "frozen=True",
+      "final=True",
+      "private=True"
+     ],
+     "answer": 0,
+     "why": "يرفع FrozenInstanceError."
+    },
+    {
+     "q": "كيف نضع قائمة افتراضية؟",
+     "options": [
+      "field(default_factory=list)",
+      "= []",
+      "= None فقط"
+     ],
+     "answer": 0,
+     "why": "لتجنب المشاركة."
+    },
+    {
+     "q": "متى نستخدم dataclass؟",
+     "options": [
+      "لحاويات البيانات",
+      "للخوارزميات",
+      "للملفات"
+     ],
+     "answer": 0,
+     "why": "عندما يكون هدف الصنف تخزين بيانات."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`@dataclass` يولّد __init__ و__repr__ و__eq__ تلقائياً.",
+    "`frozen=True` للثبات، و`field(default_factory=...)` للقوائم.",
+    "`asdict` للتحويل لقاموس."
+   ]
+  }
+ ]
+}

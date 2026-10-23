@@ -1,0 +1,302 @@
+{
+ "title_ar": "المكتبة القياسية",
+ "title_en": "Standard Library",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🧰",
+   "goal": "جولة في [[standard-library]]: أدوات جاهزة للتواريخ والمسارات والعشوائية والعدّ."
+  },
+  {
+   "type": "text",
+   "title": "أدوات يومية",
+   "body": [
+    "`datetime`: التواريخ والأوقات: `datetime(2025, 1, 5)`، والفرق بين تاريخين `timedelta`.",
+    "`pathlib.Path`: التعامل مع مسارات الملفات بطريقة آمنة بين الأنظمة: `Path(\"a\") / \"b.txt\"`، و`.suffix` الامتداد، و`.exists()`.",
+    "`collections.Counter`: يعدّ تكرار العناصر تلقائياً، و`most_common(n)`.",
+    "`random`: أرقام وخيارات عشوائية، و`secrets` للقيم الأمنية (رموز وكلمات سر)."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "لا تستخدم `random` لتوليد كلمات سر أو رموز أمنية؛ استخدم `secrets` لأن `random` قابلة للتنبؤ.",
+   "code": "from datetime import datetime, timedelta\nfrom collections import Counter\n\nd = datetime(2025, 1, 5)\nprint(d + timedelta(days=30))\nprint(Counter(\"hello\").most_common(1))"
+  },
+  {
+   "type": "text",
+   "title": "تفاصيل مفيدة",
+   "body": [
+    "`sys.argv` معطيات الأمر، و`os.getcwd()` المجلد الحالي، و`os.listdir(\".\")` محتويات المجلد.",
+    "`strftime` تنسّق التاريخ لنص: `d.strftime(\"%Y-%m-%d\")`، و`strptime` تحلل نصاً لتاريخ.",
+    "للأمان: لا تبني مسارات بدمج نصوص المستخدم مباشرة (path traversal)؛ استخدم `Path` وتحقق من الناتج."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "مدخل مثل `../../etc/passwd` يصعد لخارج المجلد المسموح إذا لم تتحقق.",
+   "code": "from datetime import datetime\nfrom pathlib import Path\n\nd = datetime.strptime(\"2025-01-05 10:22\", \"%Y-%m-%d %H:%M\")\nprint(d.hour, d.strftime(\"%d/%m/%Y\"))\np = Path(\"logs\") / \"app.log\"\nprint(p.name, p.suffix, p.parent)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "standard-library"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): Counter",
+   "code": "from collections import Counter\nc = Counter(\"aabbbc\")\nprint(c.most_common(1))\n",
+   "options": [
+    "[('b', 3)]",
+    "[('a', 2)]",
+    "[('c', 1)]"
+   ],
+   "answer": 0,
+   "why": "الحرف b ظهر 3 مرات وهو الأكثر."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): datetime",
+   "code": "from datetime import datetime\na = datetime(2025, 1, 10)\nb = datetime(2025, 1, 3)\nprint((a - b).days)\n",
+   "options": [
+    "7",
+    "-7",
+    "13"
+   ],
+   "answer": 0,
+   "why": "الفرق 7 أيام."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): Path",
+   "code": "from pathlib import Path\np = Path(\"logs\") / \"app.log\"\nprint(p.suffix, p.stem)\n",
+   "options": [
+    ".log app",
+    "log app",
+    "app .log"
+   ],
+   "answer": 0,
+   "why": "suffix الامتداد مع النقطة، وstem الاسم بدون الامتداد."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: العدّ",
+   "code": "from collections import ____\nprint(Counter(\"aab\")[\"a\"])\n",
+   "blanks": [
+    {
+     "answer": "Counter"
+    }
+   ],
+   "expect_stdout": "2",
+   "show_output": true,
+   "bank": [
+    "Counter",
+    "counter",
+    "count",
+    "Count"
+   ],
+   "intro": "وش الصنف اللي يعدّ التكرار؟",
+   "explain": "`Counter`."
+  },
+  {
+   "type": "code",
+   "title": "أكثر IP تكراراً",
+   "instructions": [
+    "اقرأ `n` ثم `n` عنوان IP. اطبع العنوان الأكثر تكراراً وعدد مرات تكراره: `ip n`. (لن يكون هناك تعادل في الاختبارات)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "1.1.1.1 3",
+     "stdin": [
+      "5",
+      "1.1.1.1",
+      "2.2.2.2",
+      "1.1.1.1",
+      "3.3.3.3",
+      "1.1.1.1"
+     ]
+    },
+    {
+     "expect_stdout": "x 2",
+     "stdin": [
+      "3",
+      "x",
+      "y",
+      "x"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "from collections import Counter\nn = int(input())\nips = [input() for _ in range(n)]\nip, count = Counter(ips).most_common(1)[0]\nprint(ip, count)\n",
+   "hints": [
+    "`Counter(ips).most_common(1)` ترجع قائمة فيها زوج."
+   ],
+   "stdin": [
+    "5",
+    "1.1.1.1",
+    "2.2.2.2",
+    "1.1.1.1",
+    "3.3.3.3",
+    "1.1.1.1"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "عمر الحادثة",
+   "instructions": [
+    "اقرأ تاريخين بصيغة `YYYY-MM-DD` (الأول تاريخ الحادثة، الثاني تاريخ اكتشافها) واطبع عدد الأيام بينهما."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "9",
+     "stdin": [
+      "2025-01-01",
+      "2025-01-10"
+     ]
+    },
+    {
+     "expect_stdout": "0",
+     "stdin": [
+      "2025-03-05",
+      "2025-03-05"
+     ]
+    },
+    {
+     "expect_stdout": "31",
+     "stdin": [
+      "2025-01-01",
+      "2025-02-01"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "from datetime import datetime\na = datetime.strptime(input(), \"%Y-%m-%d\")\nb = datetime.strptime(input(), \"%Y-%m-%d\")\nprint((b - a).days)\n",
+   "hints": [
+    "`strptime` تحول النص لتاريخ.",
+    "اطرح وخذ `.days`."
+   ],
+   "stdin": [
+    "2025-01-01",
+    "2025-01-10"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "امتداد الملف",
+   "instructions": [
+    "اقرأ اسم ملف واطبع امتداده بحروف صغيرة (أو `none` لو بدون امتداد). مثال: `Report.PDF` ← `.pdf`"
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": ".pdf",
+     "stdin": [
+      "Report.PDF"
+     ]
+    },
+    {
+     "expect_stdout": "none",
+     "stdin": [
+      "README"
+     ]
+    },
+    {
+     "expect_stdout": ".gz",
+     "stdin": [
+      "a.tar.gz"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "from pathlib import Path\next = Path(input()).suffix.lower()\nprint(ext if ext else \"none\")\n",
+   "hints": [
+    "`Path(name).suffix`"
+   ],
+   "stdin": [
+    "Report.PDF"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: مسار خطير",
+   "instructions": [
+    "الدالة تبني مسار الملف بدمج نص المستخدم فتسمح بـ `..`. أصلحها: لو الاسم فيه `..` أو `/` فارجع `None`، وإلا `\"uploads/\" + name`."
+   ],
+   "starter": "def safe_path(name):\n    return \"uploads/\" + name\n",
+   "tests": [
+    {
+     "call": "safe_path(\"a.txt\")",
+     "expect": "uploads/a.txt"
+    },
+    {
+     "call": "safe_path(\"../etc/passwd\")",
+     "expect": null
+    },
+    {
+     "call": "safe_path(\"x/y\")",
+     "expect": null,
+     "hidden": true
+    }
+   ],
+   "solution": "def safe_path(name):\n    if \"..\" in name or \"/\" in name:\n        return None\n    return \"uploads/\" + name\n",
+   "hints": [
+    "افحص وجود `..` أو `/`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يعدّ التكرار تلقائياً؟",
+     "options": [
+      "collections.Counter",
+      "random",
+      "sys"
+     ],
+     "answer": 0,
+     "why": "وله most_common."
+    },
+    {
+     "q": "لتوليد كلمة سر آمنة نستخدم؟",
+     "options": [
+      "secrets",
+      "random",
+      "math"
+     ],
+     "answer": 0,
+     "why": "random قابل للتنبؤ."
+    },
+    {
+     "q": "وش يعطي `Path(\"a.txt\").suffix`؟",
+     "options": [
+      ".txt",
+      "txt",
+      "a"
+     ],
+     "answer": 0,
+     "why": "الامتداد مع النقطة."
+    },
+    {
+     "q": "وش خطر دمج نص المستخدم في مسار؟",
+     "options": [
+      "path traversal مثل ../",
+      "بطء",
+      "ترميز"
+     ],
+     "answer": 0,
+     "why": "تحقق من المسار."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "المكتبة القياسية: datetime وpathlib وcollections وrandom.",
+    "`secrets` للقيم الأمنية بدل `random`.",
+    "احذر path traversal عند بناء المسارات."
+   ]
+  }
+ ]
+}
