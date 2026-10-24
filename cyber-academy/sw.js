@@ -1,6 +1,6 @@
 // Service Worker: يخلي المنصة تشتغل بدون نت.
 // الاستراتيجية: نجرّب النت أولاً (عشان التحديثات توصل)، وإذا فشل نرجع للنسخة المحفوظة.
-const CACHE = 'cyber-academy-v8';
+const CACHE = 'cyber-academy-v9';
 const CORE = [
   './', 'index.html', 'manifest.webmanifest', 'icons/icon.svg',
   'css/style.css',

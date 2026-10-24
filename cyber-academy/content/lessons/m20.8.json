@@ -1,0 +1,203 @@
+{
+ "title_ar": "لعبة CTF",
+ "title_en": "Build a CTF",
+ "duration_min": 30,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🏴",
+   "goal": "تصمم لعبة CTF صغيرة لغيرك: أعلام مولّدة بأمان، تحقق دون كشف الحل، ولوحة نتائج."
+  },
+  {
+   "type": "text",
+   "title": "مواصفات المشروع",
+   "body": [
+    "**الفكرة:** CTF (التقاط العلم) مسابقات أمنية يحل فيها اللاعب تحديات ويحصل على «علم» نصي يسلّمه لنيل نقاط. هنا تبني **محرك المسابقة** (لا التحديات الهجومية).",
+    "**المراحل:** (1) توليد علم لكل تحدٍ بـ HMAC من سر الخادم، (2) التحقق من الإجابة بمقارنة هاش العلم المخزن (فلا يُخزَّن العلم نفسه) بمقارنة آمنة، (3) لوحة النتائج: فريق + تحدٍ + إجابة لعدة محاولات، النقاط تُحتسب مرة واحدة لكل تحدٍ لكل فريق.",
+    "ما نبني هنا: منصة تعليمية دفاعية، وكل التحديات بيئتك أنت."
+   ],
+   "layer": "🟢 ببساطة"
+  },
+  {
+   "type": "text",
+   "title": "نصائح التصميم",
+   "body": [
+    "خزّن هاش العلم لا العلم نفسه، فلا يتسرب عند تسريب القاعدة.",
+    "احتسب كل حل مرة واحدة فقط.",
+    "رتّب اللوحة بالنقاط تنازلياً ثم باسم الفريق."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "ابنِ المشروع على مراحل، واختبر كل مرحلة قبل الانتقال للتالية."
+  },
+  {
+   "type": "code",
+   "title": "1) توليد الأعلام",
+   "instructions": [
+    "عرّف `make_flag(name)` ترجع `CTF{` + أول 12 خانة من HMAC-SHA256 لاسم التحدي بالسر `ctf-secret` + `}`. اطبع علم `warmup` ثم `login`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport hmac\n",
+   "tests": [
+    {
+     "expect_stdout": "CTF{8cadd1ce3926}\nCTF{aee516f37336}"
+    }
+   ],
+   "solution": "import hmac\n\nSECRET = b\"ctf-secret\"\n\ndef make_flag(name):\n    return \"CTF{\" + hmac.new(SECRET, name.encode(\"utf-8\"), \"sha256\").hexdigest()[:12] + \"}\"\n\nfor name in [\"warmup\", \"login\"]:\n    print(make_flag(name))\n",
+   "hints": [
+    "`hmac.new(SECRET, name.encode(), \"sha256\").hexdigest()[:12]`"
+   ],
+   "checks": [
+    {
+     "regex": "hmac",
+     "msg": "استخدم hmac"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "2) التحقق الآمن",
+   "instructions": [
+    "خزّن لكل تحدٍ **هاش** العلم الصحيح في `STORED`، وعرّف `check(name, submission)` ترجع `True` لو هاش الإجابة يطابق المخزن (مقارنة آمنة) و`False` لتحدٍ غير معروف. اقرأ اسم التحدي ثم إجابة اللاعب. (دوال التوليد مكتوبة لك.)"
+   ],
+   "starter": "# اكتب كودك هنا\nimport hashlib\nimport hmac\n",
+   "tests": [
+    {
+     "expect_stdout": "correct",
+     "stdin": [
+      "warmup",
+      "CTF{8cadd1ce3926}"
+     ]
+    },
+    {
+     "expect_stdout": "wrong",
+     "stdin": [
+      "warmup",
+      "CTF{guess}"
+     ]
+    },
+    {
+     "expect_stdout": "wrong",
+     "stdin": [
+      "login",
+      "CTF{8cadd1ce3926}"
+     ],
+     "hidden": true
+    },
+    {
+     "expect_stdout": "wrong",
+     "stdin": [
+      "nope",
+      "CTF{aee516f37336}"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import hashlib\nimport hmac\n\nSECRET = b\"ctf-secret\"\n\ndef make_flag(name):\n    return \"CTF{\" + hmac.new(SECRET, name.encode(\"utf-8\"), \"sha256\").hexdigest()[:12] + \"}\"\n\nSTORED = {name: hashlib.sha256(make_flag(name).encode(\"utf-8\")).hexdigest() for name in [\"warmup\", \"login\"]}\n\ndef check(name, submission):\n    if name not in STORED:\n        return False\n    digest = hashlib.sha256(submission.encode(\"utf-8\")).hexdigest()\n    return hmac.compare_digest(digest, STORED[name])\n\nname = input()\nsub = input()\nprint(\"correct\" if check(name, sub) else \"wrong\")\n",
+   "hints": [
+    "هاش الإجابة `sha256` ثم قارنه بالمخزن.",
+    "`compare_digest`."
+   ],
+   "checks": [
+    {
+     "regex": "compare_digest",
+     "msg": "استخدم compare_digest"
+    }
+   ],
+   "stdin": [
+    "warmup",
+    "CTF{8cadd1ce3926}"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "3) لوحة النتائج",
+   "instructions": [
+    "اقرأ `n` ثم `n` محاولة بصيغة `فريق تحدٍ إجابة`. النقاط: warmup=10 وlogin=50، وتحتسب مرة واحدة لكل تحدٍ لكل فريق. اطبع اللوحة `فريق نقاط` مرتبة بالنقاط تنازلياً ثم الاسم (الفرق بلا نقاط لا تظهر)."
+   ],
+   "starter": "# اكتب كودك هنا\nimport hashlib\nimport hmac\n",
+   "tests": [
+    {
+     "expect_stdout": "blue 50\nred 10",
+     "stdin": [
+      "5",
+      "red warmup CTF{8cadd1ce3926}",
+      "blue login CTF{aee516f37336}",
+      "red warmup CTF{8cadd1ce3926}",
+      "red login CTF{bad}",
+      "blue warmup CTF{bad}"
+     ]
+    },
+    {
+     "expect_stdout": "a 60\nb 10",
+     "stdin": [
+      "3",
+      "a warmup CTF{8cadd1ce3926}",
+      "b warmup CTF{8cadd1ce3926}",
+      "a login CTF{aee516f37336}"
+     ],
+     "hidden": true
+    },
+    {
+     "expect_stdout": "",
+     "stdin": [
+      "1",
+      "x warmup nope"
+     ]
+    }
+   ],
+   "solution": "import hashlib\nimport hmac\n\nSECRET = b\"ctf-secret\"\nPOINTS = {\"warmup\": 10, \"login\": 50}\n\ndef make_flag(name):\n    return \"CTF{\" + hmac.new(SECRET, name.encode(\"utf-8\"), \"sha256\").hexdigest()[:12] + \"}\"\n\nSTORED = {name: hashlib.sha256(make_flag(name).encode(\"utf-8\")).hexdigest() for name in POINTS}\n\ndef check(name, submission):\n    if name not in STORED:\n        return False\n    digest = hashlib.sha256(submission.encode(\"utf-8\")).hexdigest()\n    return hmac.compare_digest(digest, STORED[name])\n\nscores = {}\nsolved = {}\nn = int(input())\nfor _ in range(n):\n    team, name, sub = input().split()\n    if name in solved.get(team, set()):\n        continue\n    if check(name, sub):\n        solved.setdefault(team, set()).add(name)\n        scores[team] = scores.get(team, 0) + POINTS[name]\nfor team in sorted(scores, key=lambda t: (-scores[t], t)):\n    print(team + \" \" + str(scores[team]))\n",
+   "hints": [
+    "قاموس نقاط وقاموس مجموعات محلولة لكل فريق.",
+    "تجاهل الحل المكرر."
+   ],
+   "stdin": [
+    "2",
+    "red warmup CTF{8cadd1ce3926}",
+    "blue login CTF{aee516f37336}"
+   ]
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نخزن هاش العلم بدل العلم؟",
+     "options": [
+      "لو تسربت القاعدة لا يتسرب الحل",
+      "لتصغير الحجم",
+      "لتسريع التحقق"
+     ],
+     "answer": 0,
+     "why": "نفس مبدأ كلمات المرور."
+    },
+    {
+     "q": "وش فايدة توليد العلم بـ HMAC؟",
+     "options": [
+      "أعلام غير قابلة للتخمين ومرتبطة بسر الخادم",
+      "تشفيرها",
+      "جعلها أقصر"
+     ],
+     "answer": 0,
+     "why": "لا يستطيع اللاعب توليدها بدون السر."
+    },
+    {
+     "q": "ليش نحتسب الحل مرة واحدة؟",
+     "options": [
+      "لمنع تضخيم النقاط بتكرار الإجابة",
+      "للسرعة",
+      "لا حاجة"
+     ],
+     "answer": 0,
+     "why": "عدالة المسابقة."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "ولّدنا أعلاماً من سر الخادم.",
+    "تحققنا بمقارنة هاش آمنة.",
+    "بنينا لوحة نتائج عادلة."
+   ]
+  }
+ ]
+}

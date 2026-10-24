@@ -1,0 +1,147 @@
+{
+ "title_ar": "مولّد تقارير أمنية",
+ "title_en": "Report Generator",
+ "duration_min": 25,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🗂️",
+   "goal": "تحوّل ملف نتائج فحص (JSON) إلى ملخص منظم وتقرير HTML آمن."
+  },
+  {
+   "type": "text",
+   "title": "مواصفات المشروع",
+   "body": [
+    "**المدخل:** `findings.json` قائمة نتائج، لكل واحدة `id` و`title` و`severity` و`asset`.",
+    "**المراحل:** (1) تحميل والتحقق من الحقول والخطورة (ترفع `ValueError` برسالة واضحة)، (2) ملخص JSON: الإجمالي والتوزيع بالخطورة وأعلى نتيجة، (3) جدول HTML مرتب بالخطورة مع تهريب كل القيم.",
+    "تقارير الأمن الجيدة: ملخص تنفيذي أولاً ثم تفاصيل مرتبة بالأولوية."
+   ],
+   "layer": "🟢 ببساطة"
+  },
+  {
+   "type": "text",
+   "title": "نصائح التصميم",
+   "body": [
+    "ثبّت ترتيب الخطورة بقاموس يربط الاسم برقم.",
+    "النتائج قد تحتوي نصوصاً غير موثوقة (عناوين من أدوات فحص)، فهرّبها دائماً.",
+    "تحقق من المدخلات مبكراً وافشل برسالة مفهومة."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "ابنِ المشروع على مراحل، واختبر كل مرحلة قبل الانتقال للتالية."
+  },
+  {
+   "type": "code",
+   "title": "1) التحميل والتحقق",
+   "instructions": [
+    "عرّف `load(path)` تقرأ JSON وترفع `ValueError(\"missing KEY in ID\")` لو ينقص حقل، و`ValueError(\"bad severity X\")` لو الخطورة غير معروفة. جرّب `findings.json` ثم `bad.json`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport json\n",
+   "tests": [
+    {
+     "expect_stdout": "4\nmissing asset in X1"
+    }
+   ],
+   "solution": "import json\n\nREQUIRED = (\"id\", \"title\", \"severity\", \"asset\")\nSEVERITIES = (\"critical\", \"high\", \"medium\", \"low\")\n\ndef load(path):\n    with open(path, encoding=\"utf-8\") as f:\n        items = json.load(f)\n    for item in items:\n        for key in REQUIRED:\n            if key not in item:\n                raise ValueError(\"missing \" + key + \" in \" + str(item.get(\"id\", \"?\")))\n        if item[\"severity\"] not in SEVERITIES:\n            raise ValueError(\"bad severity \" + item[\"severity\"])\n    return items\n\nprint(len(load(\"findings.json\")))\ntry:\n    load(\"bad.json\")\nexcept ValueError as e:\n    print(e)\n",
+   "hints": [
+    "افحص كل مفتاح مطلوب لكل عنصر.",
+    "الخطورات: critical, high, medium, low."
+   ],
+   "files": {
+    "findings.json": "[{\"id\": \"F3\", \"title\": \"Exposed .env file\", \"severity\": \"high\", \"asset\": \"web01\"}, {\"id\": \"F1\", \"title\": \"Weak admin password\", \"severity\": \"critical\", \"asset\": \"web01\"}, {\"id\": \"F2\", \"title\": \"TLS 1.0 enabled\", \"severity\": \"medium\", \"asset\": \"mail01\"}, {\"id\": \"F4\", \"title\": \"<b>Banner</b> disclosure\", \"severity\": \"low\", \"asset\": \"web02\"}]",
+    "bad.json": "[{\"id\": \"X1\", \"title\": \"t\", \"severity\": \"high\"}]"
+   }
+  },
+  {
+   "type": "code",
+   "title": "2) الملخص",
+   "instructions": [
+    "رتب النتائج بالخطورة (critical ثم high ثم medium ثم low) وعند التساوي بالـ id، واطبع JSON مرتب المفاتيح: `total` و`by_severity` و`top` (id أعلى نتيجة)."
+   ],
+   "starter": "# اكتب كودك هنا\nimport json\n",
+   "tests": [
+    {
+     "expect_stdout": "{\"by_severity\": {\"critical\": 1, \"high\": 1, \"low\": 1, \"medium\": 1}, \"top\": \"F1\", \"total\": 4}"
+    }
+   ],
+   "solution": "import json\n\nORDER = {\"critical\": 0, \"high\": 1, \"medium\": 2, \"low\": 3}\n\nwith open(\"findings.json\", encoding=\"utf-8\") as f:\n    items = json.load(f)\nitems.sort(key=lambda i: (ORDER[i[\"severity\"]], i[\"id\"]))\ncounts = {}\nfor i in items:\n    counts[i[\"severity\"]] = counts.get(i[\"severity\"], 0) + 1\nsummary = {\"total\": len(items), \"by_severity\": counts, \"top\": items[0][\"id\"]}\nprint(json.dumps(summary, sort_keys=True))\n",
+   "hints": [
+    "قاموس ORDER للترتيب.",
+    "عدّاد بالخطورة بقاموس."
+   ],
+   "files": {
+    "findings.json": "[{\"id\": \"F3\", \"title\": \"Exposed .env file\", \"severity\": \"high\", \"asset\": \"web01\"}, {\"id\": \"F1\", \"title\": \"Weak admin password\", \"severity\": \"critical\", \"asset\": \"web01\"}, {\"id\": \"F2\", \"title\": \"TLS 1.0 enabled\", \"severity\": \"medium\", \"asset\": \"mail01\"}, {\"id\": \"F4\", \"title\": \"<b>Banner</b> disclosure\", \"severity\": \"low\", \"asset\": \"web02\"}]"
+   }
+  },
+  {
+   "type": "code",
+   "title": "3) تقرير HTML",
+   "instructions": [
+    "اطبع `<table>` ثم صفاً لكل نتيجة مرتبة `<tr><td>id</td><td>severity</td><td>asset</td><td>title</td></tr>` ثم `</table>`، مع **تهريب** كل خلية."
+   ],
+   "starter": "# اكتب كودك هنا\nimport html\nimport json\n",
+   "tests": [
+    {
+     "expect_stdout": "<table>\n<tr><td>F1</td><td>critical</td><td>web01</td><td>Weak admin password</td></tr>\n<tr><td>F3</td><td>high</td><td>web01</td><td>Exposed .env file</td></tr>\n<tr><td>F2</td><td>medium</td><td>mail01</td><td>TLS 1.0 enabled</td></tr>\n<tr><td>F4</td><td>low</td><td>web02</td><td>&lt;b&gt;Banner&lt;/b&gt; disclosure</td></tr>\n</table>"
+    }
+   ],
+   "solution": "import html\nimport json\n\nORDER = {\"critical\": 0, \"high\": 1, \"medium\": 2, \"low\": 3}\n\nwith open(\"findings.json\", encoding=\"utf-8\") as f:\n    items = json.load(f)\nitems.sort(key=lambda i: (ORDER[i[\"severity\"]], i[\"id\"]))\nprint(\"<table>\")\nfor i in items:\n    cells = [i[\"id\"], i[\"severity\"], i[\"asset\"], i[\"title\"]]\n    print(\"<tr>\" + \"\".join(\"<td>\" + html.escape(c) + \"</td>\" for c in cells) + \"</tr>\")\nprint(\"</table>\")\n",
+   "hints": [
+    "استخدم `html.escape` لكل خلية.",
+    "انتبه: عنوان F4 فيه وسوم HTML."
+   ],
+   "checks": [
+    {
+     "regex": "escape",
+     "msg": "هرّب القيم"
+    }
+   ],
+   "files": {
+    "findings.json": "[{\"id\": \"F3\", \"title\": \"Exposed .env file\", \"severity\": \"high\", \"asset\": \"web01\"}, {\"id\": \"F1\", \"title\": \"Weak admin password\", \"severity\": \"critical\", \"asset\": \"web01\"}, {\"id\": \"F2\", \"title\": \"TLS 1.0 enabled\", \"severity\": \"medium\", \"asset\": \"mail01\"}, {\"id\": \"F4\", \"title\": \"<b>Banner</b> disclosure\", \"severity\": \"low\", \"asset\": \"web02\"}]"
+   }
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نهرّب النصوص في HTML؟",
+     "options": [
+      "قد تحتوي نتائج الأدوات كوداً خبيثاً",
+      "لتصغير الحجم",
+      "للغة العربية"
+     ],
+     "answer": 0,
+     "why": "XSS في التقرير."
+    },
+    {
+     "q": "ليش نتحقق من الحقول أولاً؟",
+     "options": [
+      "لنفشل مبكراً برسالة واضحة",
+      "لتسريع البرنامج",
+      "لا حاجة"
+     ],
+     "answer": 0,
+     "why": "بدل انهيار غامض لاحقاً."
+    },
+    {
+     "q": "ما أول ما يقرأه المدير؟",
+     "options": [
+      "الملخص التنفيذي",
+      "التفاصيل التقنية",
+      "الكود"
+     ],
+     "answer": 0,
+     "why": "ثم الأولويات."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "تحققنا من البيانات ثم لخصناها.",
+    "رتبنا بالخطورة بمفتاح ترتيب ثابت.",
+    "هرّبنا كل ناتج HTML."
+   ]
+  }
+ ]
+}

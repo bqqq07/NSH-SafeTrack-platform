@@ -1,0 +1,199 @@
+{
+ "title_ar": "مدير باسوردات (تخزين آمن)",
+ "title_en": "Password Vault",
+ "duration_min": 25,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🗝️",
+   "goal": "تبني مدير كلمات مرور: ماستر باسورد محمي، وعرض مقنّع، وتوقيع يكشف العبث بالتخزين."
+  },
+  {
+   "type": "text",
+   "title": "مواصفات المشروع",
+   "body": [
+    "**المراحل:** (1) التحقق من الماستر باسورد بدون تخزينه (تمطيط + ملح)، (2) مخزن عناصر بأوامر `add` و`show` و`list` مع إخفاء كلمة المرور في العرض، (3) إغلاق التخزين بتوقيع HMAC يكشف أي تعديل.",
+    "**ملاحظة:** التشفير الحقيقي بـ Fernet (مكتبة cryptography) غير متاح داخل المتصفح، فنركز هنا على المصادقة والإخفاء وسلامة البيانات. على جهازك أضف Fernet لتشفير محتوى الملف."
+   ],
+   "layer": "🟢 ببساطة"
+  },
+  {
+   "type": "text",
+   "title": "نصائح التصميم",
+   "body": [
+    "لا تخزن الماستر باسورد نفسه، خزّن ناتج KDF فقط.",
+    "لا تطبع كلمات المرور في الشاشة إلا بطلب صريح (`reveal`).",
+    "ما فيه تشفير «ذكي» تصنعه بنفسك؛ استخدم مكتبات مجرّبة."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "ابنِ المشروع على مراحل، واختبر كل مرحلة قبل الانتقال للتالية."
+  },
+  {
+   "type": "code",
+   "title": "1) الماستر باسورد",
+   "instructions": [
+    "اقرأ الماستر ثم محاولة دخول. اصنع `make_verifier(master)` (ملح ثابت `b\"vault-salt\"` وتمطيط sha256 ألف مرة) و`unlock(attempt, verifier)` بمقارنة آمنة، واطبع `unlocked` أو `denied`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport hashlib\nimport hmac\n",
+   "tests": [
+    {
+     "expect_stdout": "unlocked",
+     "stdin": [
+      "s3cret",
+      "s3cret"
+     ]
+    },
+    {
+     "expect_stdout": "denied",
+     "stdin": [
+      "s3cret",
+      "guess"
+     ]
+    },
+    {
+     "expect_stdout": "denied",
+     "stdin": [
+      "a",
+      "A"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import hashlib\nimport hmac\n\nSALT = b\"vault-salt\"\n\ndef make_verifier(master):\n    h = SALT + master.encode(\"utf-8\")\n    for _ in range(1000):\n        h = hashlib.sha256(h).digest()\n    return h.hex()\n\ndef unlock(master, verifier):\n    return hmac.compare_digest(make_verifier(master), verifier)\n\nmaster = input()\nattempt = input()\nv = make_verifier(master)\nprint(\"unlocked\" if unlock(attempt, v) else \"denied\")\n",
+   "hints": [
+    "ابدأ بـ `SALT + master.encode()`.",
+    "`hmac.compare_digest`."
+   ],
+   "checks": [
+    {
+     "regex": "compare_digest",
+     "msg": "استخدم compare_digest"
+    }
+   ],
+   "stdin": [
+    "s3cret",
+    "s3cret"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "2) المخزن والأوامر",
+   "instructions": [
+    "عرّف صنف `Vault` فيه `add(site, user, pw)` (يرفع `ValueError` لو الموقع موجود) و`show(site)` (يعرض `user ******` بنجوم بعدد حروف الكلمة) و`sites()` مرتبة. ثم اقرأ أوامر `add`/`show`/`list`/`exit` من المدخلات."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "saved\nsaved\nsara *****\nbank mail",
+     "stdin": [
+      "add mail sara pw123",
+      "add bank sara x",
+      "show mail",
+      "list",
+      "exit"
+     ]
+    },
+    {
+     "expect_stdout": "saved\nexists\nmissing",
+     "stdin": [
+      "add a b c",
+      "add a b c",
+      "show zzz",
+      "exit"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "class Vault:\n    def __init__(self):\n        self.items = {}\n\n    def add(self, site, user, pw):\n        if site in self.items:\n            raise ValueError(\"exists\")\n        self.items[site] = (user, pw)\n\n    def show(self, site):\n        user, pw = self.items[site]\n        return user + \" \" + \"*\" * len(pw)\n\n    def reveal(self, site):\n        return self.items[site][1]\n\n    def sites(self):\n        return sorted(self.items)\n\nv = Vault()\nwhile True:\n    parts = input().split()\n    if parts[0] == \"exit\":\n        break\n    try:\n        if parts[0] == \"add\":\n            v.add(parts[1], parts[2], parts[3])\n            print(\"saved\")\n        elif parts[0] == \"show\":\n            print(v.show(parts[1]))\n        elif parts[0] == \"list\":\n            print(\" \".join(v.sites()))\n    except ValueError:\n        print(\"exists\")\n    except KeyError:\n        print(\"missing\")\n",
+   "hints": [
+    "`KeyError` يطلع طبيعياً لموقع غير موجود فامسكه.",
+    "`\"*\" * len(pw)`"
+   ],
+   "stdin": [
+    "add mail sara pw123",
+    "show mail",
+    "exit"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "3) ختم السلامة",
+   "instructions": [
+    "عرّف `seal(items)` ترجع `{\"data\": json, \"tag\": hmac}` و`open_sealed(blob)` ترفع `ValueError(\"tampered\")` لو التوقيع لا يطابق. البرنامج يقرأ `normal` أو `tamper` ويطبع أسماء العناصر ثم النتيجة بعد (اختياري) تعديل البيانات."
+   ],
+   "starter": "# اكتب كودك هنا\nimport hashlib\nimport hmac\nimport json\n",
+   "tests": [
+    {
+     "expect_stdout": "['bank', 'mail']\n['bank', 'mail']",
+     "stdin": [
+      "normal"
+     ]
+    },
+    {
+     "expect_stdout": "['bank', 'mail']\ntampered",
+     "stdin": [
+      "tamper"
+     ]
+    }
+   ],
+   "solution": "import hashlib\nimport hmac\nimport json\n\nKEY = b\"integrity-key\"\n\ndef seal(items):\n    data = json.dumps(items, sort_keys=True)\n    tag = hmac.new(KEY, data.encode(\"utf-8\"), \"sha256\").hexdigest()\n    return {\"data\": data, \"tag\": tag}\n\ndef open_sealed(blob):\n    expected = hmac.new(KEY, blob[\"data\"].encode(\"utf-8\"), \"sha256\").hexdigest()\n    if not hmac.compare_digest(expected, blob[\"tag\"]):\n        raise ValueError(\"tampered\")\n    return json.loads(blob[\"data\"])\n\nblob = seal({\"mail\": [\"sara\", \"pw1\"], \"bank\": [\"sara\", \"pw2\"]})\nprint(sorted(open_sealed(blob)))\nmode = input()\nif mode == \"tamper\":\n    blob[\"data\"] = blob[\"data\"].replace(\"pw1\", \"evil\")\ntry:\n    print(sorted(open_sealed(blob)))\nexcept ValueError as e:\n    print(e)\n",
+   "hints": [
+    "`json.dumps(items, sort_keys=True)` ليثبت الترتيب.",
+    "احسب HMAC على نص data."
+   ],
+   "checks": [
+    {
+     "regex": "compare_digest",
+     "msg": "استخدم compare_digest"
+    }
+   ],
+   "stdin": [
+    "normal"
+   ]
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش لا نخزن الماستر باسورد؟",
+     "options": [
+      "لأن تسريبه يكشف كل شيء، نخزن مشتقاً بطيئاً منه",
+      "لتوفير مساحة",
+      "لا فرق"
+     ],
+     "answer": 0,
+     "why": "KDF + ملح."
+    },
+    {
+     "q": "وش تضمن HMAC على الملف؟",
+     "options": [
+      "كشف أي تعديل بدون المفتاح",
+      "تشفير المحتوى",
+      "ضغطه"
+     ],
+     "answer": 0,
+     "why": "سلامة وأصالة، لا سرية."
+    },
+    {
+     "q": "أين التشفير الفعلي؟",
+     "options": [
+      "مكتبة جاهزة مثل Fernet على جهازك",
+      "خوارزمية نكتبها",
+      "base64"
+     ],
+     "answer": 0,
+     "why": "لا نخترع التشفير."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "الماستر باسورد: تمطيط وملح ومقارنة آمنة.",
+    "العرض مقنّع والكشف بطلب صريح.",
+    "HMAC يكشف العبث، والتشفير يأتي من مكتبة مجرّبة."
+   ]
+  }
+ ]
+}

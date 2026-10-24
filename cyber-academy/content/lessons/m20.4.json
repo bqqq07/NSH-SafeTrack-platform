@@ -1,0 +1,158 @@
+{
+ "title_ar": "محلل حزم من ملف",
+ "title_en": "Packet File Analyzer",
+ "duration_min": 25,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "📦",
+   "goal": "تحلل ملف التقاط حزم مبسّط (قراءة فقط) وتكتشف أنماطاً مثل أكثر المتحدثين ومحاولة مسح منافذ."
+  },
+  {
+   "type": "text",
+   "title": "مواصفات المشروع",
+   "body": [
+    "**المدخل:** ملف `capture.csv` تدريبي، كل سطر حزمة: `ts,src,dst,proto,dport,size`. (نحاكي ملف pcap بنص بسيط؛ لا توجد شبكة حقيقية هنا.)",
+    "**المراحل:** (1) تحميل الصفوف لقواميس، (2) إحصاءات البروتوكولات وأكبر المرسلين حجماً، (3) كشف مسح المنافذ: مصدر اتصل بمنافذ TCP **متعددة مختلفة** على نفس الهدف.",
+    "التحليل السلبي (قراءة ملف) آمن وقانوني، وهو عمل محللي الاستجابة والـ SOC."
+   ],
+   "layer": "🟢 ببساطة"
+  },
+  {
+   "type": "text",
+   "title": "نصائح التصميم",
+   "body": [
+    "مسح المنافذ يظهر كعدد كبير من المنافذ المختلفة من مصدر واحد في وقت قصير.",
+    "استخدم `set` لكل مصدر لعدّ المنافذ الفريدة.",
+    "في الواقع تقرأ pcap بمكتبات مثل scapy أو dpkt، والمنطق نفسه."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "ابنِ المشروع على مراحل، واختبر كل مرحلة قبل الانتقال للتالية."
+  },
+  {
+   "type": "code",
+   "title": "1) التحميل",
+   "instructions": [
+    "عرّف `load(path)` ترجع قائمة قواميس (`ts` و`port` و`size` أرقام). ثم اطبع: عدد الحزم، مصدر أول حزمة، ومجموع الأحجام."
+   ],
+   "starter": "# اكتب كودك هنا\nimport csv\n",
+   "tests": [
+    {
+     "expect_stdout": "9 10.0.0.5 2034"
+    }
+   ],
+   "solution": "import csv\n\ndef load(path):\n    rows = []\n    with open(path, encoding=\"utf-8\", newline=\"\") as f:\n        for ts, src, dst, proto, port, size in csv.reader(f):\n            rows.append({\"ts\": int(ts), \"src\": src, \"dst\": dst, \"proto\": proto, \"port\": int(port), \"size\": int(size)})\n    return rows\n\nrows = load(\"capture.csv\")\nprint(len(rows), rows[0][\"src\"], sum(r[\"size\"] for r in rows))\n",
+   "hints": [
+    "`csv.reader` تعطي 6 قيم لكل صف.",
+    "حوّل الأرقام بـ `int`."
+   ],
+   "files": {
+    "capture.csv": "1,10.0.0.5,10.0.0.100,TCP,22,60\n2,10.0.0.5,10.0.0.100,TCP,23,60\n3,10.0.0.5,10.0.0.100,TCP,80,60\n4,10.0.0.7,10.0.0.100,UDP,53,80\n5,10.0.0.5,10.0.0.100,TCP,443,60\n6,10.0.0.5,10.0.0.100,TCP,3306,60\n7,10.0.0.7,10.0.0.100,TCP,443,1500\n8,10.0.0.7,10.0.0.100,UDP,53,90\n9,10.0.0.8,10.0.0.100,ICMP,0,64\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "2) الإحصاءات",
+   "instructions": [
+    "اطبع قسم `PROTOCOLS` (عدد كل بروتوكول مرتباً أبجدياً) ثم قسم `TOP TALKERS` (أكبر مصدرين مجموع حجم، تنازلياً)."
+   ],
+   "starter": "# اكتب كودك هنا\nimport csv\nfrom collections import Counter\n",
+   "tests": [
+    {
+     "expect_stdout": "PROTOCOLS\nICMP: 1\nTCP: 6\nUDP: 2\nTOP TALKERS\n10.0.0.7: 1670\n10.0.0.5: 300"
+    }
+   ],
+   "solution": "import csv\nfrom collections import Counter\n\ndef load(path):\n    rows = []\n    with open(path, encoding=\"utf-8\", newline=\"\") as f:\n        for ts, src, dst, proto, port, size in csv.reader(f):\n            rows.append({\"ts\": int(ts), \"src\": src, \"dst\": dst, \"proto\": proto, \"port\": int(port), \"size\": int(size)})\n    return rows\n\nrows = load(\"capture.csv\")\nprint(\"PROTOCOLS\")\nprotos = Counter(r[\"proto\"] for r in rows)\nfor p in sorted(protos):\n    print(p + \": \" + str(protos[p]))\nprint(\"TOP TALKERS\")\ntalkers = Counter()\nfor r in rows:\n    talkers[r[\"src\"]] += r[\"size\"]\nfor ip, total in sorted(talkers.items(), key=lambda kv: (-kv[1], kv[0]))[:2]:\n    print(ip + \": \" + str(total))\n",
+   "hints": [
+    "Counter للبروتوكولات.",
+    "اجمع الحجم لكل مصدر ورتب بمفتاح `(-total, ip)`."
+   ],
+   "files": {
+    "capture.csv": "1,10.0.0.5,10.0.0.100,TCP,22,60\n2,10.0.0.5,10.0.0.100,TCP,23,60\n3,10.0.0.5,10.0.0.100,TCP,80,60\n4,10.0.0.7,10.0.0.100,UDP,53,80\n5,10.0.0.5,10.0.0.100,TCP,443,60\n6,10.0.0.5,10.0.0.100,TCP,3306,60\n7,10.0.0.7,10.0.0.100,TCP,443,1500\n8,10.0.0.7,10.0.0.100,UDP,53,90\n9,10.0.0.8,10.0.0.100,ICMP,0,64\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "3) كشف المسح",
+   "instructions": [
+    "اقرأ `limit` (أقل عدد منافذ TCP مختلفة لاعتبار المصدر مشتبهاً) واطبع `SCAN SUSPECT ip ports=n` لكل مصدر مشتبه مرتباً، أو `no scan detected`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport csv\n",
+   "tests": [
+    {
+     "expect_stdout": "SCAN SUSPECT 10.0.0.5 ports=5",
+     "stdin": [
+      "4"
+     ]
+    },
+    {
+     "expect_stdout": "no scan detected",
+     "stdin": [
+      "6"
+     ]
+    },
+    {
+     "expect_stdout": "SCAN SUSPECT 10.0.0.5 ports=5",
+     "stdin": [
+      "2"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import csv\n\ndef load(path):\n    rows = []\n    with open(path, encoding=\"utf-8\", newline=\"\") as f:\n        for ts, src, dst, proto, port, size in csv.reader(f):\n            rows.append({\"ts\": int(ts), \"src\": src, \"dst\": dst, \"proto\": proto, \"port\": int(port), \"size\": int(size)})\n    return rows\n\nlimit = int(input())\nrows = load(\"capture.csv\")\nports = {}\nfor r in rows:\n    if r[\"proto\"] == \"TCP\":\n        ports.setdefault(r[\"src\"], set()).add(r[\"port\"])\nfound = [ip for ip in sorted(ports) if len(ports[ip]) >= limit]\nif found:\n    for ip in found:\n        print(\"SCAN SUSPECT \" + ip + \" ports=\" + str(len(ports[ip])))\nelse:\n    print(\"no scan detected\")\n",
+   "hints": [
+    "اعدّ المنافذ الفريدة لكل مصدر من حزم TCP فقط."
+   ],
+   "stdin": [
+    "4"
+   ],
+   "files": {
+    "capture.csv": "1,10.0.0.5,10.0.0.100,TCP,22,60\n2,10.0.0.5,10.0.0.100,TCP,23,60\n3,10.0.0.5,10.0.0.100,TCP,80,60\n4,10.0.0.7,10.0.0.100,UDP,53,80\n5,10.0.0.5,10.0.0.100,TCP,443,60\n6,10.0.0.5,10.0.0.100,TCP,3306,60\n7,10.0.0.7,10.0.0.100,TCP,443,1500\n8,10.0.0.7,10.0.0.100,UDP,53,90\n9,10.0.0.8,10.0.0.100,ICMP,0,64\n"
+   }
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "كيف يظهر مسح المنافذ في الحزم؟",
+     "options": [
+      "مصدر واحد يطرق منافذ كثيرة مختلفة",
+      "مصدر يرسل حزمة كبيرة",
+      "حزم UDP فقط"
+     ],
+     "answer": 0,
+     "why": "عدد المنافذ الفريدة."
+    },
+    {
+     "q": "ليش القراءة من ملف أأمن من التقاط حي؟",
+     "options": [
+      "لا نتفاعل مع شبكة فعلية ولا نحتاج صلاحيات",
+      "أسرع دائماً",
+      "لا فرق"
+     ],
+     "answer": 0,
+     "why": "تحليل جنائي بعد الحدث."
+    },
+    {
+     "q": "وش يعني حجم الحزم الكبير من مصدر؟",
+     "options": [
+      "قد يدل على نقل بيانات كبير ويستحق المراجعة",
+      "هجوم مؤكد",
+      "لا شيء"
+     ],
+     "answer": 0,
+     "why": "مؤشر لا دليل."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "حملنا الحزم لقواميس.",
+    "أحصينا البروتوكولات وأكبر المتحدثين.",
+    "كشفنا مسح المنافذ بعدّ المنافذ الفريدة لكل مصدر."
+   ]
+  }
+ ]
+}

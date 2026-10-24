@@ -1,0 +1,200 @@
+{
+ "title_ar": "بوت تذكير",
+ "title_en": "Reminder Bot",
+ "duration_min": 25,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "⏰",
+   "goal": "تبني بوت تذكير لمهام الصيانة الأمنية الدورية (تحديثات، تدوير مفاتيح) بجدولة بسيطة."
+  },
+  {
+   "type": "text",
+   "title": "مواصفات المشروع",
+   "body": [
+    "**المدخل:** `tasks.json` فيه مهام: `name` و`due` (تاريخ الاستحقاق) و`every_days` (التكرار بالأيام، 0 = مرة وحدة).",
+    "**المراحل:** (1) إيجاد المهام المستحقة في تاريخ اليوم (المُمرَّر كمدخل لسهولة الاختبار)، (2) حساب الموعد القادم للمهمة الدورية، (3) رسالة التذكير الكاملة: المتأخر بالأيام والموعد القادم.",
+    "التقويم والوقت مصدر أخطاء شائع؛ استخدم `date` و`timedelta` ولا تحسب الأيام يدوياً."
+   ],
+   "layer": "🟢 ببساطة"
+  },
+  {
+   "type": "text",
+   "title": "نصائح التصميم",
+   "body": [
+    "مرّر «تاريخ اليوم» كمعامل لا تقرأه من الساعة داخل الدالة؛ هذا يجعل الاختبار ممكناً.",
+    "`date.fromisoformat(\"2025-01-10\")`",
+    "في الواقع تشغّله بجدولة النظام (cron / Task Scheduler) وترسل البريد."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "ابنِ المشروع على مراحل، واختبر كل مرحلة قبل الانتقال للتالية."
+  },
+  {
+   "type": "code",
+   "title": "1) المهام المستحقة",
+   "instructions": [
+    "اقرأ تاريخ اليوم (`YYYY-MM-DD`) من المدخلات واطبع `DUE تاريخ الاسم` لكل مهمة موعدها اليوم أو قبله مرتبة بالتاريخ ثم الاسم، أو `nothing due`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport json\nfrom datetime import date\n",
+   "tests": [
+    {
+     "expect_stdout": "DUE 2025-01-03 rotate keys\nDUE 2025-01-05 review firewall",
+     "stdin": [
+      "2025-01-06"
+     ]
+    },
+    {
+     "expect_stdout": "DUE 2025-01-03 rotate keys\nDUE 2025-01-05 review firewall\nDUE 2025-01-10 patch servers",
+     "stdin": [
+      "2025-01-20"
+     ]
+    },
+    {
+     "expect_stdout": "nothing due",
+     "stdin": [
+      "2024-12-01"
+     ]
+    }
+   ],
+   "solution": "import json\nfrom datetime import date\n\ndef due_tasks(tasks, today):\n    result = [t for t in tasks if date.fromisoformat(t[\"due\"]) <= today]\n    return sorted(result, key=lambda t: (t[\"due\"], t[\"name\"]))\n\ntoday = date.fromisoformat(input())\nwith open(\"tasks.json\", encoding=\"utf-8\") as f:\n    tasks = json.load(f)\noverdue = due_tasks(tasks, today)\nif overdue:\n    for t in overdue:\n        print(\"DUE \" + t[\"due\"] + \" \" + t[\"name\"])\nelse:\n    print(\"nothing due\")\n",
+   "hints": [
+    "حوّل النصوص لتواريخ بـ `fromisoformat`.",
+    "قارن التواريخ مباشرة."
+   ],
+   "stdin": [
+    "2025-01-06"
+   ],
+   "files": {
+    "tasks.json": "[{\"name\": \"patch servers\", \"due\": \"2025-01-10\", \"every_days\": 30}, {\"name\": \"rotate keys\", \"due\": \"2025-01-03\", \"every_days\": 90}, {\"name\": \"review firewall\", \"due\": \"2025-01-05\", \"every_days\": 0}, {\"name\": \"backup test\", \"due\": \"2025-02-01\", \"every_days\": 7}]"
+   }
+  },
+  {
+   "type": "code",
+   "title": "2) الموعد القادم",
+   "instructions": [
+    "اقرأ `due` ثم `every_days` ثم تاريخ اليوم، واطبع أول موعد دوري **بعد اليوم** (`YYYY-MM-DD`) أو `None` لو المهمة غير دورية (`every_days` = 0)."
+   ],
+   "starter": "# اكتب كودك هنا\nfrom datetime import date, timedelta\n",
+   "tests": [
+    {
+     "expect_stdout": "2025-04-03",
+     "stdin": [
+      "2025-01-03",
+      "90",
+      "2025-01-06"
+     ]
+    },
+    {
+     "expect_stdout": "None",
+     "stdin": [
+      "2025-01-05",
+      "0",
+      "2025-01-06"
+     ]
+    },
+    {
+     "expect_stdout": "2025-01-22",
+     "stdin": [
+      "2025-01-01",
+      "7",
+      "2025-01-20"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "from datetime import date, timedelta\n\ndef next_due(due, every_days, today):\n    d = date.fromisoformat(due)\n    if every_days <= 0:\n        return None\n    while d <= today:\n        d = d + timedelta(days=every_days)\n    return d.isoformat()\n\ndue = input()\nevery = int(input())\ntoday = input()\nprint(next_due(due, every, date.fromisoformat(today)))\n",
+   "hints": [
+    "أضف `timedelta(days=every)` حتى يتجاوز اليوم."
+   ],
+   "stdin": [
+    "2025-01-03",
+    "90",
+    "2025-01-06"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "3) البوت الكامل",
+   "instructions": [
+    "لكل مهمة مستحقة (مرتبة بالتاريخ ثم الاسم) اطبع: `OVERDUE الاسم by Nd next=الموعد القادم` (N = أيام التأخير). وإن لم يوجد: `nothing due`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport json\nfrom datetime import date, timedelta\n",
+   "tests": [
+    {
+     "expect_stdout": "OVERDUE rotate keys by 3d next=2025-04-03\nOVERDUE review firewall by 1d next=None",
+     "stdin": [
+      "2025-01-06"
+     ]
+    },
+    {
+     "expect_stdout": "OVERDUE rotate keys by 31d next=2025-04-03\nOVERDUE review firewall by 29d next=None\nOVERDUE patch servers by 24d next=2025-02-09\nOVERDUE backup test by 2d next=2025-02-08",
+     "stdin": [
+      "2025-02-03"
+     ]
+    },
+    {
+     "expect_stdout": "nothing due",
+     "stdin": [
+      "2024-12-31"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import json\nfrom datetime import date, timedelta\n\ndef next_due(due, every_days, today):\n    d = date.fromisoformat(due)\n    if every_days <= 0:\n        return None\n    while d <= today:\n        d = d + timedelta(days=every_days)\n    return d.isoformat()\n\ntoday = date.fromisoformat(input())\nwith open(\"tasks.json\", encoding=\"utf-8\") as f:\n    tasks = json.load(f)\nlines = []\nfor t in sorted(tasks, key=lambda t: (t[\"due\"], t[\"name\"])):\n    d = date.fromisoformat(t[\"due\"])\n    if d <= today:\n        days = (today - d).days\n        nxt = next_due(t[\"due\"], t[\"every_days\"], today)\n        lines.append(\"OVERDUE \" + t[\"name\"] + \" by \" + str(days) + \"d next=\" + str(nxt))\nprint(\"\\n\".join(lines) if lines else \"nothing due\")\n",
+   "hints": [
+    "استخدم `(today - d).days`.",
+    "أعد استخدام `next_due`."
+   ],
+   "stdin": [
+    "2025-01-06"
+   ],
+   "files": {
+    "tasks.json": "[{\"name\": \"patch servers\", \"due\": \"2025-01-10\", \"every_days\": 30}, {\"name\": \"rotate keys\", \"due\": \"2025-01-03\", \"every_days\": 90}, {\"name\": \"review firewall\", \"due\": \"2025-01-05\", \"every_days\": 0}, {\"name\": \"backup test\", \"due\": \"2025-02-01\", \"every_days\": 7}]"
+   }
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نمرر تاريخ اليوم كمعامل؟",
+     "options": [
+      "ليسهل اختبار الدالة بتواريخ محددة",
+      "لتسريعها",
+      "ضرورة لغوية"
+     ],
+     "answer": 0,
+     "why": "الاعتماد على الساعة يصعّب الاختبار."
+    },
+    {
+     "q": "وش يسوي timedelta(days=30)؟",
+     "options": [
+      "يمثل فترة 30 يوماً تُضاف لتاريخ",
+      "يحذف تاريخاً",
+      "يطبع التاريخ"
+     ],
+     "answer": 0,
+     "why": "حساب التواريخ."
+    },
+    {
+     "q": "كيف نشغّل البوت دورياً؟",
+     "options": [
+      "cron أو جدولة النظام",
+      "حلقة لا تنتهي في المحرر",
+      "يدوياً فقط"
+     ],
+     "answer": 0,
+     "why": "الجدولة خارج البرنامج."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "حسبنا المستحق بمقارنة التواريخ.",
+    "حسبنا الموعد الدوري القادم بـ timedelta.",
+    "ركّبنا رسالة التذكير الكاملة."
+   ]
+  }
+ ]
+}

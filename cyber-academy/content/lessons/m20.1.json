@@ -1,0 +1,165 @@
+{
+ "title_ar": "مراقب سجلات",
+ "title_en": "Log Monitor",
+ "duration_min": 25,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "📡",
+   "goal": "تبني مراقب سجلات يقرأ ملف الدخول ويرسل تنبيهاً عند اكتشاف تخمين (فشل متكرر في وقت قصير)."
+  },
+  {
+   "type": "text",
+   "title": "مواصفات المشروع",
+   "body": [
+    "**المدخل:** ملف `auth.log` كل سطر: `التاريخ الوقت FAIL|OK IP المستخدم`.",
+    "**المطلوب:** (1) تحليل السطور لقواميس بوقت حقيقي، (2) رصد العناوين اللي تتجاوز `limit` فشل خلال `window` ثانية، (3) برنامج كامل يقرأ الحدّين من المدخلات ويطبع `ALERT ip failures=n` أو `all clear`.",
+    "هذا مشروع ختامي: تجمع فيه الملفات والتواريخ والقواميس والدوال."
+   ],
+   "layer": "🟢 ببساطة"
+  },
+  {
+   "type": "text",
+   "title": "نصائح التصميم",
+   "body": [
+    "استخدم `datetime.strptime` لتحويل النص لوقت، والفرق `.total_seconds()`.",
+    "افصل المنطق في دوال (`parse`, `burst_ips`) لتسهل إعادة استخدامها واختبارها.",
+    "في الواقع ترسل التنبيه بالبريد أو Slack؛ هنا نطبعه."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "ابنِ المشروع على مراحل، واختبر كل مرحلة قبل الانتقال للتالية."
+  },
+  {
+   "type": "code",
+   "title": "1) تحليل السطور",
+   "instructions": [
+    "`auth.log` جاهز. عرّف `parse(line)` ترجع قاموساً `ts` (datetime) و`ok` (bool) و`ip` و`user`. ثم اقرأ الملف واطبع: عدد السطور، IP أول سطر، وهل السطر الثالث ناجح: مثال `7 10.0.0.5 True`."
+   ],
+   "starter": "# اكتب كودك هنا\nfrom datetime import datetime\n",
+   "tests": [
+    {
+     "expect_stdout": "7 10.0.0.5 True"
+    }
+   ],
+   "solution": "from datetime import datetime\n\ndef parse(line):\n    date, time, status, ip, user = line.split()\n    ts = datetime.strptime(date + \" \" + time, \"%Y-%m-%d %H:%M:%S\")\n    return {\"ts\": ts, \"ok\": status == \"OK\", \"ip\": ip, \"user\": user}\n\nwith open(\"auth.log\", encoding=\"utf-8\") as f:\n    rows = [parse(l) for l in f if l.strip()]\nprint(len(rows), rows[0][\"ip\"], rows[2][\"ok\"])\n",
+   "hints": [
+    "`line.split()` تعطي 5 حقول.",
+    "`datetime.strptime(..., \"%Y-%m-%d %H:%M:%S\")`"
+   ],
+   "files": {
+    "auth.log": "2025-01-05 10:00:00 FAIL 10.0.0.5 root\n2025-01-05 10:00:04 FAIL 10.0.0.5 admin\n2025-01-05 10:00:09 OK 10.0.0.2 sara\n2025-01-05 10:00:12 FAIL 10.0.0.5 test\n2025-01-05 10:05:00 FAIL 10.0.0.9 sara\n2025-01-05 10:09:00 FAIL 10.0.0.9 sara\n2025-01-05 10:09:03 FAIL 10.0.0.9 sara\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "2) رصد الدفعات",
+   "instructions": [
+    "أكمل: عرّف `burst_ips(rows, limit, window)` ترجع قائمة مرتبة بعناوين IP اللي فشلت `limit` مرات أو أكثر خلال `window` ثانية (فشل متتالٍ ضمن النافذة). اختبرها بحد 3 ونافذة 60."
+   ],
+   "starter": "# اكتب كودك هنا\nfrom datetime import datetime\n",
+   "tests": [
+    {
+     "expect_stdout": "['10.0.0.5']"
+    }
+   ],
+   "solution": "from datetime import datetime\n\ndef parse(line):\n    date, time, status, ip, user = line.split()\n    ts = datetime.strptime(date + \" \" + time, \"%Y-%m-%d %H:%M:%S\")\n    return {\"ts\": ts, \"ok\": status == \"OK\", \"ip\": ip, \"user\": user}\n\ndef burst_ips(rows, limit, window):\n    times = {}\n    for r in rows:\n        if not r[\"ok\"]:\n            times.setdefault(r[\"ip\"], []).append(r[\"ts\"])\n    bad = []\n    for ip, ts in times.items():\n        ts.sort()\n        for i in range(len(ts) - limit + 1):\n            if (ts[i + limit - 1] - ts[i]).total_seconds() <= window:\n                bad.append(ip)\n                break\n    return sorted(bad)\n\nwith open(\"auth.log\", encoding=\"utf-8\") as f:\n    rows = [parse(l) for l in f if l.strip()]\nprint(burst_ips(rows, 3, 60))\n",
+   "hints": [
+    "اجمع أوقات الفشل لكل IP ورتبها.",
+    "قارن أول وآخر فشل ضمن كل مجموعة متتالية."
+   ],
+   "files": {
+    "auth.log": "2025-01-05 10:00:00 FAIL 10.0.0.5 root\n2025-01-05 10:00:04 FAIL 10.0.0.5 admin\n2025-01-05 10:00:09 OK 10.0.0.2 sara\n2025-01-05 10:00:12 FAIL 10.0.0.5 test\n2025-01-05 10:05:00 FAIL 10.0.0.9 sara\n2025-01-05 10:09:00 FAIL 10.0.0.9 sara\n2025-01-05 10:09:03 FAIL 10.0.0.9 sara\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "3) المراقب الكامل",
+   "instructions": [
+    "اكتمل البرنامج: اقرأ `limit` ثم `window` من المدخلات وطبّق الدالتين، واطبع لكل IP مشبوه `ALERT ip failures=n` (عدد كل فشله)، أو `all clear`. جرّب أكثر من إعداد."
+   ],
+   "starter": "# اكتب كودك هنا\nfrom datetime import datetime\n",
+   "tests": [
+    {
+     "expect_stdout": "ALERT 10.0.0.5 failures=3",
+     "label": "حد 3 ونافذة 60",
+     "stdin": [
+      "3",
+      "60"
+     ]
+    },
+    {
+     "expect_stdout": "all clear",
+     "label": "حد أعلى",
+     "stdin": [
+      "5",
+      "60"
+     ]
+    },
+    {
+     "expect_stdout": "ALERT 10.0.0.5 failures=3\nALERT 10.0.0.9 failures=3",
+     "stdin": [
+      "2",
+      "10"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "from datetime import datetime\n\ndef parse(line):\n    date, time, status, ip, user = line.split()\n    ts = datetime.strptime(date + \" \" + time, \"%Y-%m-%d %H:%M:%S\")\n    return {\"ts\": ts, \"ok\": status == \"OK\", \"ip\": ip, \"user\": user}\n\ndef burst_ips(rows, limit, window):\n    times = {}\n    for r in rows:\n        if not r[\"ok\"]:\n            times.setdefault(r[\"ip\"], []).append(r[\"ts\"])\n    bad = []\n    for ip, ts in times.items():\n        ts.sort()\n        for i in range(len(ts) - limit + 1):\n            if (ts[i + limit - 1] - ts[i]).total_seconds() <= window:\n                bad.append(ip)\n                break\n    return sorted(bad)\n\nlimit = int(input())\nwindow = int(input())\nwith open(\"auth.log\", encoding=\"utf-8\") as f:\n    rows = [parse(l) for l in f if l.strip()]\nbad = burst_ips(rows, limit, window)\nif bad:\n    for ip in bad:\n        n = sum(1 for r in rows if r[\"ip\"] == ip and not r[\"ok\"])\n        print(\"ALERT \" + ip + \" failures=\" + str(n))\nelse:\n    print(\"all clear\")\n",
+   "hints": [
+    "أعد استخدام `parse` و`burst_ips`.",
+    "عدّ فشل كل IP المنبّه عنه."
+   ],
+   "stdin": [
+    "3",
+    "60"
+   ],
+   "files": {
+    "auth.log": "2025-01-05 10:00:00 FAIL 10.0.0.5 root\n2025-01-05 10:00:04 FAIL 10.0.0.5 admin\n2025-01-05 10:00:09 OK 10.0.0.2 sara\n2025-01-05 10:00:12 FAIL 10.0.0.5 test\n2025-01-05 10:05:00 FAIL 10.0.0.9 sara\n2025-01-05 10:09:00 FAIL 10.0.0.9 sara\n2025-01-05 10:09:03 FAIL 10.0.0.9 sara\n"
+   }
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نستخدم نافذة زمنية؟",
+     "options": [
+      "لتقليل الإنذارات الكاذبة",
+      "لتسريع القراءة",
+      "لحذف السجل"
+     ],
+     "answer": 0,
+     "why": "مجرد عدد الفشل الكلي لا يكفي."
+    },
+    {
+     "q": "وش نستخدم لحساب الفرق بين وقتين؟",
+     "options": [
+      "total_seconds()",
+      "len()",
+      "split()"
+     ],
+     "answer": 0,
+     "why": "من فرق datetime."
+    },
+    {
+     "q": "وش الدفاع الفعلي بعد التنبيه؟",
+     "options": [
+      "حظر مؤقت وقفل وMFA",
+      "تجاهل",
+      "حذف الحساب"
+     ],
+     "answer": 0,
+     "why": "التنبيه بداية الاستجابة."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "حللنا السجل لقواميس بأوقات حقيقية.",
+    "رصدنا الدفعات بنافذة زمنية.",
+    "جمعنا الأجزاء في مراقب كامل."
+   ]
+  }
+ ]
+}

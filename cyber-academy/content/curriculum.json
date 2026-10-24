@@ -1130,49 +1130,49 @@
      "id": "m20.1",
      "title_ar": "مراقب سجلات",
      "title_en": "Log Monitor",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m20.2",
      "title_ar": "مدير باسوردات مشفّر",
      "title_en": "Password Vault",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m20.3",
      "title_ar": "فاحص سلامة الملفات",
      "title_en": "Integrity Checker",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m20.4",
      "title_ar": "محلل حزم من ملف",
      "title_en": "Packet File Analyzer",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m20.5",
      "title_ar": "مولّد تقارير أمنية",
      "title_en": "Report Generator",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m20.6",
      "title_ar": "مستخرج IOC",
      "title_en": "IOC Extractor",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m20.7",
      "title_ar": "بوت تذكير",
      "title_en": "Reminder Bot",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m20.8",
      "title_ar": "لعبة CTF",
      "title_en": "Build a CTF",
-     "ready": false
+     "ready": true
     }
    ]
   }

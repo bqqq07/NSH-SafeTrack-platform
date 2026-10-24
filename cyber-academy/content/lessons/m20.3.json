@@ -1,0 +1,153 @@
+{
+ "title_ar": "فاحص سلامة الملفات",
+ "title_en": "Integrity Checker",
+ "duration_min": 25,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🧾",
+   "goal": "تبني أداة تأخذ لقطة (بصمات) لمجموعة ملفات وتقارنها لاحقاً بالأصل لتكشف الإضافة والحذف والتعديل."
+  },
+  {
+   "type": "text",
+   "title": "مواصفات المشروع",
+   "body": [
+    "**المراحل:** (1) `snapshot` يحسب SHA-256 لكل ملف، (2) `compare(old, new)` يرجع المضاف والمحذوف والمعدّل، (3) الأداة الكاملة تقرأ `baseline.json` وتطبع تقريراً.",
+    "هذا مبدأ أدوات مثل Tripwire وAIDE لمراقبة ملفات النظام.",
+    "الملفات التدريبية: `a.txt` و`b.txt` و`d.txt` و`baseline.json` (اللقطة الأصلية: a وb وc)."
+   ],
+   "layer": "🟢 ببساطة"
+  },
+  {
+   "type": "text",
+   "title": "نصائح التصميم",
+   "body": [
+    "افتح الملفات بالوضع الثنائي `rb`.",
+    "استخدم عمليات المجموعات (`-` و`&`) للمقارنة.",
+    "ثبّت ترتيب المخرجات ليسهل مقارنتها."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "ابنِ المشروع على مراحل، واختبر كل مرحلة قبل الانتقال للتالية."
+  },
+  {
+   "type": "code",
+   "title": "1) اللقطة",
+   "instructions": [
+    "عرّف `snapshot(names)` ترجع قاموس اسم ← SHA-256 (hex). ثم اطبع لكل ملف من `a.txt`, `b.txt`, `d.txt` سطراً: `الاسم أول 8 خانات`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport hashlib\n",
+   "tests": [
+    {
+     "expect_stdout": "a.txt 8ed3f6ad\nb.txt 21e8984b\nd.txt 4f4a9410"
+    }
+   ],
+   "solution": "import hashlib\n\ndef snapshot(names):\n    result = {}\n    for name in names:\n        with open(name, \"rb\") as f:\n            result[name] = hashlib.sha256(f.read()).hexdigest()\n    return result\n\nsnap = snapshot([\"a.txt\", \"b.txt\", \"d.txt\"])\nfor name in sorted(snap):\n    print(name, snap[name][:8])\n",
+   "hints": [
+    "`open(name, \"rb\")`",
+    "خزّن `hexdigest()` في القاموس."
+   ],
+   "files": {
+    "a.txt": "alpha",
+    "b.txt": "BRAVO!",
+    "d.txt": "delta",
+    "baseline.json": "{\"a.txt\": \"8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8\", \"b.txt\": \"f144a6907dc4284d1f9fe6a7d9b9ff53c02c1d07ba68f24d413d7ff7f757a782\", \"c.txt\": \"b9dd960c1753459a78115d3cb845a57d924b6877e805b08bd01086ccdf34433c\"}"
+   }
+  },
+  {
+   "type": "code",
+   "title": "2) المقارنة",
+   "instructions": [
+    "عرّف `compare(old, new)` ترجع ثلاث قوائم مرتبة: المضاف، المحذوف، المعدّل. ثم جرّب على المثال المعطى."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "['d'] ['c'] ['b']"
+    }
+   ],
+   "solution": "def compare(old, new):\n    added = sorted(set(new) - set(old))\n    removed = sorted(set(old) - set(new))\n    modified = sorted(n for n in set(old) & set(new) if old[n] != new[n])\n    return added, removed, modified\n\nold = {\"a\": \"1\", \"b\": \"2\", \"c\": \"3\"}\nnew = {\"a\": \"1\", \"b\": \"9\", \"d\": \"4\"}\nadded, removed, modified = compare(old, new)\nprint(added, removed, modified)\n",
+   "hints": [
+    "فروق المجموعات بين مفاتيح القاموسين.",
+    "المعدّل: مفتاح مشترك وقيمة مختلفة."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "3) الفاحص الكامل",
+   "instructions": [
+    "اجمع الأجزاء: اقرأ `baseline.json` (اللقطة الأصلية) وقارنها بلقطة الحالة. اطبع `INTEGRITY OK` أو سطراً لكل تغيير: `MODIFIED x` ثم `ADDED x` ثم `REMOVED x`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport hashlib\nimport json\n",
+   "tests": [
+    {
+     "expect_stdout": "MODIFIED b.txt\nADDED d.txt\nREMOVED c.txt"
+    },
+    {
+     "expect_stdout": "INTEGRITY OK",
+     "label": "ملفات سليمة",
+     "files": {
+      "a.txt": "alpha",
+      "b.txt": "bravo",
+      "d.txt": "delta",
+      "baseline.json": "{\"a.txt\": \"8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8\", \"b.txt\": \"f144a6907dc4284d1f9fe6a7d9b9ff53c02c1d07ba68f24d413d7ff7f757a782\", \"d.txt\": \"4f4a9410ffcdf895c4adb880659e9b5c0dd1f23a30790684340b3eaacb045398\"}"
+     }
+    }
+   ],
+   "solution": "import hashlib\nimport json\n\ndef snapshot(names):\n    result = {}\n    for name in names:\n        with open(name, \"rb\") as f:\n            result[name] = hashlib.sha256(f.read()).hexdigest()\n    return result\n\ndef compare(old, new):\n    added = sorted(set(new) - set(old))\n    removed = sorted(set(old) - set(new))\n    modified = sorted(n for n in set(old) & set(new) if old[n] != new[n])\n    return added, removed, modified\n\nwith open(\"baseline.json\", encoding=\"utf-8\") as f:\n    old = json.load(f)\nnew = snapshot([\"a.txt\", \"b.txt\", \"d.txt\"])\nadded, removed, modified = compare(old, new)\nif not (added or removed or modified):\n    print(\"INTEGRITY OK\")\nelse:\n    for n in modified:\n        print(\"MODIFIED \" + n)\n    for n in added:\n        print(\"ADDED \" + n)\n    for n in removed:\n        print(\"REMOVED \" + n)\n",
+   "hints": [
+    "أعد استخدام الدالتين.",
+    "اطبع بترتيب: معدّل، مضاف، محذوف."
+   ],
+   "files": {
+    "a.txt": "alpha",
+    "b.txt": "BRAVO!",
+    "d.txt": "delta",
+    "baseline.json": "{\"a.txt\": \"8ed3f6ad685b959ead7022518e1af76cd816f8e8ec7ccdda1ed4018e8f2223f8\", \"b.txt\": \"f144a6907dc4284d1f9fe6a7d9b9ff53c02c1d07ba68f24d413d7ff7f757a782\", \"c.txt\": \"b9dd960c1753459a78115d3cb845a57d924b6877e805b08bd01086ccdf34433c\"}"
+   }
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يكشف الفاحص لو تغير حرف في ملف؟",
+     "options": [
+      "تتغير بصمته فيظهر معدّلاً",
+      "لا شيء",
+      "يُحذف الملف"
+     ],
+     "answer": 0,
+     "why": "الهاش حساس لأي تغيير."
+    },
+    {
+     "q": "أين نحفظ اللقطة الأصلية؟",
+     "options": [
+      "في مكان محمي ومنفصل (للقراءة فقط)",
+      "بجانب الملفات نفسها دون حماية",
+      "في الكود"
+     ],
+     "answer": 0,
+     "why": "لو عدّلها المهاجم فشل الكشف. وفي الواقع نوقعها بـ HMAC."
+    },
+    {
+     "q": "لماذا نفتح بـ rb؟",
+     "options": [
+      "الهاش على بايتات لا نص",
+      "لتسريع القراءة",
+      "لا فرق"
+     ],
+     "answer": 0,
+     "why": "بايتات."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "اللقطة = بصمة SHA-256 لكل ملف.",
+    "المقارنة بعمليات المجموعات تكشف مضافاً ومحذوفاً ومعدّلاً.",
+    "اللقطة نفسها لازم تُحمى من العبث."
+   ]
+  }
+ ]
+}
