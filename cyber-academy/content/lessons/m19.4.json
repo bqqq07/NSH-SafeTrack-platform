@@ -1,0 +1,255 @@
+{
+ "title_ar": "كاشف التخمين من السجلات",
+ "title_en": "Brute-force Detector",
+ "duration_min": 11,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔍",
+   "goal": "تكتب كاشفاً يحلل سجل الدخول ويرصد عناوين تجرب كلمات مرور كثيرة ([[brute-force]])."
+  },
+  {
+   "type": "text",
+   "title": "نمط التخمين",
+   "body": [
+    "المهاجم يجرب كلمات كثيرة بسرعة، فيظهر في السجل **عدد كبير من الفشل من نفس العنوان** خلال وقت قصير.",
+    "الخطوات: نقرأ السجل، نستخرج السطور `Failed password`، نستخرج IP بالـ regex، نعدّ لكل IP، ونعلّم ما تجاوز الحد (threshold).",
+    "الدفاع: حظر مؤقت (fail2ban)، تأخير بين المحاولات، قفل الحساب، وتفعيل المصادقة الثنائية."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "نعمل على سجلات تدريبية فقط.",
+   "code": "import re\nline = \"Failed password for root from 10.0.0.5 port 22\"\nm = re.search(r\"Failed password for (\\S+) from (\\S+)\", line)\nprint(m.group(1), m.group(2))"
+  },
+  {
+   "type": "text",
+   "title": "الحد والنافذة الزمنية",
+   "body": [
+    "العدّ الكلي قد يعطي إنذارات كاذبة (مستخدم ينسى كلمته)، فنضيف **نافذة زمنية**: مثلاً 3 فشل خلال 60 ثانية.",
+    "نحوّل الوقت لثواني ونحتفظ بقائمة أوقات كل IP، ثم نفحص هل يوجد 3 فشل متتالية ضمن النافذة.",
+    "يفيد أيضاً: عدد الحسابات المختلفة المجربة من نفس IP (password spraying)."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "القائمة لازم تكون مرتبة زمنياً.",
+   "code": "times = [1, 3, 7, 70]\nwindow = 10\nlimit = 3\nhit = any(times[i + limit - 1] - times[i] <= window for i in range(len(times) - limit + 1))\nprint(hit)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "brute-force",
+    "log",
+    "regex"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "import re\nm = re.search(r\"from (\\S+)\", \"Failed password for a from 1.2.3.4 port 22\")\nprint(m.group(1))\n",
+   "options": [
+    "1.2.3.4",
+    "a",
+    "port"
+   ],
+   "answer": 0,
+   "why": "`\\S+` تلتقط كلمة بعد from."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): النافذة",
+   "code": "times = [1, 2, 3, 100]\nprint(times[2] - times[0] <= 10)\n",
+   "options": [
+    "True",
+    "False",
+    "2"
+   ],
+   "answer": 0,
+   "why": "ثلاث محاولات خلال ثانيتين."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: التجميع",
+   "code": "from collections import ____\nc = Counter([\"a\", \"b\", \"a\"])\nprint(c[\"a\"])\n",
+   "blanks": [
+    {
+     "answer": "Counter"
+    }
+   ],
+   "expect_stdout": "2",
+   "show_output": true,
+   "bank": [
+    "Counter",
+    "deque",
+    "defaultdict",
+    "namedtuple"
+   ],
+   "intro": "أي صنف يعدّ التكرارات بسرعة؟",
+   "explain": "`Counter`."
+  },
+  {
+   "type": "code",
+   "title": "عدّ الفشل لكل IP",
+   "instructions": [
+    "اقرأ `auth.log` واطبع لكل IP عدد محاولات `Failed password` بصيغة `ip: n` مرتباً بعدد الفشل تنازلياً ثم بالـ IP."
+   ],
+   "starter": "# اكتب كودك هنا\nimport re\nfrom collections import Counter\n",
+   "tests": [
+    {
+     "expect_stdout": "10.0.0.5: 3\n10.0.0.9: 2"
+    }
+   ],
+   "solution": "import re\nfrom collections import Counter\n\ncounts = Counter()\nwith open(\"auth.log\", encoding=\"utf-8\") as f:\n    for line in f:\n        m = re.search(r\"Failed password for (\\S+) from (\\S+)\", line)\n        if m:\n            counts[m.group(2)] += 1\nfor ip in sorted(counts, key=lambda k: (-counts[k], k)):\n    print(ip + \": \" + str(counts[ip]))\n",
+   "hints": [
+    "regex يلتقط المستخدم والـ IP.",
+    "رتب بمفتاح `(-count, ip)`."
+   ],
+   "files": {
+    "auth.log": "Jan 05 10:00:01 srv sshd[1]: Failed password for root from 10.0.0.5 port 22\nJan 05 10:00:03 srv sshd[1]: Failed password for admin from 10.0.0.5 port 22\nJan 05 10:00:05 srv sshd[1]: Accepted password for sara from 10.0.0.2 port 22\nJan 05 10:00:07 srv sshd[1]: Failed password for test from 10.0.0.5 port 22\nJan 05 10:00:09 srv sshd[1]: Failed password for sara from 10.0.0.9 port 22\nJan 05 10:00:11 srv sshd[1]: Failed password for sara from 10.0.0.9 port 22\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "تنبيه فوق الحد",
+   "instructions": [
+    "عدّل المنطق: اطبع `ALERT ip` فقط للعناوين اللي فشلت **3 مرات أو أكثر**، وإن لم يوجد اطبع `no alerts`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport re\nfrom collections import Counter\n",
+   "tests": [
+    {
+     "expect_stdout": "ALERT 10.0.0.5"
+    }
+   ],
+   "solution": "import re\nfrom collections import Counter\n\ncounts = Counter()\nwith open(\"auth.log\", encoding=\"utf-8\") as f:\n    for line in f:\n        m = re.search(r\"Failed password for (\\S+) from (\\S+)\", line)\n        if m:\n            counts[m.group(2)] += 1\nbad = sorted(ip for ip in counts if counts[ip] >= 3)\nif bad:\n    for ip in bad:\n        print(\"ALERT \" + ip)\nelse:\n    print(\"no alerts\")\n",
+   "hints": [
+    "استخدم حداً ثابتاً 3."
+   ],
+   "files": {
+    "auth.log": "Jan 05 10:00:01 srv sshd[1]: Failed password for root from 10.0.0.5 port 22\nJan 05 10:00:03 srv sshd[1]: Failed password for admin from 10.0.0.5 port 22\nJan 05 10:00:05 srv sshd[1]: Accepted password for sara from 10.0.0.2 port 22\nJan 05 10:00:07 srv sshd[1]: Failed password for test from 10.0.0.5 port 22\nJan 05 10:00:09 srv sshd[1]: Failed password for sara from 10.0.0.9 port 22\nJan 05 10:00:11 srv sshd[1]: Failed password for sara from 10.0.0.9 port 22\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "الحسابات المجربة (spraying)",
+   "instructions": [
+    "اطبع لكل IP عدد **الحسابات المختلفة** التي جُربت منه (في الفشل فقط) بصيغة `ip: n` بترتيب الـ IP."
+   ],
+   "starter": "# اكتب كودك هنا\nimport re\n",
+   "tests": [
+    {
+     "expect_stdout": "10.0.0.5: 3\n10.0.0.9: 1"
+    }
+   ],
+   "solution": "import re\n\nusers = {}\nwith open(\"auth.log\", encoding=\"utf-8\") as f:\n    for line in f:\n        m = re.search(r\"Failed password for (\\S+) from (\\S+)\", line)\n        if m:\n            users.setdefault(m.group(2), set()).add(m.group(1))\nfor ip in sorted(users):\n    print(ip + \": \" + str(len(users[ip])))\n",
+   "hints": [
+    "استخدم set لكل IP.",
+    "`setdefault` تنشئ set عند أول مرة."
+   ],
+   "files": {
+    "auth.log": "Jan 05 10:00:01 srv sshd[1]: Failed password for root from 10.0.0.5 port 22\nJan 05 10:00:03 srv sshd[1]: Failed password for admin from 10.0.0.5 port 22\nJan 05 10:00:05 srv sshd[1]: Accepted password for sara from 10.0.0.2 port 22\nJan 05 10:00:07 srv sshd[1]: Failed password for test from 10.0.0.5 port 22\nJan 05 10:00:09 srv sshd[1]: Failed password for sara from 10.0.0.9 port 22\nJan 05 10:00:11 srv sshd[1]: Failed password for sara from 10.0.0.9 port 22\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "نافذة زمنية",
+   "instructions": [
+    "عرّف `burst(times, limit, window)` ترجع `True` لو يوجد `limit` محاولات أو أكثر خلال `window` ثانية (القائمة مرتبة)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "burst([1, 2, 3, 100], 3, 10)",
+     "expect": true
+    },
+    {
+     "call": "burst([1, 30, 60, 90], 3, 10)",
+     "expect": false
+    },
+    {
+     "call": "burst([5], 1, 0)",
+     "expect": true,
+     "hidden": true
+    },
+    {
+     "call": "burst([], 3, 10)",
+     "expect": false,
+     "hidden": true
+    }
+   ],
+   "solution": "def burst(times, limit, window):\n    for i in range(len(times) - limit + 1):\n        if times[i + limit - 1] - times[i] <= window:\n            return True\n    return False\n",
+   "hints": [
+    "قارن أول وآخر محاولة في كل مجموعة متتالية."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: IP فارغ",
+   "instructions": [
+    "الكود ينهار على السطور اللي ما فيها `Failed password` لأنه يستخدم نتيجة `search` مباشرة. أصلحه ليطبع `1`."
+   ],
+   "starter": "import re\nlines = [\"ok\", \"Failed password for a from 1.1.1.1 port 22\"]\nn = 0\nfor line in lines:\n    m = re.search(r\"from (\\S+)\", line)\n    ip = m.group(1)\n    n += 1\nprint(n)\n",
+   "tests": [
+    {
+     "expect_stdout": "1"
+    }
+   ],
+   "solution": "import re\nlines = [\"ok\", \"Failed password for a from 1.1.1.1 port 22\"]\nn = 0\nfor line in lines:\n    m = re.search(r\"from (\\S+)\", line)\n    if m:\n        n += 1\nprint(n)\n",
+   "hints": [
+    "افحص `if m:` قبل `group`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش علامة هجوم التخمين في السجل؟",
+     "options": [
+      "فشل كثير من نفس العنوان بوقت قصير",
+      "نجاح واحد",
+      "سطر فاضي"
+     ],
+     "answer": 0,
+     "why": "مؤشر نموذجي."
+    },
+    {
+     "q": "ليش نضيف نافذة زمنية؟",
+     "options": [
+      "لتقليل الإنذارات الكاذبة",
+      "لتسريع الكود",
+      "لحذف السجل"
+     ],
+     "answer": 0,
+     "why": "ننسى كلمة السر أحياناً."
+    },
+    {
+     "q": "وش password spraying؟",
+     "options": [
+      "تجربة كلمة واحدة على حسابات كثيرة",
+      "تجربة ألف كلمة لحساب واحد",
+      "تشفير"
+     ],
+     "answer": 0,
+     "why": "يتفادى القفل."
+    },
+    {
+     "q": "أفضل دفاع؟",
+     "options": [
+      "قفل/حظر مؤقت + MFA",
+      "إخفاء السجل",
+      "تصغير كلمة المرور"
+     ],
+     "answer": 0,
+     "why": "طبقات."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "نستخرج الفشل بالـ regex ونعدّه لكل IP.",
+    "الحد + النافذة الزمنية يقللان الإنذارات الكاذبة.",
+    "الدفاع: حظر مؤقت وMFA."
+   ]
+  }
+ ]
+}

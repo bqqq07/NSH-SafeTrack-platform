@@ -1,0 +1,262 @@
+{
+ "title_ar": "فاحص قوة الباسورد",
+ "title_en": "Password Checker",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🛡️",
+   "goal": "تبني فاحصاً يقيّم كلمة المرور بقواعد وقائمة كلمات شائعة وتقدير [[entropy]]."
+  },
+  {
+   "type": "text",
+   "title": "ما الباسورد القوي؟",
+   "body": [
+    "القوة تأتي من **الطول أولاً** ثم التنوع. عبارة طويلة من كلمات (`correct horse battery staple`) أقوى وأسهل حفظاً من `P@ssw0rd!`.",
+    "ثلاثة فحوص أساسية: الطول (12+ مثلاً)، التنوع، وعدم وجودها في قائمة كلمات شائعة (أو مبنية عليها مثل `password1`).",
+    "تقدير الإنتروبيا: `طول × log2(حجم مجموعة الرموز)` بالبت. كلما زادت صعب التخمين."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "هذا تقدير نظري للتخمين العشوائي، ويهبط كثيراً لو الكلمة قابلة للتوقع.",
+   "code": "import math\n\nlength = 10\npool = 26 + 10  # حروف صغيرة + أرقام\nbits = length * math.log2(pool)\nprint(round(bits))"
+  },
+  {
+   "type": "text",
+   "title": "تصميم الفاحص",
+   "body": [
+    "نرجع قائمة **ملاحظات** بدل نعم/لا فقط لنساعد المستخدم: «قصيرة»، «تحتاج رقماً»، «شائعة جداً».",
+    "قارن بقائمة الكلمات الشائعة بعد تحويلها لحروف صغيرة وإزالة الأرقام من الأطراف.",
+    "لا تخزن ولا تسجّل كلمة المرور التي يفحصها المستخدم."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "المنصات الجادة تفحص أيضاً قوائم الكلمات المسرّبة (مثل خدمة Have I Been Pwned).",
+   "code": "COMMON = {\"password\", \"123456\", \"qwerty\"}\n\ndef issues(pw):\n    found = []\n    if len(pw) < 12:\n        found.append(\"short\")\n    if pw.lower() in COMMON:\n        found.append(\"common\")\n    return found\n\nprint(issues(\"qwerty\"))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "entropy",
+    "password",
+    "brute-force"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "import math\nprint(round(math.log2(8)))\n",
+   "options": [
+    "3",
+    "8",
+    "2"
+   ],
+   "answer": 0,
+   "why": "2³ = 8 فاللوغاريتم 3."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): تنوع",
+   "code": "pw = \"Ab1\"\nkinds = [any(c.islower() for c in pw), any(c.isupper() for c in pw), any(c.isdigit() for c in pw)]\nprint(sum(kinds))\n",
+   "options": [
+    "3",
+    "2",
+    "1"
+   ],
+   "answer": 0,
+   "why": "فيها صغير وكبير ورقم."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: تحويل",
+   "code": "COMMON = {\"password\"}\npw = \"PASSWORD\"\nprint(pw.____() in COMMON)\n",
+   "blanks": [
+    {
+     "answer": "lower"
+    }
+   ],
+   "expect_stdout": "True",
+   "show_output": true,
+   "bank": [
+    "lower",
+    "upper",
+    "strip",
+    "title"
+   ],
+   "intro": "كيف نوحّد الحالة قبل المقارنة؟",
+   "explain": "`lower()`."
+  },
+  {
+   "type": "code",
+   "title": "عدد الأنواع",
+   "instructions": [
+    "عرّف `kinds(pw)` ترجع عدد أنواع الرموز الموجودة من 4: صغير، كبير، رقم، رمز (أي شيء غير حرف أو رقم)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "kinds(\"abc\")",
+     "expect": 1
+    },
+    {
+     "call": "kinds(\"Abc1\")",
+     "expect": 3
+    },
+    {
+     "call": "kinds(\"Abc1!\")",
+     "expect": 4
+    },
+    {
+     "call": "kinds(\"\")",
+     "expect": 0,
+     "hidden": true
+    }
+   ],
+   "solution": "def kinds(pw):\n    n = 0\n    if any(c.islower() for c in pw):\n        n += 1\n    if any(c.isupper() for c in pw):\n        n += 1\n    if any(c.isdigit() for c in pw):\n        n += 1\n    if any(not c.isalnum() for c in pw):\n        n += 1\n    return n\n",
+   "hints": [
+    "فحص لكل نوع.",
+    "`not c.isalnum()` للرمز."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "الملاحظات",
+   "instructions": [
+    "عرّف `issues(pw)` ترجع قائمة الملاحظات بالترتيب: `\"short\"` لو الطول أقل من 12، ثم `\"common\"` لو `pw.lower()` ضمن `COMMON`، ثم `\"no_digit\"` لو لا يوجد رقم."
+   ],
+   "starter": "COMMON = {\"password\", \"qwerty\", \"letmein\"}\n",
+   "tests": [
+    {
+     "call": "issues(\"Str0ng-Passphrase-2025\")",
+     "expect": []
+    },
+    {
+     "call": "issues(\"qwerty\")",
+     "expect": [
+      "short",
+      "common",
+      "no_digit"
+     ]
+    },
+    {
+     "call": "issues(\"longpasswordwithoutdigits\")",
+     "expect": [
+      "no_digit"
+     ]
+    },
+    {
+     "call": "issues(\"Password\")",
+     "expect": [
+      "short",
+      "common",
+      "no_digit"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "COMMON = {\"password\", \"qwerty\", \"letmein\"}\n\ndef issues(pw):\n    found = []\n    if len(pw) < 12:\n        found.append(\"short\")\n    if pw.lower() in COMMON:\n        found.append(\"common\")\n    if not any(c.isdigit() for c in pw):\n        found.append(\"no_digit\")\n    return found\n",
+   "hints": [
+    "أضف الملاحظات بالترتيب المطلوب."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تقدير الإنتروبيا",
+   "instructions": [
+    "عرّف `entropy_bits(pw)`: حدّد حجم المجموعة (26 لكل نوع حروف موجود صغير/كبير، 10 للأرقام، 32 للرموز) ثم رجّع `round(len(pw) * log2(الحجم))`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport math\n",
+   "tests": [
+    {
+     "call": "entropy_bits(\"abcd\")",
+     "expect": 19
+    },
+    {
+     "call": "entropy_bits(\"Abcd1234\")",
+     "expect": 48
+    },
+    {
+     "call": "entropy_bits(\"\")",
+     "expect": 0,
+     "hidden": true
+    }
+   ],
+   "solution": "import math\n\ndef entropy_bits(pw):\n    size = 0\n    if any(c.islower() for c in pw):\n        size += 26\n    if any(c.isupper() for c in pw):\n        size += 26\n    if any(c.isdigit() for c in pw):\n        size += 10\n    if any(not c.isalnum() for c in pw):\n        size += 32\n    if size == 0:\n        return 0\n    return round(len(pw) * math.log2(size))\n",
+   "hints": [
+    "اجمع أحجام المجموعات الموجودة.",
+    "تعامل مع الحالة الفاضية."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: المقارنة",
+   "instructions": [
+    "الفحص يقارن بقائمة الكلمات الشائعة بدون توحيد الحالة فيفوّت `PASSWORD`. أصلحه ليطبع `True`."
+   ],
+   "starter": "COMMON = {\"password\", \"qwerty\"}\npw = \"PASSWORD\"\nprint(pw in COMMON)\n",
+   "tests": [
+    {
+     "expect_stdout": "True"
+    }
+   ],
+   "solution": "COMMON = {\"password\", \"qwerty\"}\npw = \"PASSWORD\"\nprint(pw.lower() in COMMON)\n",
+   "hints": [
+    "حوّل الحالة قبل المقارنة."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "أهم عامل في قوة كلمة المرور؟",
+     "options": [
+      "الطول",
+      "وجود @",
+      "اسم المستخدم"
+     ],
+     "answer": 0,
+     "why": "ثم التنوع."
+    },
+    {
+     "q": "ليش نفحص قائمة الشائعة؟",
+     "options": [
+      "لأن المهاجمين يجربونها أولاً",
+      "لتقصير الكلمة",
+      "لا فائدة"
+     ],
+     "answer": 0,
+     "why": "مهما كانت القواعد."
+    },
+    {
+     "q": "وش الإنتروبيا؟",
+     "options": [
+      "مقياس صعوبة التخمين",
+      "طول الملف",
+      "سرعة الشبكة"
+     ],
+     "answer": 0,
+     "why": "بالبت."
+    },
+    {
+     "q": "هل نخزن كلمة المرور المفحوصة؟",
+     "options": [
+      "لا أبداً",
+      "نعم للتحليل",
+      "بالسجل"
+     ],
+     "answer": 0,
+     "why": "حساسة."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "الطول أولاً ثم التنوع ثم عدم الشيوع.",
+    "أرجع ملاحظات مفيدة لا نعم/لا فقط.",
+    "لا تسجّل كلمات المرور."
+   ]
+  }
+ ]
+}

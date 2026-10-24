@@ -1,0 +1,272 @@
+{
+ "title_ar": "التشفير الآمن: HMAC وKDF وFernet",
+ "title_en": "Secure Crypto",
+ "duration_min": 12,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔐",
+   "goal": "تميّز بين الترميز والهاش والتشفير، وتستخدم [[hmac]] و[[kdf]] صح، وتعرف متى تستخدم [[fernet]]."
+  },
+  {
+   "type": "text",
+   "title": "ثلاثة أشياء مختلفة",
+   "body": [
+    "**الترميز** (base64) يغيّر الشكل فقط وأي أحد يفكه، **ليس** حماية. **الهاش** اتجاه واحد لا يرجع. **التشفير** يخفي المحتوى ويفك بمفتاح.",
+    "[[hmac]] يضيف مفتاحاً سرياً للهاش: يثبت أن الرسالة لم تتغير وأن مرسلها يملك المفتاح. تستخدم في توقيع الجلسات والـ webhooks.",
+    "مقارنة التواقيع بـ `hmac.compare_digest` لا بـ `==` لتجنب هجمات التوقيت."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "warn",
+   "note": "base64 ليس تشفيراً! كلمات مرور مخزنة بـ base64 تعتبر مكشوفة.",
+   "code": "import base64\nimport hmac\n\nprint(base64.b64decode(base64.b64encode(b\"secret\")))\nsig = hmac.new(b\"key\", b\"msg\", \"sha256\").hexdigest()\nprint(len(sig))\nprint(hmac.compare_digest(sig, sig))"
+  },
+  {
+   "type": "text",
+   "title": "كلمات المرور والتشفير الجاهز",
+   "body": [
+    "لتخزين كلمات المرور استخدم [[kdf]] بطيئة وملحاً عشوائياً: `hashlib.pbkdf2_hmac(\"sha256\", pw, salt, 200_000)` (أو argon2/bcrypt). التكرار الكثير يبطّئ المخمّن.",
+    "للتشفير الفعلي استخدم مكتبة جاهزة: `cryptography.fernet.Fernet`: `key = Fernet.generate_key()` ثم `Fernet(key).encrypt(data)` و`.decrypt(token)`. (وهي و`pbkdf2_hmac` غير متاحتين داخل المتصفح، فنشرحهما نصياً ونبني فكرة التمطيط يدوياً في التمرين.)",
+    "**لا تخترع تشفيرك**: خوارزميات «ذكية» محلية الصنع تُكسر بسهولة."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "المفتاح يُخزَّن بأمان (متغير بيئة أو مدير أسرار) لا بجانب البيانات المشفرة.",
+   "code": "# على جهازك:\n# from cryptography.fernet import Fernet\n# key = Fernet.generate_key()\n# f = Fernet(key)\n# token = f.encrypt(b\"secret\")\n# print(f.decrypt(token))\n\nimport hashlib\nd = hashlib.pbkdf2_hmac(\"sha256\", b\"pw\", b\"salt\", 1000)\nprint(len(d))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "hmac",
+    "kdf",
+    "fernet",
+    "base64",
+    "encryption",
+    "salt"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "import base64\nprint(base64.b64encode(b\"hi\").decode())\n",
+   "options": [
+    "aGk=",
+    "hi",
+    "ZGk="
+   ],
+   "answer": 0,
+   "why": "base64 للنص hi هو aGk=، ويُفك بسهولة."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): مقارنة",
+   "code": "import hmac\na = hmac.new(b\"k\", b\"m\", \"sha256\").hexdigest()\nb = hmac.new(b\"k\", b\"m2\", \"sha256\").hexdigest()\nprint(hmac.compare_digest(a, b))\n",
+   "options": [
+    "False",
+    "True",
+    "None"
+   ],
+   "answer": 0,
+   "why": "رسالة مختلفة تعطي توقيعاً مختلفاً."
+  },
+  {
+   "type": "match",
+   "title": "طابق المفهوم بتعريفه",
+   "pairs": [
+    [
+     "الترميز (base64)",
+     "تغيير شكل فقط، لا حماية"
+    ],
+    [
+     "الهاش",
+     "اتجاه واحد لكشف التغيير"
+    ],
+    [
+     "HMAC",
+     "هاش بمفتاح سري لإثبات الأصالة"
+    ],
+    [
+     "التشفير",
+     "إخفاء المحتوى ويفك بمفتاح"
+    ]
+   ],
+   "why": "كل واحد له غرضه ولا يغني عن الآخر."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: مقارنة آمنة",
+   "code": "import hmac\nprint(hmac.____(\"abc\", \"abc\"))\n",
+   "blanks": [
+    {
+     "answer": "compare_digest"
+    }
+   ],
+   "expect_stdout": "True",
+   "show_output": true,
+   "bank": [
+    "compare_digest",
+    "equals",
+    "compare",
+    "same"
+   ],
+   "intro": "وش الدالة الآمنة لمقارنة التواقيع؟",
+   "explain": "`compare_digest`."
+  },
+  {
+   "type": "code",
+   "title": "وقّع رسالة",
+   "instructions": [
+    "عرّف `sign(msg)` ترجع HMAC-SHA256 (hex) للرسالة بالمفتاح `KEY`."
+   ],
+   "starter": "import hmac\nKEY = b\"secret-key\"\n",
+   "tests": [
+    {
+     "call": "sign(\"amount=500&to=1234\")",
+     "expect": "b0fac8cbdd747512b6d31aac607cb84a99f7bd5322096ecba8deebb640af3b49"
+    },
+    {
+     "call": "len(sign(\"x\"))",
+     "expect": 64,
+     "hidden": true
+    }
+   ],
+   "solution": "import hmac\nKEY = b\"secret-key\"\n\ndef sign(msg):\n    return hmac.new(KEY, msg.encode(\"utf-8\"), \"sha256\").hexdigest()\n",
+   "hints": [
+    "`hmac.new(KEY, bytes, \"sha256\")`",
+    "حوّل الرسالة إلى بايتات."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تحقق من التوقيع",
+   "instructions": [
+    "عرّف `verify(msg, signature)` ترجع `True` لو التوقيع صحيح (استخدم `compare_digest`)."
+   ],
+   "starter": "import hmac\nKEY = b\"secret-key\"\n\ndef sign(msg):\n    return hmac.new(KEY, msg.encode(\"utf-8\"), \"sha256\").hexdigest()\n",
+   "tests": [
+    {
+     "call": "verify(\"amount=500&to=1234\", \"b0fac8cbdd747512b6d31aac607cb84a99f7bd5322096ecba8deebb640af3b49\")",
+     "expect": true
+    },
+    {
+     "call": "verify(\"amount=900&to=1234\", \"b0fac8cbdd747512b6d31aac607cb84a99f7bd5322096ecba8deebb640af3b49\")",
+     "expect": false
+    },
+    {
+     "call": "verify(\"x\", \"bad\")",
+     "expect": false,
+     "hidden": true
+    }
+   ],
+   "solution": "import hmac\nKEY = b\"secret-key\"\n\ndef sign(msg):\n    return hmac.new(KEY, msg.encode(\"utf-8\"), \"sha256\").hexdigest()\n\ndef verify(msg, signature):\n    return hmac.compare_digest(sign(msg), signature)\n",
+   "hints": [
+    "احسب التوقيع المتوقع وقارنه بأمان."
+   ],
+   "checks": [
+    {
+     "regex": "compare_digest",
+     "msg": "استخدم compare_digest"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تمطيط المفتاح (Key stretching)",
+   "instructions": [
+    "`pbkdf2_hmac` غير متاحة داخل المتصفح، فنبني الفكرة بأيدينا: عرّف `hash_pw(pw, salt)` تبدأ بـ `salt + pw.encode()` ثم تطبّق `sha256(...).digest()` **1000 مرة** متتالية وترجع الناتج hex. وعرّف `check_pw(pw, salt, stored)` بمقارنة آمنة. (على جهازك استخدم pbkdf2 أو argon2 الحقيقية.)"
+   ],
+   "starter": "import hashlib\nimport hmac\n",
+   "tests": [
+    {
+     "call": "hash_pw(\"pw\", b\"salt\") == \"e9dc323522f5acc08ac6cc8b0940658b67d608c925ab11dbad82a9e889c8f6dd\"",
+     "expect": true
+    },
+    {
+     "call": "check_pw(\"pw\", b\"salt\", hash_pw(\"pw\", b\"salt\"))",
+     "expect": true
+    },
+    {
+     "call": "check_pw(\"bad\", b\"salt\", hash_pw(\"pw\", b\"salt\"))",
+     "expect": false,
+     "hidden": true
+    }
+   ],
+   "solution": "import hashlib\nimport hmac\n\ndef hash_pw(pw, salt):\n    h = salt + pw.encode(\"utf-8\")\n    for _ in range(1000):\n        h = hashlib.sha256(h).digest()\n    return h.hex()\n\ndef check_pw(pw, salt, stored):\n    return hmac.compare_digest(hash_pw(pw, salt), stored)\n",
+   "hints": [
+    "كرر `h = hashlib.sha256(h).digest()` ألف مرة.",
+    "قارن بـ `compare_digest`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: base64 ليس تشفيراً",
+   "instructions": [
+    "المطور يظن أن base64 يحمي الرمز السري. اجعل الكود يثبت أن أي أحد يفك الرمز: اطبع القيمة الأصلية `s3cret` من `stored`."
+   ],
+   "starter": "import base64\nstored = base64.b64encode(b\"s3cret\").decode()\nprint(stored)\n",
+   "tests": [
+    {
+     "expect_stdout": "s3cret"
+    }
+   ],
+   "solution": "import base64\nstored = base64.b64encode(b\"s3cret\").decode()\nprint(base64.b64decode(stored).decode())\n",
+   "hints": [
+    "فك الترميز بـ `b64decode` ثم `decode()`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "هل base64 تشفير؟",
+     "options": [
+      "لا، ترميز فقط",
+      "نعم",
+      "أحياناً"
+     ],
+     "answer": 0,
+     "why": "أي أحد يفكه."
+    },
+    {
+     "q": "ليش نستخدم KDF بطيئة لكلمات المرور؟",
+     "options": [
+      "لتصعيب التخمين",
+      "لتسريع الدخول",
+      "لتقصير الهاش"
+     ],
+     "answer": 0,
+     "why": "وملح عشوائي."
+    },
+    {
+     "q": "وش يثبت HMAC؟",
+     "options": [
+      "أن الرسالة لم تتغير ومرسلها يملك المفتاح",
+      "أنها مشفرة",
+      "أنها قصيرة"
+     ],
+     "answer": 0,
+     "why": "سلامة وأصالة."
+    },
+    {
+     "q": "هل نخترع خوارزمية تشفير؟",
+     "options": [
+      "لا، نستخدم مكتبات مثبتة",
+      "نعم",
+      "أحياناً"
+     ],
+     "answer": 0,
+     "why": "مثل Fernet."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "ترميز ≠ هاش ≠ تشفير.",
+    "HMAC للأصالة، وKDF بطيئة مع ملح لكلمات المرور.",
+    "استخدم مكتبات جاهزة مثل Fernet ولا تخترع تشفيرك."
+   ]
+  }
+ ]
+}

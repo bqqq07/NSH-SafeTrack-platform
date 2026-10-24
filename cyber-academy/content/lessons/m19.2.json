@@ -1,0 +1,263 @@
+{
+ "title_ar": "مولّد باسوردات secrets",
+ "title_en": "Password Generator",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🎲",
+   "goal": "تولد كلمات مرور ورموزاً عشوائية آمنة بوحدة `secrets` بدل `random`."
+  },
+  {
+   "type": "text",
+   "title": "عشوائي آمن",
+   "body": [
+    "`random` مصممة للمحاكاة والألعاب، وقابلة للتنبؤ لو عُرفت حالتها (seed). أما `secrets` فتستخدم مصدر عشوائية نظام التشغيل الآمن.",
+    "أدواتها: `secrets.choice(seq)` اختيار آمن، `secrets.token_hex(16)` رمز سداسي، `secrets.token_urlsafe(16)` رمز صالح للروابط.",
+    "مثال: توليد كلمة مرور = اختيار n حرفاً من مجموعة الحروف بـ `secrets.choice` مرة لكل حرف."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "النتيجة تختلف كل مرة؛ نختبر خصائصها (الطول والأنواع) لا قيمتها.",
+   "code": "import secrets\nimport string\n\nalphabet = string.ascii_letters + string.digits\npw = \"\".join(secrets.choice(alphabet) for _ in range(12))\nprint(len(pw))"
+  },
+  {
+   "type": "text",
+   "title": "سياسات وأخطاء",
+   "body": [
+    "تأكد أن كلمة المرور تحتوي كل أنواع الرموز المطلوبة (كبير، صغير، رقم، رمز) ثم أكمل الباقي عشوائياً واخلطها.",
+    "`string.ascii_lowercase` و`ascii_uppercase` و`digits` و`punctuation` مجموعات جاهزة.",
+    "لا تطبع كلمات المرور في السجلات، ولا تضع `seed` ثابتة أبداً. وقارن الأسرار بـ `secrets.compare_digest(a, b)`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "لا تولّد كلمات المرور بـ `random.choice`؛ ممكن التنبؤ بها لو عُرفت بذرتها.",
+   "code": "import secrets\nimport string\n\nparts = [\n    secrets.choice(string.ascii_lowercase),\n    secrets.choice(string.ascii_uppercase),\n    secrets.choice(string.digits),\n]\nprint(len(parts))\nprint(secrets.compare_digest(\"abc\", \"abc\"))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "entropy",
+    "password"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "import secrets\nprint(len(secrets.token_hex(8)))\n",
+   "options": [
+    "16",
+    "8",
+    "4"
+   ],
+   "answer": 0,
+   "why": "كل بايت يظهر بخانتين سداسيتين: 8 بايت = 16 خانة."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): خصائص",
+   "code": "import string\nprint(len(string.digits), string.ascii_lowercase[:3])\n",
+   "options": [
+    "10 abc",
+    "9 abc",
+    "10 xyz"
+   ],
+   "answer": 0,
+   "why": "10 أرقام، وأول 3 حروف a b c."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الاختيار الآمن",
+   "code": "import secrets\nc = secrets.____(\"abc\")\nprint(c in \"abc\")\n",
+   "blanks": [
+    {
+     "answer": "choice"
+    }
+   ],
+   "expect_stdout": "True",
+   "show_output": true,
+   "bank": [
+    "choice",
+    "random",
+    "pick",
+    "sample"
+   ],
+   "intro": "وش دالة الاختيار الآمن؟",
+   "explain": "`secrets.choice`."
+  },
+  {
+   "type": "code",
+   "title": "كلمة مرور بطول n",
+   "instructions": [
+    "عرّف `gen_password(n)` ترجع كلمة مرور طولها n من الحروف والأرقام باستخدام `secrets.choice`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport secrets\nimport string\n",
+   "tests": [
+    {
+     "call": "len(gen_password(12))",
+     "expect": 12
+    },
+    {
+     "call": "all(c.isalnum() for c in gen_password(20))",
+     "expect": true
+    },
+    {
+     "call": "gen_password(16) != gen_password(16)",
+     "expect": true,
+     "hidden": true
+    }
+   ],
+   "solution": "import secrets\nimport string\n\ndef gen_password(n):\n    alphabet = string.ascii_letters + string.digits\n    return \"\".join(secrets.choice(alphabet) for _ in range(n))\n",
+   "hints": [
+    "اختر حرفاً n مرة واجمعها."
+   ],
+   "checks": [
+    {
+     "regex": "secrets\\.choice",
+     "msg": "استخدم secrets.choice"
+    },
+    {
+     "regex": "random",
+     "must": false,
+     "msg": "لا تستخدم random"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تحقق من السياسة",
+   "instructions": [
+    "عرّف `gen_strong(n)` (n ≥ 8) ترجع كلمة مرور فيها حرف صغير وكبير ورقم **على الأقل**."
+   ],
+   "starter": "# اكتب كودك هنا\nimport secrets\nimport string\n",
+   "tests": [
+    {
+     "call": "(lambda p: len(p) == 10 and any(c.islower() for c in p) and any(c.isupper() for c in p) and any(c.isdigit() for c in p))(gen_strong(10))",
+     "expect": true
+    },
+    {
+     "call": "all((lambda p: any(c.islower() for c in p) and any(c.isupper() for c in p) and any(c.isdigit() for c in p))(gen_strong(8)) for _ in range(50))",
+     "expect": true,
+     "hidden": true
+    }
+   ],
+   "solution": "import secrets\nimport string\n\ndef gen_strong(n):\n    pool = string.ascii_letters + string.digits\n    chars = [secrets.choice(string.ascii_lowercase), secrets.choice(string.ascii_uppercase), secrets.choice(string.digits)]\n    chars += [secrets.choice(pool) for _ in range(n - 3)]\n    secrets.SystemRandom().shuffle(chars)\n    return \"\".join(chars)\n",
+   "hints": [
+    "ضمن حرفاً من كل نوع أولاً ثم أكمل.",
+    "اخلط بـ `secrets.SystemRandom().shuffle`."
+   ],
+   "checks": [
+    {
+     "regex": "secrets",
+     "msg": "استخدم secrets"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "رمز جلسة",
+   "instructions": [
+    "عرّف `new_token()` ترجع `secrets.token_hex(16)` (طول الناتج 32 خانة)."
+   ],
+   "starter": "# اكتب كودك هنا\nimport secrets\n",
+   "tests": [
+    {
+     "call": "len(new_token())",
+     "expect": 32
+    },
+    {
+     "call": "new_token() != new_token()",
+     "expect": true,
+     "hidden": true
+    }
+   ],
+   "solution": "import secrets\n\ndef new_token():\n    return secrets.token_hex(16)\n",
+   "hints": [
+    "`token_hex(16)` = 16 بايت = 32 خانة."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: random غير آمن",
+   "instructions": [
+    "الدالة تستخدم `random` لتوليد رمز أمني. استبدلها بـ `secrets` (ليبقى الطول 16)."
+   ],
+   "starter": "import random\nimport string\n\ndef make_token():\n    pool = string.ascii_letters\n    return \"\".join(random.choice(pool) for _ in range(16))\n\nprint(len(make_token()))\n",
+   "tests": [
+    {
+     "expect_stdout": "16"
+    }
+   ],
+   "solution": "import secrets\nimport string\n\ndef make_token():\n    pool = string.ascii_letters\n    return \"\".join(secrets.choice(pool) for _ in range(16))\n\nprint(len(make_token()))\n",
+   "hints": [
+    "`secrets.choice` بدل `random.choice`."
+   ],
+   "checks": [
+    {
+     "regex": "secrets\\.choice",
+     "msg": "استخدم secrets.choice"
+    },
+    {
+     "regex": "import\\s+random",
+     "must": false,
+     "msg": "احذف random"
+    }
+   ],
+   "variant": "bugfix",
+   "allow_starter_pass": true
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش secrets بدل random للأمان؟",
+     "options": [
+      "random قابل للتنبؤ",
+      "secrets أسرع",
+      "نفس الشيء"
+     ],
+     "answer": 0,
+     "why": "secrets مصدره آمن."
+    },
+    {
+     "q": "كم طول token_hex(16)؟",
+     "options": [
+      "32 خانة",
+      "16 خانة",
+      "8 خانات"
+     ],
+     "answer": 0,
+     "why": "خانتان لكل بايت."
+    },
+    {
+     "q": "كيف نقارن الأسرار؟",
+     "options": [
+      "secrets.compare_digest",
+      "==",
+      "is"
+     ],
+     "answer": 0,
+     "why": "يتفادى تسريب الزمن."
+    },
+    {
+     "q": "هل نضع seed ثابتة؟",
+     "options": [
+      "لا أبداً في الأمن",
+      "نعم",
+      "أحياناً"
+     ],
+     "answer": 0,
+     "why": "تجعل الناتج متوقعاً."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "استخدم `secrets` لكل ما يخص الأمن.",
+    "ضمن أنواع الرموز ثم اخلط.",
+    "`compare_digest` لمقارنة الأسرار."
+   ]
+  }
+ ]
+}

@@ -1,0 +1,232 @@
+{
+ "title_ar": "المنافذ والمقابس (بيئة محلية)",
+ "title_en": "Sockets & Local Ports",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔌",
+   "goal": "تفهم كيف يفحص برنامج منفذاً مفتوحاً عبر [[socket]]، وتلتزم بالحدود القانونية: جهازك أنت فقط."
+  },
+  {
+   "type": "text",
+   "title": "⚖️ قبل أي كود: الحدود القانونية",
+   "body": [
+    "فحص المنافذ على أجهزة **لا تملكها أو ما عندك إذن مكتوب بفحصها** مخالف للقانون في كثير من الدول، وفي السعودية يندرج تحت نظام مكافحة الجرائم المعلوماتية.",
+    "في هذا الدرس: نكتب المنطق على **محاكاة** داخل المنصة، ولو طبقته فعلياً فعلى `localhost` (جهازك) أو معمل خاص بك فقط.",
+    "قاعدة ذهبية: نطاق مكتوب + إذن مكتوب + وقت محدد، وإلا لا تفحص."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "warn",
+   "note": "هذا الدرس يعلّم الفهم الدفاعي: أي المنافذ يجب أن تكون مغلقة على جهازك؟"
+  },
+  {
+   "type": "text",
+   "title": "كيف يعمل الاتصال",
+   "body": [
+    "المنفذ رقم (0–65535) يحدد خدمة على الجهاز: 22 SSH، 80 HTTP، 443 HTTPS. [[socket]] هو نقطة الاتصال: `socket.create_connection((host, port), timeout=1)` تنجح لو المنفذ مفتوح وتفشل (`OSError`) لو مغلق.",
+    "في المتصفح لا توجد مقابس حقيقية، فنكتب الدالة بحيث تستقبل «دالة الاتصال» كمعامل، ونمرر لها محاكاة: `connect(host, port)` ترجع True/False.",
+    "ونفحص أولاً أن الهدف محلي: `ipaddress.ip_address(host).is_loopback`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "المنفذ المفتوح غير الضروري يوسّع سطح الهجوم؛ الهدف الدفاعي إغلاقه.",
+   "code": "# الكود الحقيقي على جهازك (للمعرفة، لا يُنفذ هنا):\n# import socket\n# def is_open(host, port):\n#     try:\n#         with socket.create_connection((host, port), timeout=1):\n#             return True\n#     except OSError:\n#         return False\n\nimport ipaddress\nprint(ipaddress.ip_address(\"127.0.0.1\").is_loopback)\nprint(ipaddress.ip_address(\"8.8.8.8\").is_loopback)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "socket",
+    "port",
+    "ip-address"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "import ipaddress\nprint(ipaddress.ip_address(\"127.0.0.1\").is_loopback, ipaddress.ip_address(\"10.0.0.5\").is_loopback)\n",
+   "options": [
+    "True False",
+    "True True",
+    "False False"
+   ],
+   "answer": 0,
+   "why": "العنوان 127.0.0.1 هو الجهاز نفسه."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): محاكاة",
+   "code": "OPEN = {22, 80}\nconnect = lambda host, port: port in OPEN\nprint([p for p in [21, 22, 80, 443] if connect(\"127.0.0.1\", p)])\n",
+   "options": [
+    "[22, 80]",
+    "[21, 443]",
+    "[22]"
+   ],
+   "answer": 0,
+   "why": "المنفذان 22 و80 فقط مفتوحان في المحاكاة."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الجهاز المحلي",
+   "code": "import ipaddress\nprint(ipaddress.ip_address(\"127.0.0.1\").____)\n",
+   "blanks": [
+    {
+     "answer": "is_loopback"
+    }
+   ],
+   "expect_stdout": "True",
+   "show_output": true,
+   "bank": [
+    "is_loopback",
+    "is_local",
+    "is_self",
+    "is_private"
+   ],
+   "intro": "أي خاصية تقول إن العنوان هو الجهاز نفسه؟",
+   "explain": "`is_loopback`."
+  },
+  {
+   "type": "code",
+   "title": "تحقق أنه محلي",
+   "instructions": [
+    "عرّف `is_local(host)` ترجع `True` لو `host` هو `\"localhost\"` أو عنوان loopback (مثل `127.0.0.1`)، وإلا `False` (والنص غير الصالح `False`)."
+   ],
+   "starter": "# اكتب كودك هنا\nimport ipaddress\n",
+   "tests": [
+    {
+     "call": "is_local(\"localhost\")",
+     "expect": true
+    },
+    {
+     "call": "is_local(\"127.0.0.1\")",
+     "expect": true
+    },
+    {
+     "call": "is_local(\"8.8.8.8\")",
+     "expect": false
+    },
+    {
+     "call": "is_local(\"evil.example\")",
+     "expect": false,
+     "hidden": true
+    },
+    {
+     "call": "is_local(\"::1\")",
+     "expect": true,
+     "hidden": true
+    }
+   ],
+   "solution": "import ipaddress\n\ndef is_local(host):\n    if host == \"localhost\":\n        return True\n    try:\n        return ipaddress.ip_address(host).is_loopback\n    except ValueError:\n        return False\n",
+   "hints": [
+    "افحص \"localhost\" أولاً.",
+    "امسك ValueError للنصوص غير الصالحة."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "ماسح محاكى",
+   "instructions": [
+    "عرّف `scan(host, ports, connect)`: لو `host` ليس محلياً (استخدم `is_local` المعرّفة) ارفع `PermissionError(\"authorized hosts only\")`، وإلا ارجع قائمة المنافذ المفتوحة مرتبة. اختبر: المحاكاة تفتح 22 و8080 فقط."
+   ],
+   "starter": "import ipaddress\n\ndef is_local(host):\n    if host == \"localhost\":\n        return True\n    try:\n        return ipaddress.ip_address(host).is_loopback\n    except ValueError:\n        return False\n\nOPEN = {22, 8080}\nfake_connect = lambda host, port: port in OPEN\n\n# عرّف scan هنا\n\nprint(scan(\"127.0.0.1\", [21, 22, 80, 8080], fake_connect))\ntry:\n    scan(\"8.8.8.8\", [80], fake_connect)\nexcept PermissionError as e:\n    print(e)\n",
+   "tests": [
+    {
+     "expect_stdout": "[22, 8080]\nauthorized hosts only"
+    }
+   ],
+   "solution": "import ipaddress\n\ndef is_local(host):\n    if host == \"localhost\":\n        return True\n    try:\n        return ipaddress.ip_address(host).is_loopback\n    except ValueError:\n        return False\n\nOPEN = {22, 8080}\nfake_connect = lambda host, port: port in OPEN\n\ndef scan(host, ports, connect):\n    if not is_local(host):\n        raise PermissionError(\"authorized hosts only\")\n    return sorted(p for p in ports if connect(host, p))\n\nprint(scan(\"127.0.0.1\", [21, 22, 80, 8080], fake_connect))\ntry:\n    scan(\"8.8.8.8\", [80], fake_connect)\nexcept PermissionError as e:\n    print(e)\n",
+   "hints": [
+    "افحص الهدف قبل أي اتصال.",
+    "استخدم `connect(host, p)`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تقرير المنافذ المكشوفة",
+   "instructions": [
+    "قائمة `EXPECTED` بالمنافذ المسموح فتحها. من نتيجة الفحص `found` اطبع المنافذ المفتوحة **غير المتوقعة** مرتبة، أو `ok` لو لا يوجد."
+   ],
+   "starter": "EXPECTED = {22, 443}\n",
+   "tests": [
+    {
+     "expect_stdout": "[3306, 8080]"
+    }
+   ],
+   "solution": "EXPECTED = {22, 443}\nfound = [22, 443, 3306, 8080]\nextra = sorted(set(found) - EXPECTED)\nprint(extra if extra else \"ok\")\n",
+   "hints": [
+    "الفرق بين المجموعتين: `set(found) - EXPECTED`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: بدون حارس",
+   "instructions": [
+    "الماسح لا يتحقق من الهدف. أضف الحارس ليرفع `PermissionError` للأهداف غير المحلية ويطبع `blocked`."
+   ],
+   "starter": "def is_local(h):\n    return h in (\"localhost\", \"127.0.0.1\")\n\ndef scan(host, ports):\n    return list(ports)\n\ntry:\n    scan(\"8.8.8.8\", [80])\n    print(\"scanned\")\nexcept PermissionError:\n    print(\"blocked\")\n",
+   "tests": [
+    {
+     "expect_stdout": "blocked"
+    }
+   ],
+   "solution": "def is_local(h):\n    return h in (\"localhost\", \"127.0.0.1\")\n\ndef scan(host, ports):\n    if not is_local(host):\n        raise PermissionError(\"no\")\n    return list(ports)\n\ntry:\n    scan(\"8.8.8.8\", [80])\n    print(\"scanned\")\nexcept PermissionError:\n    print(\"blocked\")\n",
+   "hints": [
+    "افحص `is_local` أول الدالة."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "متى يُسمح بفحص المنافذ؟",
+     "options": [
+      "على أجهزتك أو بإذن مكتوب",
+      "أي موقع",
+      "فقط ليلاً"
+     ],
+     "answer": 0,
+     "why": "وإلا مخالفة قانونية."
+    },
+    {
+     "q": "وش يدل منفذ مفتوح غير ضروري؟",
+     "options": [
+      "سطح هجوم زائد",
+      "سرعة أعلى",
+      "تشفير"
+     ],
+     "answer": 0,
+     "why": "يجب إغلاقه."
+    },
+    {
+     "q": "وش is_loopback؟",
+     "options": [
+      "العنوان الذي يشير للجهاز نفسه",
+      "عنوان خارجي",
+      "بوابة"
+     ],
+     "answer": 0,
+     "why": "127.0.0.1."
+    },
+    {
+     "q": "ليش مررنا دالة الاتصال كمعامل؟",
+     "options": [
+      "لنختبر بمحاكاة بلا شبكة",
+      "لتسريع",
+      "ضرورة لغوية"
+     ],
+     "answer": 0,
+     "why": "يسهل الاختبار."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "افحص أجهزتك أنت أو بإذن مكتوب فقط.",
+    "`socket.create_connection` ينجح للمنفذ المفتوح.",
+    "ابدأ بحارس يتحقق أن الهدف محلي."
+   ]
+  }
+ ]
+}

@@ -1,0 +1,267 @@
+{
+ "title_ar": "استخراج IOC بـ Regex",
+ "title_en": "IOC Extraction",
+ "duration_min": 11,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🧲",
+   "goal": "تستخرج مؤشرات الاختراق ([[ioc]]) من تقارير وسجلات نصية آلياً."
+  },
+  {
+   "type": "text",
+   "title": "وش هي IOC؟",
+   "body": [
+    "[[ioc]] هي أدلة على نشاط خبيث: عناوين IP ونطاقات وروابط وبصمات ملفات (MD5/SHA-256).",
+    "محللو الأمن يستخرجونها من تقارير التهديد لإدخالها في أنظمة الحظر والمراقبة.",
+    "الأنماط: IPv4 `\\d{1,3}(\\.\\d{1,3}){3}`، بصمة MD5 = 32 خانة سداسية، SHA-256 = 64 خانة."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "`\\b` حد كلمة ليلتقط الكامل ولا جزءاً من رقم أطول.",
+   "code": "import re\n\ntext = \"ip 10.0.0.1 hash d41d8cd98f00b204e9800998ecf8427e\"\nprint(re.findall(r\"\\b\\d{1,3}(?:\\.\\d{1,3}){3}\\b\", text))\nprint(re.findall(r\"\\b[a-f0-9]{32}\\b\", text))"
+  },
+  {
+   "type": "text",
+   "title": "Defang والتحقق",
+   "body": [
+    "التقارير تكتب الروابط بشكل معطّل (defanged) لمنع الضغط بالخطأ: `hxxp://evil[.]com`. نعيدها لصيغتها الأصلية قبل التحليل: `.replace(\"[.]\", \".\")` و`hxxp` ← `http`.",
+    "تحقق من الأرقام: `ipaddress.ip_address(x)` ترفع خطأ لو العنوان غير صالح (مثل 999.1.1.1).",
+    "ثم رتّب وأزل التكرار بـ `sorted(set(...))` واحفظ بصيغة مناسبة للأدوات (CSV/JSON)."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "لا تفتح أو تزر الروابط المستخرجة؛ تحليلها يتم نصياً فقط.",
+   "code": "import ipaddress\n\nfor x in [\"10.0.0.1\", \"999.1.1.1\"]:\n    try:\n        ipaddress.ip_address(x)\n        print(x, \"valid\")\n    except ValueError:\n        print(x, \"invalid\")"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "ioc",
+    "ip-address",
+    "regex"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "import re\nprint(re.findall(r\"\\d+\\.\\d+\", \"v1.2 and 3.45\"))\n",
+   "options": [
+    "['1.2', '3.45']",
+    "['1', '2', '3', '45']",
+    "['1.2']"
+   ],
+   "answer": 0,
+   "why": "نمط رقم نقطة رقم."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): defang",
+   "code": "u = \"hxxp://evil[.]com\"\nprint(u.replace(\"hxxp\", \"http\").replace(\"[.]\", \".\"))\n",
+   "options": [
+    "http://evil.com",
+    "hxxp://evil[.]com",
+    "http://evil[.]com"
+   ],
+   "answer": 0,
+   "why": "أعدنا الرابط لصيغته."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: IP صالح",
+   "code": "import ____\nprint(ipaddress.ip_address(\"10.0.0.1\"))\n",
+   "blanks": [
+    {
+     "answer": "ipaddress"
+    }
+   ],
+   "expect_stdout": "10.0.0.1",
+   "show_output": true,
+   "bank": [
+    "ipaddress",
+    "socket",
+    "re",
+    "urllib"
+   ],
+   "intro": "أي وحدة تتحقق من عناوين IP؟",
+   "explain": "`ipaddress`."
+  },
+  {
+   "type": "code",
+   "title": "استخرج العناوين",
+   "instructions": [
+    "اقرأ `report.txt` واطبع عناوين IPv4 الفريدة مرتبة (كل عنوان في سطر)."
+   ],
+   "starter": "# اكتب كودك هنا\nimport re\n",
+   "tests": [
+    {
+     "expect_stdout": "10.1.2.3\n185.220.101.4"
+    }
+   ],
+   "solution": "import re\nwith open(\"report.txt\", encoding=\"utf-8\") as f:\n    text = f.read()\nips = set(re.findall(r\"\\b\\d{1,3}(?:\\.\\d{1,3}){3}\\b\", text))\nfor ip in sorted(ips):\n    print(ip)\n",
+   "hints": [
+    "استخدم `(?:...)` لتجنب مجموعات findall.",
+    "`sorted(set(...))`"
+   ],
+   "files": {
+    "report.txt": "Alert: beacon to hxxp://evil-update[.]com/a.php from host 10.1.2.3\nDropped file md5 d41d8cd98f00b204e9800998ecf8427e\nAlso contacted 185.220.101.4 and update.badsite.org\nsha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "استخرج البصمات",
+   "instructions": [
+    "اطبع البصمات (MD5 بطول 32 وSHA-256 بطول 64) بصيغة `النوع: القيمة` مرتبة بالنوع (md5 ثم sha256)."
+   ],
+   "starter": "# اكتب كودك هنا\nimport re\n",
+   "tests": [
+    {
+     "expect_stdout": "md5: d41d8cd98f00b204e9800998ecf8427e\nsha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+   ],
+   "solution": "import re\nwith open(\"report.txt\", encoding=\"utf-8\") as f:\n    text = f.read()\nfor h in re.findall(r\"\\b[a-f0-9]{32}\\b\", text):\n    print(\"md5: \" + h)\nfor h in re.findall(r\"\\b[a-f0-9]{64}\\b\", text):\n    print(\"sha256: \" + h)\n",
+   "hints": [
+    "`\\b[a-f0-9]{32}\\b` للـ MD5.",
+    "استخدم `\\b` ليتجنب التطابق داخل بصمة أطول."
+   ],
+   "files": {
+    "report.txt": "Alert: beacon to hxxp://evil-update[.]com/a.php from host 10.1.2.3\nDropped file md5 d41d8cd98f00b204e9800998ecf8427e\nAlso contacted 185.220.101.4 and update.badsite.org\nsha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "نطاقات وروابط",
+   "instructions": [
+    "الملف فيه رابط معطّل. أعده لصيغته (`hxxp`→`http`, `[.]`→`.`) ثم اطبع النطاق فقط (`evil-update.com`)."
+   ],
+   "starter": "# اكتب كودك هنا\nimport re\n",
+   "tests": [
+    {
+     "expect_stdout": "evil-update.com"
+    }
+   ],
+   "solution": "import re\nwith open(\"report.txt\", encoding=\"utf-8\") as f:\n    text = f.read()\ntext = text.replace(\"hxxp\", \"http\").replace(\"[.]\", \".\")\nm = re.search(r\"https?://([A-Za-z0-9.-]+)\", text)\nprint(m.group(1))\n",
+   "hints": [
+    "أعد الصيغة أولاً.",
+    "التقط ما بعد `://`."
+   ],
+   "files": {
+    "report.txt": "Alert: beacon to hxxp://evil-update[.]com/a.php from host 10.1.2.3\nDropped file md5 d41d8cd98f00b204e9800998ecf8427e\nAlso contacted 185.220.101.4 and update.badsite.org\nsha256 e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "تحقق من الصلاحية",
+   "instructions": [
+    "اقرأ عنواناً واطبع `valid` لو عنوان IPv4 صالح، وإلا `invalid` باستخدام `ipaddress`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport ipaddress\n",
+   "tests": [
+    {
+     "expect_stdout": "valid",
+     "stdin": [
+      "10.0.0.1"
+     ]
+    },
+    {
+     "expect_stdout": "invalid",
+     "stdin": [
+      "999.1.1.1"
+     ]
+    },
+    {
+     "expect_stdout": "invalid",
+     "stdin": [
+      "abc"
+     ],
+     "hidden": true
+    },
+    {
+     "expect_stdout": "valid",
+     "stdin": [
+      "255.255.255.255"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import ipaddress\nx = input()\ntry:\n    ipaddress.IPv4Address(x)\n    print(\"valid\")\nexcept ValueError:\n    print(\"invalid\")\n",
+   "hints": [
+    "امسك `ValueError`."
+   ],
+   "stdin": [
+    "10.0.0.1"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: النمط الجشع",
+   "instructions": [
+    "النمط يلتقط مقاطع من بصمة أطول لأنه بلا `\\b`. أصلحه ليطبع `1` (بصمة MD5 واحدة فقط من النص)."
+   ],
+   "starter": "import re\ntext = \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 d41d8cd98f00b204e9800998ecf8427e\"\nprint(len(re.findall(r\"[a-f0-9]{32}\", text)))\n",
+   "tests": [
+    {
+     "expect_stdout": "1"
+    }
+   ],
+   "solution": "import re\ntext = \"e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855 d41d8cd98f00b204e9800998ecf8427e\"\nprint(len(re.findall(r\"\\b[a-f0-9]{32}\\b\", text)))\n",
+   "hints": [
+    "أضف `\\b` قبل وبعد."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش IOC؟",
+     "options": [
+      "مؤشر اختراق مثل IP أو بصمة",
+      "لغة برمجة",
+      "نوع تشفير"
+     ],
+     "answer": 0,
+     "why": "أدلة على نشاط خبيث."
+    },
+    {
+     "q": "طول بصمة SHA-256 السداسية؟",
+     "options": [
+      "64",
+      "32",
+      "40"
+     ],
+     "answer": 0,
+     "why": "256 بت."
+    },
+    {
+     "q": "ليش تُكتب الروابط defanged؟",
+     "options": [
+      "لمنع الضغط بالخطأ",
+      "للتشفير",
+      "لتقصيرها"
+     ],
+     "answer": 0,
+     "why": "سلامة المحلل."
+    },
+    {
+     "q": "وش نفعل بالروابط المستخرجة؟",
+     "options": [
+      "نحللها نصياً دون فتحها",
+      "نفتحها فوراً",
+      "نرسلها لغيرنا"
+     ],
+     "answer": 0,
+     "why": "لا نزورها."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "IOC: IP ونطاقات وروابط وبصمات.",
+    "regex لاستخراجها و`ipaddress` للتحقق.",
+    "defang للأمان، ولا تفتح الروابط."
+   ]
+  }
+ ]
+}

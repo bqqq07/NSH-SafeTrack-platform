@@ -1,0 +1,261 @@
+{
+ "title_ar": "بصمة الملفات hashlib",
+ "title_en": "File Integrity",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔏",
+   "goal": "تتأكد أن ملفاً ما تغيّر (أو لم يُعبث به) بحساب [[checksum]] بوحدة `hashlib`."
+  },
+  {
+   "type": "text",
+   "title": "بصمة لا ترجع",
+   "body": [
+    "دالة [[hashing]] تحول أي محتوى إلى نص ثابت الطول (البصمة). نفس المحتوى يعطي نفس البصمة دائماً، وتغيير حرف واحد يغيّر البصمة كلها، ولا يمكن استرجاع المحتوى منها.",
+    "نحسبها بـ `hashlib.sha256(data).hexdigest()` والبيانات لازم **بايتات**: `\"نص\".encode(\"utf-8\")`.",
+    "استخدامها: التأكد أن ملفاً نزّلته لم يتغير، وكشف التلاعب بملفات النظام (File Integrity Monitoring)."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "حرف واحد تغيّر فاختلفت البصمة كلياً.",
+   "code": "import hashlib\n\na = hashlib.sha256(\"hello\".encode(\"utf-8\")).hexdigest()\nb = hashlib.sha256(\"hellp\".encode(\"utf-8\")).hexdigest()\nprint(a[:12])\nprint(b[:12])\nprint(a == b)"
+  },
+  {
+   "type": "text",
+   "title": "بصمة ملف كبير",
+   "body": [
+    "نقرأ الملف بالوضع الثنائي `\"rb\"` وعلى أجزاء حتى لا نحمّله كله بالذاكرة: `h.update(chunk)`.",
+    "MD5 وSHA-1 ضعيفة ضد التصادم ولا تُستخدم للأمان؛ استخدم **SHA-256** أو أعلى.",
+    "قارن البصمات بـ `hmac.compare_digest` لتفادي تسريب معلومات من زمن المقارنة (تفاصيل في درس التشفير)."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "لا تستخدم MD5 لتحقق أمني؛ يمكن صنع ملفين مختلفين لهما نفس البصمة.",
+   "code": "import hashlib\n\ndef file_sha256(path):\n    h = hashlib.sha256()\n    with open(path, \"rb\") as f:\n        for chunk in iter(lambda: f.read(4096), b\"\"):\n            h.update(chunk)\n    return h.hexdigest()"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "hashing",
+    "checksum",
+    "sha256"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "import hashlib\nh = hashlib.sha256(b\"a\").hexdigest()\nprint(len(h))\n",
+   "options": [
+    "64",
+    "32",
+    "16"
+   ],
+   "answer": 0,
+   "why": "SHA-256 تنتج 256 بت = 64 خانة سداسية عشرية."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): نفس المدخل",
+   "code": "import hashlib\nf = lambda s: hashlib.sha256(s.encode()).hexdigest()\nprint(f(\"x\") == f(\"x\"), f(\"x\") == f(\"X\"))\n",
+   "options": [
+    "True False",
+    "True True",
+    "False False"
+   ],
+   "answer": 0,
+   "why": "نفس المدخل نفس البصمة، وحرف مختلف بصمة مختلفة."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الصيغة",
+   "code": "import hashlib\nprint(len(hashlib.sha256(b\"x\").____()))\n",
+   "blanks": [
+    {
+     "answer": "hexdigest"
+    }
+   ],
+   "expect_stdout": "64",
+   "show_output": true,
+   "bank": [
+    "hexdigest",
+    "digits",
+    "hex",
+    "update"
+   ],
+   "intro": "وش الأسلوب اللي يرجع البصمة كنص؟",
+   "explain": "`hexdigest()`."
+  },
+  {
+   "type": "code",
+   "title": "بصمة نص",
+   "instructions": [
+    "اقرأ نصاً واطبع أول **10** خانات من بصمة SHA-256 له."
+   ],
+   "starter": "# اكتب كودك هنا\nimport hashlib\n",
+   "tests": [
+    {
+     "expect_stdout": "2cf24dba5f",
+     "stdin": [
+      "hello"
+     ]
+    },
+    {
+     "expect_stdout": "e3b0c44298",
+     "stdin": [
+      ""
+     ]
+    },
+    {
+     "expect_stdout": "fb22388826",
+     "stdin": [
+      "أمن"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import hashlib\ntext = input()\nprint(hashlib.sha256(text.encode(\"utf-8\")).hexdigest()[:10])\n",
+   "hints": [
+    "حوّل النص إلى بايتات بـ `encode(\"utf-8\")`."
+   ],
+   "stdin": [
+    "hello"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "التحقق من الملف",
+   "instructions": [
+    "الملف `report.txt` موجود، والبصمة المتوقعة في المتغير `expected`. اطبع `OK` لو بصمة الملف تطابقها، وإلا `TAMPERED`."
+   ],
+   "starter": "expected = \"6b81475db6d438c9c1dd2c8fbe2e3fb6af841f4a5019966049c8c486d239f356\"\n",
+   "tests": [
+    {
+     "expect_stdout": "OK"
+    }
+   ],
+   "solution": "import hashlib\nexpected = \"6b81475db6d438c9c1dd2c8fbe2e3fb6af841f4a5019966049c8c486d239f356\"\nwith open(\"report.txt\", \"rb\") as f:\n    actual = hashlib.sha256(f.read()).hexdigest()\nprint(\"OK\" if actual == expected else \"TAMPERED\")\n",
+   "hints": [
+    "افتح الملف بـ `\"rb\"`.",
+    "قارن البصمتين."
+   ],
+   "files": {
+    "report.txt": "transfer 500 to account 1234\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "كشف التعديل",
+   "instructions": [
+    "الملف `report.txt` تغيّر بعد أخذ البصمة الأصلية (المخزنة في `expected`). اطبع `TAMPERED` أو `OK` حسب المقارنة."
+   ],
+   "starter": "expected = \"6b81475db6d438c9c1dd2c8fbe2e3fb6af841f4a5019966049c8c486d239f356\"\n",
+   "tests": [
+    {
+     "expect_stdout": "TAMPERED"
+    }
+   ],
+   "solution": "import hashlib\nexpected = \"6b81475db6d438c9c1dd2c8fbe2e3fb6af841f4a5019966049c8c486d239f356\"\nwith open(\"report.txt\", \"rb\") as f:\n    actual = hashlib.sha256(f.read()).hexdigest()\nprint(\"OK\" if actual == expected else \"TAMPERED\")\n",
+   "hints": [
+    "نفس الكود: النتيجة تعتمد على محتوى الملف."
+   ],
+   "files": {
+    "report.txt": "transfer 900 to account 1234\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "بصمات عدة ملفات",
+   "instructions": [
+    "الملفات `a.txt` و`b.txt` و`c.txt` موجودة. اطبع لكل ملف سطراً `اسم: أول 8 خانات من البصمة` بترتيب الأسماء."
+   ],
+   "starter": "# اكتب كودك هنا\nimport hashlib\n",
+   "tests": [
+    {
+     "expect_stdout": "a.txt: 7692c3ad\nb.txt: 3fc4ccfe\nc.txt: 8b5b9db0"
+    }
+   ],
+   "solution": "import hashlib\nfor name in [\"a.txt\", \"b.txt\", \"c.txt\"]:\n    with open(name, \"rb\") as f:\n        digest = hashlib.sha256(f.read()).hexdigest()\n    print(name + \": \" + digest[:8])\n",
+   "hints": [
+    "كرر على الأسماء المرتبة.",
+    "افتحها بـ `\"rb\"`."
+   ],
+   "files": {
+    "a.txt": "one",
+    "b.txt": "two",
+    "c.txt": "three"
+   }
+  },
+  {
+   "type": "code",
+   "title": "أصلح: str بدل bytes",
+   "instructions": [
+    "الكود يعطي `TypeError` لأن `sha256` تحتاج بايتات. أصلحه ليطبع أول 6 خانات من البصمة."
+   ],
+   "starter": "import hashlib\nprint(hashlib.sha256(\"hello\").hexdigest()[:6])\n",
+   "tests": [
+    {
+     "expect_stdout": "2cf24d"
+    }
+   ],
+   "solution": "import hashlib\nprint(hashlib.sha256(\"hello\".encode(\"utf-8\")).hexdigest()[:6])\n",
+   "hints": [
+    "استخدم `.encode(\"utf-8\")`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يميّز دالة الهاش؟",
+     "options": [
+      "نفس المدخل نفس الناتج ولا ترجع للأصل",
+      "ترجع للأصل",
+      "تشفّر وتفك"
+     ],
+     "answer": 0,
+     "why": "اتجاه واحد."
+    },
+    {
+     "q": "ليش لا نستخدم MD5 للأمان؟",
+     "options": [
+      "ممكن صنع تصادم",
+      "بطيء",
+      "طويل"
+     ],
+     "answer": 0,
+     "why": "استخدم SHA-256."
+    },
+    {
+     "q": "كيف نقرأ ملفاً للهاش؟",
+     "options": [
+      "بالوضع الثنائي rb",
+      "بالوضع النصي فقط",
+      "بالكتابة"
+     ],
+     "answer": 0,
+     "why": "لأن الهاش على بايتات."
+    },
+    {
+     "q": "وش يعني اختلاف البصمة؟",
+     "options": [
+      "الملف تغيّر",
+      "الملف انحذف",
+      "الجهاز تعطل"
+     ],
+     "answer": 0,
+     "why": "سلامة الملف تكسّرت."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "البصمة ثابتة الطول وتتغير كلياً مع أي تعديل.",
+    "استخدم SHA-256 وافتح الملفات بـ rb.",
+    "مقارنة البصمة تكشف العبث."
+   ]
+  }
+ ]
+}

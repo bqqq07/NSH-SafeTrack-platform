@@ -1,0 +1,245 @@
+{
+ "title_ar": "تحليل سجلات الويب",
+ "title_en": "Web Log Analysis",
+ "duration_min": 12,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🕸️",
+   "goal": "تقرأ سجل خادم ويب وتكتشف طلبات تحمل أنماط هجوم شائعة (SQLi وXSS وتجاوز المسار)."
+  },
+  {
+   "type": "text",
+   "title": "شكل السجل",
+   "body": [
+    "كل سطر في سجل الوصول: `IP - - [الوقت] \"الطريقة المسار HTTP/1.1\" رمز-الحالة الحجم \"المرجع\" \"وكيل-المستخدم\"`.",
+    "نقسم السطر بـ regex بمجموعات مسماة، ونعدّ [[status-code]] (200 نجاح، 404 غير موجود، 403 ممنوع)، ونرصد طلبات من IP واحد بكثرة.",
+    "الطلب قد يكون **مرمَّزاً** (`%27` = علامة اقتباس) لذلك نفكّه بـ `urllib.parse.unquote` قبل الفحص."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "المهاجم يرمّز الحمولة ليتفادى الفحوص البسيطة، لذلك نفك الترميز أولاً.",
+   "code": "import re\nfrom urllib.parse import unquote\n\nline = '10.0.0.1 - - [05/Jan/2025:10:00:01] \"GET /a?x=%27 HTTP/1.1\" 200 5'\nm = re.search(r'\"(\\w+) (\\S+) HTTP', line)\nprint(m.group(1), unquote(m.group(2)))"
+  },
+  {
+   "type": "text",
+   "title": "توقيعات بسيطة",
+   "body": [
+    "نمط SQLi: `union\\s+select` أو `or\\s+1=1` أو `--` بعد علامة اقتباس. نمط XSS: `<script` أو `onerror=`. تجاوز المسار: `../`.",
+    "التوقيعات (signatures) تلتقط الهجمات الساذجة فقط؛ الحماية الحقيقية في الكود (استعلامات مجهّزة، ترميز المخرجات) وفي WAF.",
+    "نستخدم `re.IGNORECASE` لأن المهاجم يغيّر حالة الأحرف."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "وجود التوقيع يعني اشتباه لا إثبات، وغيابه لا يعني السلامة.",
+   "code": "import re\n\nSIG = {\n    \"sqli\": re.compile(r\"(union\\s+select|or\\s+1=1)\", re.I),\n    \"xss\": re.compile(r\"<script|onerror\\s*=\", re.I),\n}\nfor name, pat in SIG.items():\n    print(name, bool(pat.search(\"id=1 OR 1=1\")))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "status-code",
+    "sql-injection",
+    "xss",
+    "user-agent"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "from urllib.parse import unquote\nprint(unquote(\"a%20b%27\"))\n",
+   "options": [
+    "a b'",
+    "a%20b%27",
+    "a b%27"
+   ],
+   "answer": 0,
+   "why": "`%20` مسافة و`%27` علامة اقتباس."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): IGNORECASE",
+   "code": "import re\nprint(bool(re.search(r\"union\\s+select\", \"UNION  SELECT\", re.I)))\n",
+   "options": [
+    "True",
+    "False",
+    "None"
+   ],
+   "answer": 0,
+   "why": "re.I تتجاهل حالة الأحرف."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: فك الترميز",
+   "code": "from urllib.parse import ____\nprint(unquote(\"%3Cb%3E\"))\n",
+   "blanks": [
+    {
+     "answer": "unquote"
+    }
+   ],
+   "expect_stdout": "<b>",
+   "show_output": true,
+   "bank": [
+    "unquote",
+    "quote",
+    "urlparse",
+    "urljoin"
+   ],
+   "intro": "أي دالة تفك ترميز الرابط؟",
+   "explain": "`unquote`."
+  },
+  {
+   "type": "code",
+   "title": "عدّ رموز الحالة",
+   "instructions": [
+    "اقرأ `access.log` واطبع عدد كل رمز حالة بصيغة `رمز: عدد` مرتباً تصاعدياً بالرمز."
+   ],
+   "starter": "# اكتب كودك هنا\nimport re\nfrom collections import Counter\n",
+   "tests": [
+    {
+     "expect_stdout": "200: 4\n403: 1\n404: 1"
+    }
+   ],
+   "solution": "import re\nfrom collections import Counter\n\ncodes = Counter()\nwith open(\"access.log\", encoding=\"utf-8\") as f:\n    for line in f:\n        m = re.search(r'\" (\\d{3}) ', line)\n        if m:\n            codes[m.group(1)] += 1\nfor code in sorted(codes):\n    print(code + \": \" + str(codes[code]))\n",
+   "hints": [
+    "الرمز بعد علامة الاقتباس الأخيرة للطلب.",
+    "نمط `\" (\\d{3}) `"
+   ],
+   "files": {
+    "access.log": "10.0.0.1 - - [05/Jan/2025:10:00:01] \"GET /index.php?id=5 HTTP/1.1\" 200 512 \"-\" \"Mozilla/5.0\"\n10.0.0.7 - - [05/Jan/2025:10:00:02] \"GET /item.php?id=1%27%20OR%201%3D1-- HTTP/1.1\" 200 900 \"-\" \"curl/8.0\"\n10.0.0.7 - - [05/Jan/2025:10:00:03] \"GET /search?q=%3Cscript%3Ealert(1)%3C/script%3E HTTP/1.1\" 200 300 \"-\" \"curl/8.0\"\n10.0.0.2 - - [05/Jan/2025:10:00:04] \"GET /missing HTTP/1.1\" 404 120 \"-\" \"Mozilla/5.0\"\n10.0.0.7 - - [05/Jan/2025:10:00:05] \"GET /download?f=../../etc/passwd HTTP/1.1\" 403 80 \"-\" \"curl/8.0\"\n10.0.0.1 - - [05/Jan/2025:10:00:06] \"GET /about HTTP/1.1\" 200 410 \"-\" \"Mozilla/5.0\"\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "اكتشف طلبات مشبوهة",
+   "instructions": [
+    "لكل سطر مشبوه (يحتوي SQLi أو XSS أو `../` بعد فك الترميز) اطبع `ip نوع`، بنفس ترتيب ظهورها. الأنواع: `sqli` و`xss` و`traversal`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport re\nfrom urllib.parse import unquote\n",
+   "tests": [
+    {
+     "expect_stdout": "10.0.0.7 sqli\n10.0.0.7 xss\n10.0.0.7 traversal"
+    }
+   ],
+   "solution": "import re\nfrom urllib.parse import unquote\n\nSIG = [\n    (\"sqli\", re.compile(r\"(union\\s+select|or\\s+1=1)\", re.I)),\n    (\"xss\", re.compile(r\"<script|onerror\\s*=\", re.I)),\n    (\"traversal\", re.compile(r\"\\.\\./\")),\n]\nwith open(\"access.log\", encoding=\"utf-8\") as f:\n    for line in f:\n        m = re.search(r'^(\\S+) .*?\"\\w+ (\\S+) HTTP', line)\n        if not m:\n            continue\n        ip, path = m.group(1), unquote(m.group(2))\n        for name, pat in SIG:\n            if pat.search(path):\n                print(ip + \" \" + name)\n                break\n",
+   "hints": [
+    "فك الترميز قبل الفحص.",
+    "اكسر بعد أول توقيع مطابق."
+   ],
+   "files": {
+    "access.log": "10.0.0.1 - - [05/Jan/2025:10:00:01] \"GET /index.php?id=5 HTTP/1.1\" 200 512 \"-\" \"Mozilla/5.0\"\n10.0.0.7 - - [05/Jan/2025:10:00:02] \"GET /item.php?id=1%27%20OR%201%3D1-- HTTP/1.1\" 200 900 \"-\" \"curl/8.0\"\n10.0.0.7 - - [05/Jan/2025:10:00:03] \"GET /search?q=%3Cscript%3Ealert(1)%3C/script%3E HTTP/1.1\" 200 300 \"-\" \"curl/8.0\"\n10.0.0.2 - - [05/Jan/2025:10:00:04] \"GET /missing HTTP/1.1\" 404 120 \"-\" \"Mozilla/5.0\"\n10.0.0.7 - - [05/Jan/2025:10:00:05] \"GET /download?f=../../etc/passwd HTTP/1.1\" 403 80 \"-\" \"curl/8.0\"\n10.0.0.1 - - [05/Jan/2025:10:00:06] \"GET /about HTTP/1.1\" 200 410 \"-\" \"Mozilla/5.0\"\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "أكثر IP طلباً",
+   "instructions": [
+    "اطبع العنوان الأكثر طلباً وعدد طلباته بصيغة `ip n`."
+   ],
+   "starter": "# اكتب كودك هنا\nfrom collections import Counter\n",
+   "tests": [
+    {
+     "expect_stdout": "10.0.0.7 3"
+    }
+   ],
+   "solution": "from collections import Counter\n\nips = Counter()\nwith open(\"access.log\", encoding=\"utf-8\") as f:\n    for line in f:\n        ips[line.split()[0]] += 1\nip, n = ips.most_common(1)[0]\nprint(ip + \" \" + str(n))\n",
+   "hints": [
+    "أول كلمة في السطر هي الـ IP."
+   ],
+   "files": {
+    "access.log": "10.0.0.1 - - [05/Jan/2025:10:00:01] \"GET /index.php?id=5 HTTP/1.1\" 200 512 \"-\" \"Mozilla/5.0\"\n10.0.0.7 - - [05/Jan/2025:10:00:02] \"GET /item.php?id=1%27%20OR%201%3D1-- HTTP/1.1\" 200 900 \"-\" \"curl/8.0\"\n10.0.0.7 - - [05/Jan/2025:10:00:03] \"GET /search?q=%3Cscript%3Ealert(1)%3C/script%3E HTTP/1.1\" 200 300 \"-\" \"curl/8.0\"\n10.0.0.2 - - [05/Jan/2025:10:00:04] \"GET /missing HTTP/1.1\" 404 120 \"-\" \"Mozilla/5.0\"\n10.0.0.7 - - [05/Jan/2025:10:00:05] \"GET /download?f=../../etc/passwd HTTP/1.1\" 403 80 \"-\" \"curl/8.0\"\n10.0.0.1 - - [05/Jan/2025:10:00:06] \"GET /about HTTP/1.1\" 200 410 \"-\" \"Mozilla/5.0\"\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "وكيل المستخدم",
+   "instructions": [
+    "اطبع قائمة (مرتبة وفريدة) بوكلاء المستخدم (آخر حقل بين علامتي اقتباس) كل واحد في سطر."
+   ],
+   "starter": "# اكتب كودك هنا\nimport re\n",
+   "tests": [
+    {
+     "expect_stdout": "Mozilla/5.0\ncurl/8.0"
+    }
+   ],
+   "solution": "import re\n\nagents = set()\nwith open(\"access.log\", encoding=\"utf-8\") as f:\n    for line in f:\n        m = re.search(r'\"([^\"]*)\"\\s*$', line.strip())\n        if m:\n            agents.add(m.group(1))\nfor a in sorted(agents):\n    print(a)\n",
+   "hints": [
+    "التقط آخر نص بين اقتباسين.",
+    "sorted(set(...))"
+   ],
+   "files": {
+    "access.log": "10.0.0.1 - - [05/Jan/2025:10:00:01] \"GET /index.php?id=5 HTTP/1.1\" 200 512 \"-\" \"Mozilla/5.0\"\n10.0.0.7 - - [05/Jan/2025:10:00:02] \"GET /item.php?id=1%27%20OR%201%3D1-- HTTP/1.1\" 200 900 \"-\" \"curl/8.0\"\n10.0.0.7 - - [05/Jan/2025:10:00:03] \"GET /search?q=%3Cscript%3Ealert(1)%3C/script%3E HTTP/1.1\" 200 300 \"-\" \"curl/8.0\"\n10.0.0.2 - - [05/Jan/2025:10:00:04] \"GET /missing HTTP/1.1\" 404 120 \"-\" \"Mozilla/5.0\"\n10.0.0.7 - - [05/Jan/2025:10:00:05] \"GET /download?f=../../etc/passwd HTTP/1.1\" 403 80 \"-\" \"curl/8.0\"\n10.0.0.1 - - [05/Jan/2025:10:00:06] \"GET /about HTTP/1.1\" 200 410 \"-\" \"Mozilla/5.0\"\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "أصلح: التوقيع لا يلتقط الترميز",
+   "instructions": [
+    "الفحص لا يلتقط `%3Cscript%3E` لأنه لم يفك الترميز. أصلحه ليطبع `xss`."
+   ],
+   "starter": "import re\nfrom urllib.parse import unquote\npath = \"/s?q=%3Cscript%3Ealert(1)%3C/script%3E\"\nprint(\"xss\" if re.search(r\"<script\", path, re.I) else \"clean\")\n",
+   "tests": [
+    {
+     "expect_stdout": "xss"
+    }
+   ],
+   "solution": "import re\nfrom urllib.parse import unquote\npath = \"/s?q=%3Cscript%3Ealert(1)%3C/script%3E\"\nprint(\"xss\" if re.search(r\"<script\", unquote(path), re.I) else \"clean\")\n",
+   "hints": [
+    "فك الترميز قبل الفحص."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نفك ترميز الرابط قبل الفحص؟",
+     "options": [
+      "المهاجم يرمّز الحمولة لتفادي الفحص",
+      "لتقصيره",
+      "لتشفيره"
+     ],
+     "answer": 0,
+     "why": "unquote."
+    },
+    {
+     "q": "وش يعني 404؟",
+     "options": [
+      "الصفحة غير موجودة",
+      "نجاح",
+      "خطأ في الخادم"
+     ],
+     "answer": 0,
+     "why": "404 Not Found."
+    },
+    {
+     "q": "هل التوقيعات كافية للحماية؟",
+     "options": [
+      "لا، نحتاج كوداً آمناً وWAF",
+      "نعم",
+      "فقط للـ XSS"
+     ],
+     "answer": 0,
+     "why": "تكشف الهجمات الساذجة."
+    },
+    {
+     "q": "ليش re.IGNORECASE؟",
+     "options": [
+      "المهاجم يغيّر حالة الأحرف",
+      "لتسريع regex",
+      "للعربية"
+     ],
+     "answer": 0,
+     "why": "UNION = union."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "نحلل السجل بـ regex ونفك الترميز قبل الفحص.",
+    "توقيعات SQLi وXSS وtraversal كشف أولي فقط.",
+    "الحماية الحقيقية: استعلامات مجهّزة وترميز مخرجات وWAF."
+   ]
+  }
+ ]
+}

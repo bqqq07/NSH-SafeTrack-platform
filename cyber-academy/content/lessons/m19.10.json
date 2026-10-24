@@ -1,0 +1,223 @@
+{
+ "title_ar": "تقرير أمني تلقائي",
+ "title_en": "Auto Report",
+ "duration_min": 12,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "📄",
+   "goal": "تحوّل نتائج التحليل إلى تقرير منظم بصيغتي JSON وHTML، مع الحذر من حقن HTML."
+  },
+  {
+   "type": "text",
+   "title": "من النتائج إلى تقرير",
+   "body": [
+    "التقرير الجيد: ملخص تنفيذي، أرقام، قائمة مرتبة بالخطورة، وتوصيات. نجمع النتائج في قاموس ثم نحوّله.",
+    "JSON للأنظمة: `json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False)`. و HTML للبشر.",
+    "عند بناء HTML من بيانات (مثل User-Agent من السجل) **لازم** نهرّب النص بـ `html.escape` وإلا صرنا نحقن XSS في تقريرنا نفسه!"
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "warn",
+   "note": "بيانات السجلات غير موثوقة: قد يضع المهاجم كوداً في User-Agent ليصيب من يفتح التقرير.",
+   "code": "import json\nimport html\n\nreport = {\"failed_logins\": 5, \"top_ip\": \"10.0.0.5\"}\nprint(json.dumps(report, sort_keys=True))\nprint(html.escape(\"<script>alert(1)</script>\"))"
+  },
+  {
+   "type": "text",
+   "title": "ترتيب وتنسيق",
+   "body": [
+    "نرتب النتائج بالخطورة أولاً ثم بالاسم ليكون الناتج ثابتاً (مهم للمقارنة).",
+    "جدول HTML بسيط: صف لكل نتيجة `<tr><td>...</td></tr>`، ونهرّب كل قيمة.",
+    "سمِّ الحقول بوضوح وأضف وقت الإنشاء (من `datetime`) في التقارير الحقيقية."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "القاعدة: هرّب عند الإخراج، ولا تثق بأي بيانات من خارج برنامجك.",
+   "code": "import html\n\nrows = [(\"high\", \"10.0.0.5\"), (\"low\", \"10.0.0.9\")]\nfor sev, ip in rows:\n    print(\"<tr><td>\" + html.escape(sev) + \"</td><td>\" + html.escape(ip) + \"</td></tr>\")"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "json",
+    "xss",
+    "log"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "import json\nprint(json.dumps({\"b\": 1, \"a\": 2}, sort_keys=True))\n",
+   "options": [
+    "{\"a\": 2, \"b\": 1}",
+    "{\"b\": 1, \"a\": 2}",
+    "{\"a\": 1, \"b\": 2}"
+   ],
+   "answer": 0,
+   "why": "sort_keys ترتب المفاتيح أبجدياً."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): escape",
+   "code": "import html\nprint(html.escape(\"<b>&</b>\"))\n",
+   "options": [
+    "&lt;b&gt;&amp;&lt;/b&gt;",
+    "<b>&</b>",
+    "&lt;b&gt;&&lt;/b&gt;"
+   ],
+   "answer": 0,
+   "why": "الرموز < > & تُهرَّب."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: التهريب",
+   "code": "import ____\nprint(html.escape(\"<x>\"))\n",
+   "blanks": [
+    {
+     "answer": "html"
+    }
+   ],
+   "expect_stdout": "&lt;x&gt;",
+   "show_output": true,
+   "bank": [
+    "html",
+    "json",
+    "csv",
+    "xml"
+   ],
+   "intro": "أي وحدة فيها escape للـ HTML؟",
+   "explain": "`html`."
+  },
+  {
+   "type": "code",
+   "title": "تقرير JSON",
+   "instructions": [
+    "من الملف `auth.log` احسب عدد الفشل الكلي وأكثر IP فشلاً، واطبع قاموس التقرير بصيغة JSON مرتبة المفاتيح: `{\"failed_total\": n, \"top_ip\": ip}`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport json\nimport re\nfrom collections import Counter\n",
+   "tests": [
+    {
+     "expect_stdout": "{\"failed_total\": 5, \"top_ip\": \"10.0.0.5\"}"
+    }
+   ],
+   "solution": "import json\nimport re\nfrom collections import Counter\n\ncounts = Counter()\nwith open(\"auth.log\", encoding=\"utf-8\") as f:\n    for line in f:\n        m = re.search(r\"Failed password for (\\S+) from (\\S+)\", line)\n        if m:\n            counts[m.group(2)] += 1\nreport = {\"failed_total\": sum(counts.values()), \"top_ip\": counts.most_common(1)[0][0]}\nprint(json.dumps(report, sort_keys=True))\n",
+   "hints": [
+    "استخدم Counter.",
+    "`sum(counts.values())`"
+   ],
+   "files": {
+    "auth.log": "Jan 05 Failed password for root from 10.0.0.5 port 22\nJan 05 Failed password for admin from 10.0.0.5 port 22\nJan 05 Accepted password for sara from 10.0.0.2 port 22\nJan 05 Failed password for test from 10.0.0.5 port 22\nJan 05 Failed password for sara from 10.0.0.9 port 22\nJan 05 Failed password for sara from 10.0.0.9 port 22\n"
+   }
+  },
+  {
+   "type": "code",
+   "title": "جدول HTML آمن",
+   "instructions": [
+    "`findings` قائمة أزواج (الخطورة، الوصف). اطبع صفاً HTML لكل نتيجة `<tr><td>الخطورة</td><td>الوصف</td></tr>` مع **تهريب** القيم. الوصف الثاني يحتوي كوداً خبيثاً."
+   ],
+   "starter": "findings = [(\"high\", \"brute force from 10.0.0.5\"), (\"low\", \"<script>alert(1)</script>\")]\nimport html\n",
+   "tests": [
+    {
+     "expect_stdout": "<tr><td>high</td><td>brute force from 10.0.0.5</td></tr>\n<tr><td>low</td><td>&lt;script&gt;alert(1)&lt;/script&gt;</td></tr>"
+    }
+   ],
+   "solution": "import html\nfindings = [(\"high\", \"brute force from 10.0.0.5\"), (\"low\", \"<script>alert(1)</script>\")]\nfor sev, desc in findings:\n    print(\"<tr><td>\" + html.escape(sev) + \"</td><td>\" + html.escape(desc) + \"</td></tr>\")\n",
+   "hints": [
+    "هرّب كل قيمة بـ `html.escape`."
+   ],
+   "checks": [
+    {
+     "regex": "html\\.escape|escape\\s*\\(",
+     "msg": "استخدم html.escape"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "ترتيب بالخطورة",
+   "instructions": [
+    "رتّب `findings` بالخطورة (`high` ثم `medium` ثم `low`) وعند التساوي بالوصف أبجدياً، واطبع كل نتيجة `[خطورة] وصف`."
+   ],
+   "starter": "findings = [(\"low\", \"old tls\"), (\"high\", \"weak pw\"), (\"medium\", \"open 3306\"), (\"high\", \"exposed .env\")]\n",
+   "tests": [
+    {
+     "expect_stdout": "[high] exposed .env\n[high] weak pw\n[medium] open 3306\n[low] old tls"
+    }
+   ],
+   "solution": "findings = [(\"low\", \"old tls\"), (\"high\", \"weak pw\"), (\"medium\", \"open 3306\"), (\"high\", \"exposed .env\")]\norder = {\"high\": 0, \"medium\": 1, \"low\": 2}\nfor sev, desc in sorted(findings, key=lambda f: (order[f[0]], f[1])):\n    print(\"[\" + sev + \"] \" + desc)\n",
+   "hints": [
+    "قاموس يربط الخطورة برقم الترتيب.",
+    "مفتاح الترتيب `(order[sev], desc)`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: حقن في التقرير",
+   "instructions": [
+    "التقرير يضع User-Agent كما هو في HTML فيصير ثغرة XSS. هرّبه ليطبع `<td>&lt;img src=x onerror=alert(1)&gt;</td>`."
+   ],
+   "starter": "ua = \"<img src=x onerror=alert(1)>\"\nprint(\"<td>\" + ua + \"</td>\")\n",
+   "tests": [
+    {
+     "expect_stdout": "<td>&lt;img src=x onerror=alert(1)&gt;</td>"
+    }
+   ],
+   "solution": "import html\nua = \"<img src=x onerror=alert(1)>\"\nprint(\"<td>\" + html.escape(ua) + \"</td>\")\n",
+   "hints": [
+    "استورد html واستخدم escape."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نهرّب قيم السجل في HTML؟",
+     "options": [
+      "لأن المهاجم قد يضع كوداً فيها",
+      "لتصغير الملف",
+      "للعربية"
+     ],
+     "answer": 0,
+     "why": "XSS ضد من يفتح التقرير."
+    },
+    {
+     "q": "وش تفعل sort_keys؟",
+     "options": [
+      "تثبّت ترتيب المفاتيح",
+      "تحذف المفاتيح",
+      "تشفرها"
+     ],
+     "answer": 0,
+     "why": "ناتج ثابت للمقارنة."
+    },
+    {
+     "q": "ماذا نرتب أولاً في التقرير؟",
+     "options": [
+      "الأخطر",
+      "الأقدم",
+      "الأقصر"
+     ],
+     "answer": 0,
+     "why": "الأولوية للخطورة."
+    },
+    {
+     "q": "JSON أم HTML؟",
+     "options": [
+      "JSON للأنظمة وHTML للبشر",
+      "لا فرق",
+      "HTML للأنظمة"
+     ],
+     "answer": 0,
+     "why": "حسب المستهلك."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "نجمع النتائج في قاموس ثم JSON للأنظمة وHTML للبشر.",
+    "هرّب كل بيانات غير موثوقة بـ `html.escape`.",
+    "رتّب بالخطورة وثبّت الترتيب."
+   ]
+  }
+ ]
+}

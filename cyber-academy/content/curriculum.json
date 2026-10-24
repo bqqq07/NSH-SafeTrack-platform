@@ -1060,61 +1060,61 @@
      "id": "m19.1",
      "title_ar": "بصمة الملفات hashlib",
      "title_en": "File Integrity",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m19.2",
      "title_ar": "مولّد باسوردات secrets",
      "title_en": "Password Generator",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m19.3",
      "title_ar": "فاحص قوة الباسورد",
      "title_en": "Password Checker",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m19.4",
      "title_ar": "كاشف التخمين من السجلات",
      "title_en": "Brute-force Detector",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m19.5",
      "title_ar": "استخراج IOC بـ Regex",
      "title_en": "IOC Extraction",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m19.6",
      "title_ar": "تحليل سجلات الويب",
      "title_en": "Web Log Analysis",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m19.7",
-     "title_ar": "فحص المنافذ المحلية",
-     "title_en": "Local Port Check",
-     "ready": false
+     "title_ar": "المنافذ والمقابس (بيئة محلية)",
+     "title_en": "Sockets & Local Ports",
+     "ready": true
     },
     {
      "id": "m19.8",
-     "title_ar": "requests وواجهات JSON",
-     "title_en": "APIs",
-     "ready": false
+     "title_ar": "واجهات API وJSON (محاكاة)",
+     "title_en": "APIs & JSON",
+     "ready": true
     },
     {
      "id": "m19.9",
-     "title_ar": "التشفير بـ cryptography",
-     "title_en": "Fernet",
-     "ready": false
+     "title_ar": "التشفير الآمن: HMAC وKDF وFernet",
+     "title_en": "Secure Crypto",
+     "ready": true
     },
     {
      "id": "m19.10",
      "title_ar": "تقرير أمني تلقائي",
      "title_en": "Auto Report",
-     "ready": false
+     "ready": true
     }
    ]
   },

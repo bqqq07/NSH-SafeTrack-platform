@@ -1,0 +1,238 @@
+{
+ "title_ar": "واجهات API وJSON (محاكاة)",
+ "title_en": "APIs & JSON",
+ "duration_min": 11,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🌐",
+   "goal": "تتعامل مع واجهة API: ترسل طلباً، تقرأ [[status-code]]، وتحلل JSON، وتمر على الصفحات."
+  },
+  {
+   "type": "text",
+   "title": "طلب وجواب",
+   "body": [
+    "واجهة [[api]] تعمل عبر [[endpoint]] (عنوان) وطريقة (GET لقراءة، POST لإرسال)، وترجع رمز حالة وجسماً غالباً [[json]].",
+    "على جهازك تستخدم مكتبة `requests`: `r = requests.get(url, timeout=5)` ثم `r.status_code` و`r.json()`. هنا في المتصفح نستخدم **دالة محاكاة** `fake_get(path)` ترجع `(status, data)` بنفس الفكرة.",
+    "تحقق دائماً من `status` قبل استخدام البيانات، وحدد `timeout`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "لا تضع مفاتيح API داخل الكود؛ خزّنها في متغيرات بيئة.",
+   "code": "# على جهازك (للمعرفة):\n# import requests\n# r = requests.get(\"https://api.example.com/users\", timeout=5)\n# if r.status_code == 200:\n#     data = r.json()\n\nstatus, data = 200, {\"items\": [{\"id\": 1}]}\nprint(status, len(data[\"items\"]))"
+  },
+  {
+   "type": "text",
+   "title": "الصفحات والأخطاء",
+   "body": [
+    "الواجهات تقسم النتائج لصفحات: الرد فيه `next` للصفحة التالية، نكرر حتى تكون `None`.",
+    "أخطاء 4xx خطؤك (401 غير مصرح، 404 غير موجود)، و5xx خطأ الخادم (نعيد المحاولة بتأخير متزايد).",
+    "بناء الاستعلام بأمان: `urllib.parse.urlencode({\"q\": \"a b\"})` يرمّز القيم صح."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "لا تدمج مدخلات المستخدم في الرابط يدوياً؛ استخدم urlencode.",
+   "code": "from urllib.parse import urlencode\n\nprint(urlencode({\"q\": \"a b\", \"page\": 2}))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "api",
+    "endpoint",
+    "json",
+    "status-code"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "import json\nd = json.loads('{\"items\": [1, 2, 3]}')\nprint(len(d[\"items\"]))\n",
+   "options": [
+    "3",
+    "1",
+    "2"
+   ],
+   "answer": 0,
+   "why": "القائمة بها ثلاثة عناصر."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): urlencode",
+   "code": "from urllib.parse import urlencode\nprint(urlencode({\"q\": \"a b\"}))\n",
+   "options": [
+    "q=a+b",
+    "q=a b",
+    "q=a%20b"
+   ],
+   "answer": 0,
+   "why": "urlencode تستبدل المسافة بـ +."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: التحليل",
+   "code": "import json\ndata = json.____('{\"ok\": true}')\nprint(data[\"ok\"])\n",
+   "blanks": [
+    {
+     "answer": "loads"
+    }
+   ],
+   "expect_stdout": "True",
+   "show_output": true,
+   "bank": [
+    "loads",
+    "dumps",
+    "dump",
+    "parse"
+   ],
+   "intro": "وش دالة تحويل نص JSON لبيانات؟",
+   "explain": "`loads`."
+  },
+  {
+   "type": "code",
+   "title": "اقرأ المستخدمين",
+   "instructions": [
+    "استدع `fake_get(\"/users\")` واطبع أسماء مستخدمي الصفحة الأولى، كل اسم في سطر. تحقق أن الحالة 200."
+   ],
+   "starter": "import json\n\n# خدمة محاكاة داخل التمرين (بدون إنترنت)\nDB = {\n    \"/users\": (200, '{\"items\": [{\"id\": 1, \"name\": \"sara\"}, {\"id\": 2, \"name\": \"ali\"}], \"next\": \"/users?page=2\"}'),\n    \"/users?page=2\": (200, '{\"items\": [{\"id\": 3, \"name\": \"nora\"}], \"next\": null}'),\n    \"/secret\": (401, '{\"error\": \"unauthorized\"}'),\n    \"/boom\": (500, '{\"error\": \"server\"}'),\n}\n\ndef fake_get(path):\n    status, body = DB.get(path, (404, '{\"error\": \"not found\"}'))\n    return status, json.loads(body)\n\n# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "sara\nali"
+    }
+   ],
+   "solution": "import json\n\n# خدمة محاكاة داخل التمرين (بدون إنترنت)\nDB = {\n    \"/users\": (200, '{\"items\": [{\"id\": 1, \"name\": \"sara\"}, {\"id\": 2, \"name\": \"ali\"}], \"next\": \"/users?page=2\"}'),\n    \"/users?page=2\": (200, '{\"items\": [{\"id\": 3, \"name\": \"nora\"}], \"next\": null}'),\n    \"/secret\": (401, '{\"error\": \"unauthorized\"}'),\n    \"/boom\": (500, '{\"error\": \"server\"}'),\n}\n\ndef fake_get(path):\n    status, body = DB.get(path, (404, '{\"error\": \"not found\"}'))\n    return status, json.loads(body)\n\nstatus, data = fake_get(\"/users\")\nif status == 200:\n    for u in data[\"items\"]:\n        print(u[\"name\"])\n",
+   "hints": [
+    "المفتاح `items` فيه القائمة."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "كل الصفحات",
+   "instructions": [
+    "اجلب كل الصفحات بدءاً من `/users` متتبعاً الحقل `next` حتى `None`، واطبع كل الأسماء مرتبة أبجدياً."
+   ],
+   "starter": "import json\n\n# خدمة محاكاة داخل التمرين (بدون إنترنت)\nDB = {\n    \"/users\": (200, '{\"items\": [{\"id\": 1, \"name\": \"sara\"}, {\"id\": 2, \"name\": \"ali\"}], \"next\": \"/users?page=2\"}'),\n    \"/users?page=2\": (200, '{\"items\": [{\"id\": 3, \"name\": \"nora\"}], \"next\": null}'),\n    \"/secret\": (401, '{\"error\": \"unauthorized\"}'),\n    \"/boom\": (500, '{\"error\": \"server\"}'),\n}\n\ndef fake_get(path):\n    status, body = DB.get(path, (404, '{\"error\": \"not found\"}'))\n    return status, json.loads(body)\n\n# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "ali\nnora\nsara"
+    }
+   ],
+   "solution": "import json\n\n# خدمة محاكاة داخل التمرين (بدون إنترنت)\nDB = {\n    \"/users\": (200, '{\"items\": [{\"id\": 1, \"name\": \"sara\"}, {\"id\": 2, \"name\": \"ali\"}], \"next\": \"/users?page=2\"}'),\n    \"/users?page=2\": (200, '{\"items\": [{\"id\": 3, \"name\": \"nora\"}], \"next\": null}'),\n    \"/secret\": (401, '{\"error\": \"unauthorized\"}'),\n    \"/boom\": (500, '{\"error\": \"server\"}'),\n}\n\ndef fake_get(path):\n    status, body = DB.get(path, (404, '{\"error\": \"not found\"}'))\n    return status, json.loads(body)\n\nnames = []\npath = \"/users\"\nwhile path:\n    status, data = fake_get(path)\n    for u in data[\"items\"]:\n        names.append(u[\"name\"])\n    path = data[\"next\"]\nfor n in sorted(names):\n    print(n)\n",
+   "hints": [
+    "كرر ما دام `path` غير None.",
+    "حدّث `path` من `next`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "معالجة الأخطاء",
+   "instructions": [
+    "عرّف `fetch(path)` ترجع البيانات لو الحالة 200، وترفع `PermissionError` لـ 401، و`LookupError` لـ 404، و`RuntimeError` لأي حالة أخرى. ثم اطبع اسم نوع الخطأ لكل من `/secret` و`/nope` و`/boom` (كل في سطر)."
+   ],
+   "starter": "import json\n\n# خدمة محاكاة داخل التمرين (بدون إنترنت)\nDB = {\n    \"/users\": (200, '{\"items\": [{\"id\": 1, \"name\": \"sara\"}, {\"id\": 2, \"name\": \"ali\"}], \"next\": \"/users?page=2\"}'),\n    \"/users?page=2\": (200, '{\"items\": [{\"id\": 3, \"name\": \"nora\"}], \"next\": null}'),\n    \"/secret\": (401, '{\"error\": \"unauthorized\"}'),\n    \"/boom\": (500, '{\"error\": \"server\"}'),\n}\n\ndef fake_get(path):\n    status, body = DB.get(path, (404, '{\"error\": \"not found\"}'))\n    return status, json.loads(body)\n\n# عرّف fetch هنا\n\nfor p in [\"/secret\", \"/nope\", \"/boom\"]:\n    try:\n        fetch(p)\n    except Exception as e:\n        print(type(e).__name__)\n",
+   "tests": [
+    {
+     "expect_stdout": "PermissionError\nLookupError\nRuntimeError"
+    }
+   ],
+   "solution": "import json\n\n# خدمة محاكاة داخل التمرين (بدون إنترنت)\nDB = {\n    \"/users\": (200, '{\"items\": [{\"id\": 1, \"name\": \"sara\"}, {\"id\": 2, \"name\": \"ali\"}], \"next\": \"/users?page=2\"}'),\n    \"/users?page=2\": (200, '{\"items\": [{\"id\": 3, \"name\": \"nora\"}], \"next\": null}'),\n    \"/secret\": (401, '{\"error\": \"unauthorized\"}'),\n    \"/boom\": (500, '{\"error\": \"server\"}'),\n}\n\ndef fake_get(path):\n    status, body = DB.get(path, (404, '{\"error\": \"not found\"}'))\n    return status, json.loads(body)\n\ndef fetch(path):\n    status, data = fake_get(path)\n    if status == 200:\n        return data\n    if status == 401:\n        raise PermissionError(\"unauthorized\")\n    if status == 404:\n        raise LookupError(\"not found\")\n    raise RuntimeError(\"server error\")\n\nfor p in [\"/secret\", \"/nope\", \"/boom\"]:\n    try:\n        fetch(p)\n    except Exception as e:\n        print(type(e).__name__)\n",
+   "hints": [
+    "افحص الحالات بالتتابع."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "بناء الرابط",
+   "instructions": [
+    "عرّف `build(path, **params)` ترجع `path?query` مستخدماً `urlencode` بحسب ترتيب الإدخال. مثال: `build(\"/search\", q=\"a b\", page=2)` ← `/search?q=a+b&page=2`"
+   ],
+   "starter": "# اكتب كودك هنا\nfrom urllib.parse import urlencode\n",
+   "tests": [
+    {
+     "call": "build(\"/search\", q=\"a b\", page=2)",
+     "expect": "/search?q=a+b&page=2"
+    },
+    {
+     "call": "build(\"/x\")",
+     "expect": "/x",
+     "hidden": true
+    }
+   ],
+   "solution": "from urllib.parse import urlencode\n\ndef build(path, **params):\n    if not params:\n        return path\n    return path + \"?\" + urlencode(params)\n",
+   "hints": [
+    "`urlencode(params)` تقبل قاموساً.",
+    "تعامل مع الحالة بدون معاملات."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: لا تثق بالحالة",
+   "instructions": [
+    "الكود يقرأ البيانات حتى لو فشل الطلب فينهار (`KeyError`). افحص الحالة ليطبع `failed 401`."
+   ],
+   "starter": "import json\n\n# خدمة محاكاة داخل التمرين (بدون إنترنت)\nDB = {\n    \"/users\": (200, '{\"items\": [{\"id\": 1, \"name\": \"sara\"}, {\"id\": 2, \"name\": \"ali\"}], \"next\": \"/users?page=2\"}'),\n    \"/users?page=2\": (200, '{\"items\": [{\"id\": 3, \"name\": \"nora\"}], \"next\": null}'),\n    \"/secret\": (401, '{\"error\": \"unauthorized\"}'),\n    \"/boom\": (500, '{\"error\": \"server\"}'),\n}\n\ndef fake_get(path):\n    status, body = DB.get(path, (404, '{\"error\": \"not found\"}'))\n    return status, json.loads(body)\n\nstatus, data = fake_get(\"/secret\")\nprint(data[\"items\"])\n",
+   "tests": [
+    {
+     "expect_stdout": "failed 401"
+    }
+   ],
+   "solution": "import json\n\n# خدمة محاكاة داخل التمرين (بدون إنترنت)\nDB = {\n    \"/users\": (200, '{\"items\": [{\"id\": 1, \"name\": \"sara\"}, {\"id\": 2, \"name\": \"ali\"}], \"next\": \"/users?page=2\"}'),\n    \"/users?page=2\": (200, '{\"items\": [{\"id\": 3, \"name\": \"nora\"}], \"next\": null}'),\n    \"/secret\": (401, '{\"error\": \"unauthorized\"}'),\n    \"/boom\": (500, '{\"error\": \"server\"}'),\n}\n\ndef fake_get(path):\n    status, body = DB.get(path, (404, '{\"error\": \"not found\"}'))\n    return status, json.loads(body)\n\nstatus, data = fake_get(\"/secret\")\nif status == 200:\n    print(data[\"items\"])\nelse:\n    print(\"failed\", status)\n",
+   "hints": [
+    "افحص `status == 200` قبل القراءة."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يعني 401؟",
+     "options": [
+      "غير مصرح (مصادقة مفقودة)",
+      "غير موجود",
+      "خطأ الخادم"
+     ],
+     "answer": 0,
+     "why": "تحقق من المفتاح."
+    },
+    {
+     "q": "لماذا نحدد timeout؟",
+     "options": [
+      "لئلا ينتظر البرنامج للأبد",
+      "لتسريع الخادم",
+      "لتشفير الطلب"
+     ],
+     "answer": 0,
+     "why": "حماية من التعليق."
+    },
+    {
+     "q": "كيف نبني استعلاماً بأمان؟",
+     "options": [
+      "urlencode",
+      "دمج النصوص",
+      "eval"
+     ],
+     "answer": 0,
+     "why": "يرمّز القيم."
+    },
+    {
+     "q": "أين نخزن مفتاح API؟",
+     "options": [
+      "متغيرات بيئة لا في الكود",
+      "في الكود",
+      "في GitHub"
+     ],
+     "answer": 0,
+     "why": "لا تسرّبه."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "API: endpoint وطريقة ورمز حالة وجسم JSON.",
+    "افحص الحالة قبل البيانات، وكرر الصفحات بـ next.",
+    "urlencode ومتغيرات البيئة للأمان."
+   ]
+  }
+ ]
+}
