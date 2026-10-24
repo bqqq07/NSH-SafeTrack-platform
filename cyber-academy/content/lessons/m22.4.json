@@ -1,0 +1,232 @@
+{
+ "title_ar": "المتغيرات والشروط",
+ "title_en": "Variables & Conditions",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔀",
+   "goal": "تخزن قيماً في [[variable]] وتتخذ قرارات بشروط `if` في Bash."
+  },
+  {
+   "type": "text",
+   "title": "المتغيرات",
+   "body": [
+    "`name=sara` بدون مسافات حول `=`. نقرأه بـ `$name` أو `\"${name}\"`. ونلتقط ناتج أمر بـ `$(cmd)`: `today=$(date +%F)`.",
+    "[[environment-variable]] يراه كل برنامج تشغّله: `export API_URL=http://localhost`. وتقرأ الوسطاء في السكربت بـ `$1` و`$2` و`$#` (عددهم).",
+    "**الاقتباس ([[quoting]]):** المزدوج `\"$x\"` يوسّع المتغيرات، والمفرد `'$x'` نص حرفي."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "warn",
+   "note": "اكتب `name = sara` بمسافات فيعتبرها Bash أمراً اسمه name! الخطأ الأشهر.",
+   "code": "name=sara\necho \"hi $name\"\necho 'hi $name'\ncount=$(ls | wc -l)\necho $count"
+  },
+  {
+   "type": "text",
+   "title": "الشروط",
+   "body": [
+    "`if [[ -f file ]]; then ... elif ... else ... fi`. فحوص الملفات: `-f` ملف موجود، `-d` مجلد، `-e` أي شيء، `-z` نص فارغ.",
+    "مقارنة الأرقام: `-eq` `-ne` `-lt` `-gt`. والنصوص: `==` و`!=`.",
+    "[[exit-code]]: كل أمر يرجع 0 للنجاح، و`$?` يحمل رمز آخر أمر. و`if grep -q x f; then` تستخدم النجاح كشرط."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "داخل `[[ ]]` الفراغات حول الأقواس والمعاملات إلزامية.",
+   "code": "if [[ -f app.log ]]; then\n  echo exists\nelse\n  echo missing\nfi\nif grep -q ERROR app.log; then echo found; fi"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "variable",
+    "environment-variable",
+    "quoting",
+    "exit-code"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): الاقتباس",
+   "code": "name=sara\necho \"hi $name\"\necho 'hi $name'\n",
+   "options": [
+    "hi sara\nhi $name",
+    "hi sara\nhi sara",
+    "hi $name\nhi sara"
+   ],
+   "answer": 0,
+   "why": "المزدوج يوسّع والمفرد حرفي.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): أمر داخل أمر",
+   "code": "touch a b c\nn=$(ls | wc -l)\necho \"files=$n\"\n",
+   "options": [
+    "files=3",
+    "files=n",
+    "files="
+   ],
+   "answer": 0,
+   "why": "$(...) تلتقط ناتج الأمر.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): if",
+   "code": "x=5\nif [[ $x -gt 3 ]]; then echo big; else echo small; fi\n",
+   "options": [
+    "big",
+    "small",
+    ""
+   ],
+   "answer": 0,
+   "why": "5 أكبر من 3.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (4): الملف",
+   "code": "touch f.txt\nif [[ -f f.txt ]]; then echo yes; else echo no; fi\nif [[ -d f.txt ]]; then echo dir; else echo notdir; fi\n",
+   "options": [
+    "yes\nnotdir",
+    "no\nnotdir",
+    "yes\ndir"
+   ],
+   "answer": 0,
+   "why": "f.txt ملف عادي لا مجلد.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (5): رمز الخروج",
+   "code": "true; echo \"a=$?\"\nfalse || echo \"b=$?\"\n",
+   "options": [
+    "a=0\nb=1",
+    "a=1\nb=0",
+    "a=0\nb=0"
+   ],
+   "answer": 0,
+   "why": "true ينجح (0) وfalse يفشل (1).",
+   "lang": "bash"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: فحص الملف",
+   "lines": [
+    "touch config.txt",
+    "if [[ -f config.txt ]]; then",
+    "  echo \"found\"",
+    "else",
+    "  echo \"missing\"",
+    "fi"
+   ],
+   "expect_stdout": "found",
+   "lang": "bash",
+   "intro": "رتّب أمر if كاملاً.",
+   "explain": "then وelse وfi بهذا الترتيب."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الاقتباس",
+   "code": "user=sara\necho ____hello $user____\n",
+   "blanks": [
+    {
+     "answer": "\""
+    },
+    {
+     "answer": "\""
+    }
+   ],
+   "expect_stdout": "hello sara",
+   "show_output": false,
+   "lang": "bash",
+   "bank": [
+    "\"",
+    "'",
+    "`",
+    "#"
+   ],
+   "intro": "أي علامة اقتباس توسّع المتغير؟ (نفسها في الطرفين)",
+   "explain": "المزدوجة."
+  },
+  {
+   "type": "match",
+   "title": "طابق الفحص بمعناه",
+   "pairs": [
+    [
+     "-f x",
+     "x ملف موجود"
+    ],
+    [
+     "-d x",
+     "x مجلد"
+    ],
+    [
+     "-z \"$s\"",
+     "النص فارغ"
+    ],
+    [
+     "-gt",
+     "أكبر من (أرقام)"
+    ],
+    [
+     "$?",
+     "رمز خروج آخر أمر"
+    ]
+   ],
+   "why": "عوامل الشروط."
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "كيف نعيّن متغيراً؟",
+     "options": [
+      "name=sara بدون مسافات",
+      "name = sara",
+      "set name sara"
+     ],
+     "answer": 0,
+     "why": "المسافات تكسره."
+    },
+    {
+     "q": "وش الفرق بين \" و'؟",
+     "options": [
+      "المزدوج يوسّع المتغيرات",
+      "لا فرق",
+      "المفرد يوسّع"
+     ],
+     "answer": 0,
+     "why": "الحرفي بالمفرد."
+    },
+    {
+     "q": "وش يعني رمز خروج 0؟",
+     "options": [
+      "نجاح",
+      "فشل",
+      "خطأ نحوي"
+     ],
+     "answer": 0,
+     "why": "وغيره فشل."
+    },
+    {
+     "q": "وش تسوي $(cmd)؟",
+     "options": [
+      "تلتقط ناتج الأمر",
+      "تحذف",
+      "تكرر"
+     ],
+     "answer": 0,
+     "why": "command substitution."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "var=value بدون مسافات، و\"$var\" للقراءة.",
+    "if [[ ]] مع فحوص الملفات والأرقام.",
+    "رمز الخروج 0 = نجاح."
+   ]
+  }
+ ]
+}

@@ -1,0 +1,282 @@
+{
+ "title_ar": "كيف يتعلم الحاسوب",
+ "title_en": "How Machines Learn",
+ "duration_min": 12,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🤖",
+   "goal": "تفهم فكرة [[machine-learning]] ببناء مصنِّف بسيط من الصفر: يصنف الرسائل إلى تصيّد وسليمة."
+  },
+  {
+   "type": "text",
+   "title": "من القواعد إلى الأمثلة",
+   "body": [
+    "البرمجة التقليدية: أنت تكتب القواعد (`if \"urgent\" in text`). [[machine-learning]]: تعطي الحاسوب **أمثلة** ([[training-data]]) فيستخرج النمط بنفسه.",
+    "كل مثال له **خصائص** (features) مثل: عدد الروابط، عدد كلمات الاستعجال. ولها **تسمية** (label): `phish` أو `ok`.",
+    "نموذج [[classifier]] يتوقع تسمية مثال جديد بمقارنته بما تعلمه."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "الأمثلة والتسميات الجيدة أهم من تعقيد النموذج.",
+   "code": "# خصائص: (روابط، كلمات استعجال) ← تسمية\ntrain = [\n    ((8, 5), \"phish\"),\n    ((0, 1), \"ok\"),\n]\nprint(train[0][1])"
+  },
+  {
+   "type": "text",
+   "title": "أقرب الجيران (k-NN)",
+   "body": [
+    "أبسط مصنِّف: لمثال جديد نحسب **المسافة** لكل أمثلة التدريب، نأخذ أقرب `k` أمثلة، ونختار التسمية الأكثر بينها (تصويت).",
+    "المسافة الإقليدية: `√((x1-y1)² + (x2-y2)²)`.",
+    "تنبيه: [[overfitting]] — نموذج يحفظ التدريب ويفشل على الجديد. لذلك نختبر دائماً على أمثلة **لم يرها** النموذج."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "k صغير جداً يتأثر بالشذوذ، وكبير جداً يطمس الأنماط.",
+   "code": "import math\n\ndef distance(a, b):\n    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))\n\ndef predict(train, point, k=3):\n    ranked = sorted(train, key=lambda item: distance(item[0], point))\n    labels = [label for _, label in ranked[:k]]\n    return max(sorted(set(labels)), key=labels.count)\n\nprint(predict([((0, 0), \"ok\"), ((9, 9), \"phish\")], (8, 8), k=1))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "machine-learning",
+    "training-data",
+    "classifier",
+    "overfitting"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): المسافة",
+   "code": "import math\nprint(math.dist((0, 0), (3, 4)))\n",
+   "options": [
+    "5.0",
+    "7",
+    "25.0"
+   ],
+   "answer": 0,
+   "why": "مثلث 3-4-5."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): الأقرب",
+   "code": "train = [\n    ((8, 5), \"phish\"), ((7, 4), \"phish\"), ((9, 6), \"phish\"),\n    ((0, 0), \"ok\"), ((1, 0), \"ok\"), ((0, 1), \"ok\"), ((1, 1), \"ok\"),\n]\nfrom math import dist\nnearest = min(train, key=lambda it: dist(it[0], (8, 6)))\nprint(nearest[1])\n",
+   "options": [
+    "phish",
+    "ok",
+    "None"
+   ],
+   "answer": 0,
+   "why": "النقطة (8,6) أقرب لأمثلة التصيّد."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): التصويت",
+   "code": "labels = [\"ok\", \"phish\", \"phish\"]\nprint(max(set(labels), key=labels.count))\n",
+   "options": [
+    "phish",
+    "ok",
+    "2"
+   ],
+   "answer": 0,
+   "why": "phish ظهرت مرتين."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الجذر",
+   "code": "import math\nprint(math.____(16))\n",
+   "blanks": [
+    {
+     "answer": "sqrt"
+    }
+   ],
+   "expect_stdout": "4.0",
+   "show_output": true,
+   "bank": [
+    "sqrt",
+    "pow",
+    "abs",
+    "dist"
+   ],
+   "intro": "وش دالة الجذر التربيعي؟",
+   "explain": "`math.sqrt`."
+  },
+  {
+   "type": "code",
+   "title": "المسافة",
+   "instructions": [
+    "عرّف `distance(a, b)` ترجع المسافة الإقليدية بين نقطتين (tuples بأي عدد أبعاد)."
+   ],
+   "starter": "# اكتب كودك هنا\nimport math\n",
+   "tests": [
+    {
+     "call": "distance((0, 0), (3, 4))",
+     "expect": 5.0
+    },
+    {
+     "call": "distance((1, 1), (1, 1))",
+     "expect": 0.0
+    },
+    {
+     "call": "distance((0, 0, 0), (1, 2, 2))",
+     "expect": 3.0,
+     "hidden": true
+    }
+   ],
+   "solution": "import math\n\ndef distance(a, b):\n    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))\n",
+   "hints": [
+    "اجمع مربعات الفروق ثم الجذر.",
+    "`zip(a, b)`"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "k-NN كامل",
+   "instructions": [
+    "`distance` معرّفة. اكتب `predict(train, point, k=3)`: رتّب الأمثلة بالمسافة، خذ أقرب k، وأعد التسمية الأكثر تكراراً (عند التعادل أصغر تسمية أبجدياً)."
+   ],
+   "starter": "import math\n\ndef distance(a, b):\n    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))\n\ntrain = [\n    ((8, 5), \"phish\"), ((7, 4), \"phish\"), ((9, 6), \"phish\"),\n    ((0, 0), \"ok\"), ((1, 0), \"ok\"), ((0, 1), \"ok\"), ((1, 1), \"ok\"),\n]\n\n",
+   "tests": [
+    {
+     "call": "predict(train, (8, 6))",
+     "expect": "phish"
+    },
+    {
+     "call": "predict(train, (0, 0))",
+     "expect": "ok"
+    },
+    {
+     "call": "predict(train, (1, 1), k=1)",
+     "expect": "ok",
+     "hidden": true
+    },
+    {
+     "call": "predict(train, (6, 4))",
+     "expect": "phish",
+     "hidden": true
+    }
+   ],
+   "solution": "import math\n\ndef distance(a, b):\n    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))\n\ndef predict(train, point, k=3):\n    ranked = sorted(train, key=lambda item: distance(item[0], point))\n    labels = [label for _, label in ranked[:k]]\n    return max(sorted(set(labels)), key=labels.count)\n\ntrain = [\n    ((8, 5), \"phish\"), ((7, 4), \"phish\"), ((9, 6), \"phish\"),\n    ((0, 0), \"ok\"), ((1, 0), \"ok\"), ((0, 1), \"ok\"), ((1, 1), \"ok\"),\n]\n",
+   "hints": [
+    "`sorted(train, key=...)`",
+    "`max(sorted(set(labels)), key=labels.count)` يحسم التعادل أبجدياً."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "صنّف الرسائل",
+   "instructions": [
+    "اقرأ سطرين: عدد الروابط وعدد كلمات الاستعجال في رسالة، واستخدم `predict` و`train` المعرّفين لتطبع `phish` أو `ok`."
+   ],
+   "starter": "import math\n\ndef distance(a, b):\n    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))\n\ndef predict(train, point, k=3):\n    ranked = sorted(train, key=lambda item: distance(item[0], point))\n    labels = [label for _, label in ranked[:k]]\n    return max(sorted(set(labels)), key=labels.count)\n\ntrain = [\n    ((8, 5), \"phish\"), ((7, 4), \"phish\"), ((9, 6), \"phish\"),\n    ((0, 0), \"ok\"), ((1, 0), \"ok\"), ((0, 1), \"ok\"), ((1, 1), \"ok\"),\n]\n# اقرأ المدخلات هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "phish",
+     "stdin": [
+      "8",
+      "5"
+     ]
+    },
+    {
+     "expect_stdout": "ok",
+     "stdin": [
+      "0",
+      "1"
+     ]
+    },
+    {
+     "expect_stdout": "ok",
+     "stdin": [
+      "1",
+      "0"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import math\n\ndef distance(a, b):\n    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))\n\ndef predict(train, point, k=3):\n    ranked = sorted(train, key=lambda item: distance(item[0], point))\n    labels = [label for _, label in ranked[:k]]\n    return max(sorted(set(labels)), key=labels.count)\n\ntrain = [\n    ((8, 5), \"phish\"), ((7, 4), \"phish\"), ((9, 6), \"phish\"),\n    ((0, 0), \"ok\"), ((1, 0), \"ok\"), ((0, 1), \"ok\"), ((1, 1), \"ok\"),\n]\nlinks = int(input())\nurgent = int(input())\nprint(predict(train, (links, urgent)))\n",
+   "hints": [
+    "حوّل المدخلات لأرقام وكوّن tuple."
+   ],
+   "stdin": [
+    "8",
+    "5"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: النموذج يحفظ",
+   "instructions": [
+    "الاختبار يجرّب على نفس أمثلة التدريب فتبدو الدقة 100%. أصلحه: اختبر على أمثلة **جديدة** `test` ليطبع الدقة `1.0` بدل استخدام `train` نفسه."
+   ],
+   "starter": "import math\n\ndef distance(a, b):\n    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))\n\ndef predict(train, point, k=3):\n    ranked = sorted(train, key=lambda item: distance(item[0], point))\n    labels = [label for _, label in ranked[:k]]\n    return max(sorted(set(labels)), key=labels.count)\n\ntrain = [\n    ((8, 5), \"phish\"), ((7, 4), \"phish\"), ((9, 6), \"phish\"),\n    ((0, 0), \"ok\"), ((1, 0), \"ok\"), ((0, 1), \"ok\"), ((1, 1), \"ok\"),\n]\ntest = [((7, 5), \"phish\"), ((0, 2), \"ok\")]\nhits = sum(1 for p, label in train if predict(train, p) == label)\nprint(hits / len(train))\n",
+   "tests": [
+    {
+     "expect_stdout": "1.0"
+    }
+   ],
+   "solution": "import math\n\ndef distance(a, b):\n    return math.sqrt(sum((x - y) ** 2 for x, y in zip(a, b)))\n\ndef predict(train, point, k=3):\n    ranked = sorted(train, key=lambda item: distance(item[0], point))\n    labels = [label for _, label in ranked[:k]]\n    return max(sorted(set(labels)), key=labels.count)\n\ntrain = [\n    ((8, 5), \"phish\"), ((7, 4), \"phish\"), ((9, 6), \"phish\"),\n    ((0, 0), \"ok\"), ((1, 0), \"ok\"), ((0, 1), \"ok\"), ((1, 1), \"ok\"),\n]\ntest = [((7, 5), \"phish\"), ((0, 2), \"ok\")]\nhits = sum(1 for p, label in test if predict(train, p) == label)\nprint(hits / len(test))\n",
+   "hints": [
+    "اجعل الحلقة والقسمة على `test`."
+   ],
+   "checks": [
+    {
+     "regex": "in\\s+test",
+     "msg": "اختبر على test"
+    }
+   ],
+   "variant": "bugfix",
+   "allow_starter_pass": true
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش الفرق بين البرمجة التقليدية وتعلم الآلة؟",
+     "options": [
+      "الثاني يتعلم القواعد من أمثلة",
+      "الثاني بدون بيانات",
+      "لا فرق"
+     ],
+     "answer": 0,
+     "why": "الأمثلة تحل محل القواعد اليدوية."
+    },
+    {
+     "q": "وش يسوي k-NN؟",
+     "options": [
+      "يصوّت أقرب k أمثلة",
+      "يحذف البيانات",
+      "يشفر الأمثلة"
+     ],
+     "answer": 0,
+     "why": "مثال بسيط على التصنيف."
+    },
+    {
+     "q": "ليش نختبر على بيانات جديدة؟",
+     "options": [
+      "لنكشف الحفظ (overfitting)",
+      "لتسريع التدريب",
+      "ليس مهماً"
+     ],
+     "answer": 0,
+     "why": "الأداء الحقيقي على ما لم يره."
+    },
+    {
+     "q": "وش الخصائص (features)؟",
+     "options": [
+      "القياسات التي تصف كل مثال",
+      "التسمية",
+      "النموذج"
+     ],
+     "answer": 0,
+     "why": "مثل عدد الروابط."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "تعلم الآلة يستخلص النمط من أمثلة معنونة.",
+    "k-NN: أقرب الجيران بالتصويت.",
+    "اختبر على بيانات لم يرها النموذج."
+   ]
+  }
+ ]
+}

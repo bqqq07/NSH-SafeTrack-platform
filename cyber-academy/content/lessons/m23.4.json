@@ -1,0 +1,254 @@
+{
+ "title_ar": "الجلسات والمصادقة",
+ "title_en": "Sessions & Auth",
+ "duration_min": 12,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🍪",
+   "goal": "تحافظ على تسجيل دخول المستخدم بـ[[session]] و[[signed-cookie]] آمن."
+  },
+  {
+   "type": "text",
+   "title": "كيف يتذكرك الموقع",
+   "body": [
+    "HTTP بلا ذاكرة: كل طلب مستقل. لنتذكر المستخدم نعطيه [[cookie]] فيه هوية الجلسة، والمتصفح يرسله مع كل طلب.",
+    "لا تثق بالكوكي كما هو! لو خزّنت `user=sara` فيقدر المستخدم يغيّره إلى `admin`. الحل: **توقيع** القيمة بسر الخادم (HMAC) والتحقق منه عند كل طلب: [[signed-cookie]]. هكذا تعمل جلسات Flask.",
+    "أو نخزن هوية عشوائية طويلة في الكوكي وبقية البيانات في الخادم."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "السر على الخادم فقط. من يعرفه يقدر يزوّر أي جلسة.",
+   "code": "import hmac\n\nKEY = b\"server-secret\"\n\ndef sign(value):\n    sig = hmac.new(KEY, value.encode(), \"sha256\").hexdigest()[:16]\n    return value + \".\" + sig\n\nprint(sign(\"user=sara\"))"
+  },
+  {
+   "type": "text",
+   "title": "أعلام الكوكي وتسجيل الدخول",
+   "body": [
+    "ضع على الكوكي: `HttpOnly` (جافاسكربت لا تقرؤه ← يخفف سرقته عبر XSS)، و`Secure` (HTTPS فقط)، و`SameSite=Lax` (يخفف CSRF)، ومدة صلاحية.",
+    "تسجيل الدخول: تحقق من كلمة المرور بمقارنة هاش بطيء، رسالة خطأ **موحدة** («بيانات خاطئة») لا تكشف هل الاسم موجود، تحديد عدد المحاولات، وتجديد معرّف الجلسة بعد الدخول.",
+    "تسجيل الخروج: احذف الجلسة من الخادم، لا الكوكي فقط."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "رسائل مختلفة لـ\"المستخدم غير موجود\" و\"كلمة المرور خطأ\" تساعد المهاجم على جمع أسماء المستخدمين.",
+   "code": "Set-Cookie: session=abc123; HttpOnly; Secure; SameSite=Lax; Max-Age=3600"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "session",
+    "cookie",
+    "signed-cookie",
+    "hmac"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): التوقيع",
+   "code": "import hmac\nKEY = b\"k\"\ndef sign(v):\n    return v + \".\" + hmac.new(KEY, v.encode(), \"sha256\").hexdigest()[:6]\na = sign(\"user=sara\")\nprint(a.startswith(\"user=sara.\"), len(a.split(\".\")[-1]))\n",
+   "options": [
+    "True 6",
+    "False 6",
+    "True 16"
+   ],
+   "answer": 0,
+   "why": "القيمة ثم نقطة ثم توقيع طوله 6."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): تزوير",
+   "code": "import hmac\nKEY = b\"k\"\nsig = lambda v: hmac.new(KEY, v.encode(), \"sha256\").hexdigest()[:8]\ncookie = \"user=sara.\" + sig(\"user=sara\")\nforged = \"user=admin.\" + sig(\"user=sara\")\nvalue, s = forged.rsplit(\".\", 1)\nprint(hmac.compare_digest(sig(value), s))\n",
+   "options": [
+    "False",
+    "True",
+    "None"
+   ],
+   "answer": 0,
+   "why": "القيمة تغيرت فلم يعد التوقيع يطابقها."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الأعلام",
+   "code": "cookie = \"session=abc; ____; Secure; SameSite=Lax\"\nprint(\"HttpOnly\" in cookie)\n",
+   "blanks": [
+    {
+     "answer": "HttpOnly"
+    }
+   ],
+   "expect_stdout": "True",
+   "show_output": true,
+   "bank": [
+    "HttpOnly",
+    "Public",
+    "Visible",
+    "Script"
+   ],
+   "intro": "أي علم يمنع قراءة الكوكي من جافاسكربت؟",
+   "explain": "`HttpOnly`."
+  },
+  {
+   "type": "code",
+   "title": "وقّع وتحقق",
+   "instructions": [
+    "عرّف `sign(value)` ترجع `value.توقيع` (HMAC-SHA256 hex أول 16 خانة بالمفتاح `KEY`)، و`verify(cookie)` ترجع القيمة الأصلية لو التوقيع صحيح، وإلا `None`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport hmac\nKEY = b\"server-secret\"\n",
+   "tests": [
+    {
+     "call": "sign(\"user=sara\") == \"user=sara.7b30dff0e8977d4b\"",
+     "expect": true
+    },
+    {
+     "call": "verify(sign(\"user=sara\"))",
+     "expect": "user=sara"
+    },
+    {
+     "call": "verify(\"user=admin.7b30dff0e8977d4b\")",
+     "expect": null
+    },
+    {
+     "call": "verify(\"nodot\")",
+     "expect": null,
+     "hidden": true
+    }
+   ],
+   "solution": "import hmac\nKEY = b\"server-secret\"\n\ndef sign(value):\n    sig = hmac.new(KEY, value.encode(\"utf-8\"), \"sha256\").hexdigest()[:16]\n    return value + \".\" + sig\n\ndef verify(cookie):\n    if \".\" not in cookie:\n        return None\n    value, sig = cookie.rsplit(\".\", 1)\n    expected = sign(value).rsplit(\".\", 1)[1]\n    return value if hmac.compare_digest(expected, sig) else None\n",
+   "hints": [
+    "`rsplit(\".\", 1)` يفصل آخر نقطة.",
+    "قارن بـ compare_digest."
+   ],
+   "checks": [
+    {
+     "regex": "compare_digest",
+     "msg": "استخدم compare_digest"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "دخول بمحاولات محدودة",
+   "instructions": [
+    "اقرأ كلمة المرور الصحيحة ثم محاولات تسجيل (كل سطر) حتى `exit`. اقفل الحساب بعد **3 فشل**: اطبع `ok` عند النجاح قبل القفل، و`bad` عند الفشل، و`locked` لأي محاولة بعد القفل."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "bad\nbad\nbad\nlocked\nlocked",
+     "stdin": [
+      "pw",
+      "x",
+      "y",
+      "z",
+      "pw",
+      "pw",
+      "exit"
+     ]
+    },
+    {
+     "expect_stdout": "bad\nok",
+     "stdin": [
+      "pw",
+      "x",
+      "pw",
+      "exit"
+     ]
+    },
+    {
+     "expect_stdout": "ok\nok",
+     "stdin": [
+      "pw",
+      "pw",
+      "pw",
+      "exit"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "secret = input()\nfails = 0\nwhile True:\n    attempt = input()\n    if attempt == \"exit\":\n        break\n    if fails >= 3:\n        print(\"locked\")\n    elif attempt == secret:\n        print(\"ok\")\n        fails = 0\n    else:\n        fails += 1\n        print(\"bad\")\n",
+   "hints": [
+    "عدّاد فشل يعود لصفر عند النجاح.",
+    "افحص القفل أولاً."
+   ],
+   "stdin": [
+    "pw",
+    "x",
+    "y",
+    "z",
+    "pw",
+    "exit"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: رسالة تكشف",
+   "instructions": [
+    "رسالة الخطأ تكشف هل الاسم موجود. وحّدها: كلتا الحالتين تطبعان `بيانات غير صحيحة`."
+   ],
+   "starter": "users = {\"sara\": \"pw\"}\nname, pw = \"ghost\", \"x\"\nif name not in users:\n    print(\"المستخدم غير موجود\")\nelif users[name] != pw:\n    print(\"كلمة المرور خطأ\")\nelse:\n    print(\"ok\")\n",
+   "tests": [
+    {
+     "expect_stdout": "بيانات غير صحيحة"
+    }
+   ],
+   "solution": "users = {\"sara\": \"pw\"}\nname, pw = \"ghost\", \"x\"\nif users.get(name) == pw:\n    print(\"ok\")\nelse:\n    print(\"بيانات غير صحيحة\")\n",
+   "hints": [
+    "افحص الشرطين معاً برسالة واحدة."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نوقّع الكوكي؟",
+     "options": [
+      "لنكتشف أي تعديل من المستخدم",
+      "لتقصيره",
+      "لتسريعه"
+     ],
+     "answer": 0,
+     "why": "HMAC بسر الخادم."
+    },
+    {
+     "q": "وش يفعل HttpOnly؟",
+     "options": [
+      "يمنع جافاسكربت من قراءة الكوكي",
+      "يشفره",
+      "يمنع HTTPS"
+     ],
+     "answer": 0,
+     "why": "يخفف أثر XSS."
+    },
+    {
+     "q": "ليش رسالة خطأ موحدة؟",
+     "options": [
+      "لا تكشف وجود المستخدم",
+      "لتقصير الكود",
+      "لا فرق"
+     ],
+     "answer": 0,
+     "why": "تمنع جمع الأسماء."
+    },
+    {
+     "q": "وش يضمنه Secure؟",
+     "options": [
+      "الإرسال عبر HTTPS فقط",
+      "التوقيع",
+      "الصلاحية"
+     ],
+     "answer": 0,
+     "why": "لا يسافر الكوكي بنص صريح."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "الكوكي الموقّع يمنع التلاعب بالجلسة.",
+    "HttpOnly وSecure وSameSite وانتهاء صلاحية.",
+    "رسائل موحدة وحد للمحاولات."
+   ]
+  }
+ ]
+}

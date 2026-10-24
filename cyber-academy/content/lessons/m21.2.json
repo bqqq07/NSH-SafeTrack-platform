@@ -1,0 +1,204 @@
+{
+ "title_ar": "الفروع والدمج",
+ "title_en": "Branches & Merge",
+ "duration_min": 11,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🌳",
+   "goal": "تجرّب ميزات جديدة بأمان على [[branch]] (فرع) ثم تدمجها بـ[[merge]]."
+  },
+  {
+   "type": "text",
+   "title": "خط تطوير موازٍ",
+   "body": [
+    "[[branch]] خط تطوير مستقل: تخرج من `main`، تجرّب وتخرّب بدون خوف، والرئيسي سليم. لو نجحت تدمجها، ولو لا تحذف الفرع.",
+    "الأوامر: `git switch -c feature` ينشئ فرعاً وينتقل له، `git switch main` يرجع، `git branch` يعرض الفروع.",
+    "الدمج: وأنت على `main` نفّذ `git merge feature` لإدخال تغييرات الفرع."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "عادة اسم الفرع الرئيسي `main` (وقديماً `master`).",
+   "code": "git switch -c feature\n# عدّل وسوِّ commit\ngit switch main\ngit merge feature"
+  },
+  {
+   "type": "text",
+   "title": "التعارض",
+   "body": [
+    "لو عدّل فرعان **نفس السطر** بشكل مختلف يحصل [[conflict]]: Git يوقف الدمج ويطلب منك تختار.",
+    "يضع علامات في الملف: `<<<<<<<` نسختك، `=======`، `>>>>>>>` النسخة الثانية. تحرر الملف يدوياً وتحذف العلامات، ثم `git add` و`git commit`.",
+    "تقليل التعارض: فروع قصيرة العمر، ودمج `main` في فرعك بانتظام، وتقسيم العمل بين الملفات."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "لا تترك علامات التعارض في الكود! ابحث عن `<<<<<<<` قبل أي commit.",
+   "code": "<<<<<<< HEAD\nport = 8080\n=======\nport = 9090\n>>>>>>> feature"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "branch",
+    "merge",
+    "conflict"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): الفرع الحالي",
+   "code": "git init -q\necho a > f.txt\ngit add f.txt\ngit commit -qm base\ngit switch -qc feature\ngit branch --show-current\n",
+   "options": [
+    "feature",
+    "main",
+    "base"
+   ],
+   "answer": 0,
+   "why": "switch -c أنشأ feature وانتقل له.",
+   "lang": "git"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): قبل الدمج",
+   "code": "git init -q\necho a > f.txt\ngit add f.txt\ngit commit -qm base\ngit switch -qc feature\necho b >> f.txt\ngit commit -qam work\ngit switch -q main\nwc -l < f.txt\n",
+   "options": [
+    "1",
+    "2",
+    "0"
+   ],
+   "answer": 0,
+   "why": "main ما استلم تغييرات feature بعد (سطر واحد).",
+   "lang": "git"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): بعد الدمج",
+   "code": "git init -q\necho a > f.txt\ngit add f.txt\ngit commit -qm base\ngit switch -qc feature\necho b >> f.txt\ngit commit -qam work\ngit switch -q main\ngit merge -q feature\nwc -l < f.txt\n",
+   "options": [
+    "2",
+    "1",
+    "3"
+   ],
+   "answer": 0,
+   "why": "الدمج أدخل سطر feature فصار سطران.",
+   "lang": "git"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (4): تعارض",
+   "code": "git init -q\necho \"port=1\" > c.txt\ngit add c.txt\ngit commit -qm base\ngit switch -qc feature\necho \"port=2\" > c.txt\ngit commit -qam f\ngit switch -q main\necho \"port=3\" > c.txt\ngit commit -qam m\ngit merge feature >/dev/null 2>&1 || true\ngit status --short\n",
+   "options": [
+    "UU c.txt",
+    "M  c.txt",
+    ""
+   ],
+   "answer": 0,
+   "why": "UU = تعارض لازم يُحل (both modified).",
+   "lang": "git"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: دمج ميزة",
+   "lines": [
+    "git init -q",
+    "echo a > f.txt",
+    "git add f.txt",
+    "git commit -qm base",
+    "git switch -qc feature",
+    "echo b >> f.txt",
+    "git commit -qam work",
+    "git switch -q main",
+    "git merge -q feature",
+    "git log --format=%s"
+   ],
+   "expect_stdout": "work\nbase",
+   "lang": "git",
+   "intro": "رتّب الأوامر: كوميت أساسي ثم فرع ميزة ثم الرجوع للرئيسي والدمج.",
+   "explain": "ننشئ الفرع بعد الكوميت الأول، ثم نعود لـ main قبل الدمج."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الدمج",
+   "code": "git init -q\necho a > f.txt\ngit add f.txt\ngit commit -qm base\ngit switch -qc dev\necho b >> f.txt\ngit commit -qam more\ngit switch -q main\ngit ____ -q dev\nwc -l < f.txt\n",
+   "blanks": [
+    {
+     "answer": "merge"
+    }
+   ],
+   "expect_stdout": "2",
+   "show_output": false,
+   "lang": "git",
+   "bank": [
+    "merge",
+    "join",
+    "pull",
+    "combine"
+   ],
+   "intro": "وش أمر ضم فرع dev في main؟",
+   "explain": "`git merge dev` وأنت على main."
+  },
+  {
+   "type": "order",
+   "title": "رتّب حل التعارض",
+   "items": [
+    "يفشل الدمج ويعلّم Git الملف بالتعارض",
+    "نفتح الملف ونحذف العلامات ونختار الصحيح",
+    "git add للملف بعد الحل",
+    "git commit لإكمال الدمج",
+    "نشغّل الاختبارات للتأكد"
+   ],
+   "why": "نحل التعارض يدوياً ثم نكمل الدمج ونختبر."
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نستخدم الفروع؟",
+     "options": [
+      "نجرّب دون المساس بالرئيسي",
+      "لتشفير الكود",
+      "لحذف التاريخ"
+     ],
+     "answer": 0,
+     "why": "عزل العمل."
+    },
+    {
+     "q": "وين نكون لما ندمج feature في main؟",
+     "options": [
+      "على main",
+      "على feature",
+      "لا فرق"
+     ],
+     "answer": 0,
+     "why": "ندمج داخل الفرع الحالي."
+    },
+    {
+     "q": "متى يحصل تعارض؟",
+     "options": [
+      "تعديلان مختلفان لنفس السطر",
+      "كوميت جديد",
+      "فرع جديد"
+     ],
+     "answer": 0,
+     "why": "Git لا يعرف أيهما يختار."
+    },
+    {
+     "q": "وش نحذف قبل كوميت الحل؟",
+     "options": [
+      "علامات <<<<<<< و=======",
+      "الملف كله",
+      "التاريخ"
+     ],
+     "answer": 0,
+     "why": "ونتأكد أن الكود يعمل."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "الفرع خط تطوير معزول، والدمج يضم تغييراته.",
+    "التعارض يُحل يدوياً ثم add وcommit.",
+    "فروع قصيرة تقلل التعارض."
+   ]
+  }
+ ]
+}

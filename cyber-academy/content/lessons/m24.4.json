@@ -1,0 +1,219 @@
+{
+ "title_ar": "قراءة CSV والتنظيف",
+ "title_en": "CSV & Cleaning",
+ "duration_min": 11,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🧼",
+   "goal": "تقرأ ملف CSV حقيقي وتنظف بياناته: قيم ناقصة ومكررة وأنواع خاطئة."
+  },
+  {
+   "type": "text",
+   "title": "القراءة والفحص",
+   "body": [
+    "`pd.read_csv(\"file.csv\")` تقرأ الملف كجدول وتتعرف على الأنواع. (هنا نحاكي الملف بنص عبر `io.StringIO`.)",
+    "فحص الجودة أول خطوة: `df.info()` (الأنواع والقيم الفارغة)، `df.isna().sum()` (عدد الفارغ لكل عمود)، `df.duplicated().sum()` (المكرر)، `df.describe()`.",
+    "السجلات الحقيقية فوضوية: خانات فارغة، مسافات زائدة، أحرف كبيرة وصغيرة، تواريخ كنصوص."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "مكتبة pandas غير مثبتة داخل المتصفح هنا، فتجرّب الأكواد على جهازك (pip install pandas)؛ والنواتج في التمارين مُتحقَّق منها فعلياً.",
+   "code": "import io\nraw = \"ip,status\\n1.1.1.1,200\\n2.2.2.2,\\n\"\ndf = pd.read_csv(io.StringIO(raw))\nprint(df.isna().sum().to_dict())"
+  },
+  {
+   "type": "text",
+   "title": "أدوات التنظيف",
+   "body": [
+    "`dropna()` تحذف الصفوف الناقصة، و`fillna(قيمة)` تعوّضها، و`drop_duplicates()` تحذف المكرر.",
+    "نصوص: `df[\"user\"].str.strip().str.lower()`. أنواع: `df[\"status\"].astype(int)`. تواريخ: `pd.to_datetime(df[\"time\"])`.",
+    "**لا تحذف بصمت:** سجل كم صفاً حذفت ولماذا؛ في الأمن الصفوف الشاذة قد تكون هي المهمة!"
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "لا تعوّض القيم الناقصة بدون تفكير: التعويض يغيّر الإحصاءات.",
+   "code": "clean = df.dropna(subset=[\"ip\"]).drop_duplicates()\nprint(len(df), len(clean))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "dataframe",
+    "csv",
+    "series"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): الأبعاد",
+   "code": "import pandas as pd\nimport io\nraw = \"ip,status,user\\n10.0.0.5,401,root\\n10.0.0.9,200,sara\\n10.0.0.5,401,\\n10.0.0.5,401,root\\n,200,ali\\n\"\ndf = pd.read_csv(io.StringIO(raw))\nprint(df.shape)\n",
+   "options": [
+    "(5, 3)",
+    "(4, 3)",
+    "(5, 4)"
+   ],
+   "answer": 0,
+   "why": "5 صفوف (بعد العنوان) و3 أعمدة.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): الفارغ",
+   "code": "import pandas as pd\nimport io\nraw = \"ip,status,user\\n10.0.0.5,401,root\\n10.0.0.9,200,sara\\n10.0.0.5,401,\\n10.0.0.5,401,root\\n,200,ali\\n\"\ndf = pd.read_csv(io.StringIO(raw))\nprint(df.isna().sum().to_dict())\n",
+   "options": [
+    "{'ip': 1, 'status': 0, 'user': 1}",
+    "{'ip': 0, 'status': 0, 'user': 2}",
+    "{'ip': 1, 'status': 1, 'user': 1}"
+   ],
+   "answer": 0,
+   "why": "ip فارغ في صف، وuser فارغ في صف.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): المكرر",
+   "code": "import pandas as pd\nimport io\nraw = \"ip,status,user\\n10.0.0.5,401,root\\n10.0.0.9,200,sara\\n10.0.0.5,401,\\n10.0.0.5,401,root\\n,200,ali\\n\"\ndf = pd.read_csv(io.StringIO(raw))\nprint(df.duplicated().sum())\n",
+   "options": [
+    "1",
+    "0",
+    "2"
+   ],
+   "answer": 0,
+   "why": "الصف الأول (10.0.0.5,401,root) تكرر مرة.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (4): بعد التنظيف",
+   "code": "import pandas as pd\nimport io\nraw = \"ip,status,user\\n10.0.0.5,401,root\\n10.0.0.9,200,sara\\n10.0.0.5,401,\\n10.0.0.5,401,root\\n,200,ali\\n\"\ndf = pd.read_csv(io.StringIO(raw))\nclean = df.dropna().drop_duplicates()\nprint(len(clean))\n",
+   "options": [
+    "2",
+    "3",
+    "5"
+   ],
+   "answer": 0,
+   "why": "يبقى (.5 root) و(.9 sara) فقط.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (5): نصوص",
+   "code": "import pandas as pd\ns = pd.Series([\"  Sara \", \"ALI\"])\nprint(s.str.strip().str.lower().tolist())\n",
+   "options": [
+    "['sara', 'ali']",
+    "['Sara', 'ALI']",
+    "['  sara ', 'ali']"
+   ],
+   "answer": 0,
+   "why": "strip ثم lower.",
+   "lang": "pandas"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: تنظيف",
+   "lines": [
+    "import pandas as pd",
+    "import io",
+    "raw = \"ip,status,user\\n10.0.0.5,401,root\\n10.0.0.9,200,sara\\n10.0.0.5,401,\\n10.0.0.5,401,root\\n,200,ali\\n\"",
+    "df = pd.read_csv(io.StringIO(raw))",
+    "clean = df.dropna(subset=[\"ip\"])",
+    "clean = clean.drop_duplicates()",
+    "print(len(clean))"
+   ],
+   "expect_stdout": "3",
+   "lang": "pandas",
+   "intro": "رتّب لقراءة الملف وحذف الناقص ثم المكرر.",
+   "explain": "القراءة ثم dropna ثم drop_duplicates."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: المكرر",
+   "code": "import pandas as pd\nimport io\nraw = \"ip,status,user\\n10.0.0.5,401,root\\n10.0.0.9,200,sara\\n10.0.0.5,401,\\n10.0.0.5,401,root\\n,200,ali\\n\"\ndf = pd.read_csv(io.StringIO(raw))\nprint(len(df.____()))\n",
+   "blanks": [
+    {
+     "answer": "drop_duplicates"
+    }
+   ],
+   "expect_stdout": "4",
+   "show_output": false,
+   "lang": "pandas",
+   "bank": [
+    "drop_duplicates",
+    "dropna",
+    "fillna",
+    "unique"
+   ],
+   "intro": "وش الدالة اللي تحذف الصفوف المكررة؟",
+   "explain": "`drop_duplicates`."
+  },
+  {
+   "type": "code",
+   "title": "نظّف بدون pandas",
+   "instructions": [
+    "`users` قائمة نصوص فيها مسافات وحروف كبيرة وفراغات. نظّفها (strip وlower) واحذف الفاضي، واطبع القائمة: `['sara', 'ali']`"
+   ],
+   "starter": "users = [\"  Sara \", \"ALI\", \"\", \"   \"]\n",
+   "tests": [
+    {
+     "expect_stdout": "['sara', 'ali']"
+    }
+   ],
+   "solution": "users = [\"  Sara \", \"ALI\", \"\", \"   \"]\nclean = [u.strip().lower() for u in users if u.strip()]\nprint(clean)\n",
+   "hints": [
+    "قائمة شاملة مع شرط."
+   ]
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش أول خطوة بعد قراءة البيانات؟",
+     "options": [
+      "فحص الجودة: الفارغ والمكرر والأنواع",
+      "الرسم مباشرة",
+      "الحذف"
+     ],
+     "answer": 0,
+     "why": "info وisna."
+    },
+    {
+     "q": "ليش لا نحذف الصفوف الشاذة بصمت؟",
+     "options": [
+      "قد تكون هي الدليل المهم",
+      "لتسريع الكود",
+      "لا فرق"
+     ],
+     "answer": 0,
+     "why": "خاصة في الأمن."
+    },
+    {
+     "q": "وش drop_duplicates؟",
+     "options": [
+      "تحذف الصفوف المتطابقة",
+      "تحذف الأعمدة",
+      "تجمع"
+     ],
+     "answer": 0,
+     "why": "تبقي واحداً."
+    },
+    {
+     "q": "كيف ننظف نصاً؟",
+     "options": [
+      ".str.strip().str.lower()",
+      "del",
+      "int()"
+     ],
+     "answer": 0,
+     "why": "سلسلة دوال str."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "read_csv ثم فحص الجودة قبل التحليل.",
+    "dropna وfillna وdrop_duplicates وstr وastype.",
+    "وثّق ما حذفته ولماذا."
+   ]
+  }
+ ]
+}

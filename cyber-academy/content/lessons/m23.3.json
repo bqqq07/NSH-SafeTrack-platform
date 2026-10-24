@@ -1,0 +1,269 @@
+{
+ "title_ar": "النماذج والتحقق",
+ "title_en": "Forms & Validation",
+ "duration_min": 11,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "📝",
+   "goal": "تستقبل بيانات النماذج وتتحقق منها على الخادم، وتحميها من تزوير الطلبات بـ[[csrf]]."
+  },
+  {
+   "type": "text",
+   "title": "لا تثق بأي مدخل",
+   "body": [
+    "بيانات النموذج تصل نصاً مثل `name=sara&age=25`. في Flask: `request.form[\"name\"]`. ننظّفها ونتحقق منها **على الخادم دائماً** (تحقق المتصفح يتجاوزه المهاجم بسهولة).",
+    "نفك النص بـ `urllib.parse.parse_qs` (يعطي قوائم) ونتحقق: النوع (رقم؟)، الطول، النطاق، القيم المسموحة (قائمة بيضاء allowlist).",
+    "نرجع قاموس أخطاء `{\"age\": \"must be a number\"}` بدل رفض غامض."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "parse_qs يرجع قيماً كقوائم لأن الحقل قد يتكرر.",
+   "code": "from urllib.parse import parse_qs\n\ndata = parse_qs(\"name=sara&age=25\")\nprint(data)\nprint(data[\"name\"][0])"
+  },
+  {
+   "type": "text",
+   "title": "حماية CSRF",
+   "body": [
+    "[[csrf]]: موقع خبيث يجعل متصفحك المسجّل في موقعك يرسل طلباً (تحويل، تغيير بريد) بدون علمك لأن المتصفح يرسل الكوكيز تلقائياً.",
+    "الحماية: **رمز CSRF** عشوائي مربوط بجلسة المستخدم يوضع في النموذج ويُتحقق منه عند الإرسال (والمهاجم لا يعرفه). مع كوكي `SameSite=Lax/Strict`.",
+    "نولّد الرمز بـ `secrets.token_hex` ونقارنه بـ `hmac.compare_digest`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "طلبات GET يجب ألا تغيّر حالة (لا حذف ولا تحويل)، فتتفادى جزءاً كبيراً من CSRF.",
+   "code": "import secrets, hmac\n\ntoken = secrets.token_hex(8)\nsubmitted = token\nprint(hmac.compare_digest(token, submitted))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "csrf",
+    "api"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): parse_qs",
+   "code": "from urllib.parse import parse_qs\nprint(parse_qs(\"a=1&b=2&a=3\"))\n",
+   "options": [
+    "{'a': ['1', '3'], 'b': ['2']}",
+    "{'a': '3', 'b': '2'}",
+    "{'a': ['1'], 'b': ['2']}"
+   ],
+   "answer": 0,
+   "why": "الحقل المكرر يجمع قيمه في قائمة."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): isdigit",
+   "code": "print(\"25\".isdigit(), \"2a\".isdigit(), \"\".isdigit())\n",
+   "options": [
+    "True False False",
+    "True True False",
+    "True False True"
+   ],
+   "answer": 0,
+   "why": "النص الفاضي ليس أرقاماً."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: التحليل",
+   "code": "from urllib.parse import ____\nprint(parse_qs(\"x=1\")[\"x\"][0])\n",
+   "blanks": [
+    {
+     "answer": "parse_qs"
+    }
+   ],
+   "expect_stdout": "1",
+   "show_output": true,
+   "bank": [
+    "parse_qs",
+    "quote",
+    "urlparse",
+    "urlencode"
+   ],
+   "intro": "أي دالة تفك نص النموذج لقاموس؟",
+   "explain": "`parse_qs`."
+  },
+  {
+   "type": "code",
+   "title": "تحقق من النموذج",
+   "instructions": [
+    "عرّف `validate(query)` تأخذ نص النموذج (مثل `name=sara&age=25`) وترجع قاموس أخطاء: `name` مطلوب (غير فاضٍ)، و`age` رقم بين 1 و120. القاموس الفاضي = سليم."
+   ],
+   "starter": "# اكتب كودك هنا\nfrom urllib.parse import parse_qs\n",
+   "tests": [
+    {
+     "call": "validate(\"name=sara&age=25\")",
+     "expect": {}
+    },
+    {
+     "call": "validate(\"name=&age=25\")",
+     "expect": {
+      "name": "required"
+     }
+    },
+    {
+     "call": "validate(\"name=sara&age=abc\")",
+     "expect": {
+      "age": "invalid"
+     }
+    },
+    {
+     "call": "validate(\"name=sara&age=200\")",
+     "expect": {
+      "age": "invalid"
+     },
+     "hidden": true
+    },
+    {
+     "call": "validate(\"age=5\")",
+     "expect": {
+      "name": "required"
+     },
+     "hidden": true
+    }
+   ],
+   "solution": "from urllib.parse import parse_qs\n\ndef validate(query):\n    data = parse_qs(query, keep_blank_values=True)\n    errors = {}\n    name = data.get(\"name\", [\"\"])[0].strip()\n    if not name:\n        errors[\"name\"] = \"required\"\n    age = data.get(\"age\", [\"\"])[0]\n    if age:\n        if not age.isdigit() or not 1 <= int(age) <= 120:\n            errors[\"age\"] = \"invalid\"\n    return errors\n",
+   "hints": [
+    "استخدم `keep_blank_values=True`.",
+    "age اختياري: تحقق منه فقط إن وُجد."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "رمز CSRF",
+   "instructions": [
+    "عرّف `new_token()` (رمز عشوائي `token_hex(16)`) و`check_token(expected, submitted)` بمقارنة آمنة."
+   ],
+   "starter": "# اكتب كودك هنا\nimport secrets\nimport hmac\n",
+   "tests": [
+    {
+     "call": "len(new_token())",
+     "expect": 32
+    },
+    {
+     "call": "check_token(\"abc\", \"abc\")",
+     "expect": true
+    },
+    {
+     "call": "check_token(\"abc\", \"abd\")",
+     "expect": false
+    },
+    {
+     "call": "check_token(\"abc\", \"\")",
+     "expect": false,
+     "hidden": true
+    }
+   ],
+   "solution": "import secrets\nimport hmac\n\ndef new_token():\n    return secrets.token_hex(16)\n\ndef check_token(expected, submitted):\n    return hmac.compare_digest(expected, submitted)\n",
+   "hints": [
+    "`compare_digest` تقبل نصين."
+   ],
+   "checks": [
+    {
+     "regex": "compare_digest",
+     "msg": "استخدم compare_digest"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "قائمة بيضاء",
+   "instructions": [
+    "عرّف `safe_role(value)` ترجع `value` لو ضمن `{\"user\", \"editor\"}`، وإلا `\"user\"` (لا نسمح للمستخدم باختيار `admin` من النموذج)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "safe_role(\"editor\")",
+     "expect": "editor"
+    },
+    {
+     "call": "safe_role(\"admin\")",
+     "expect": "user"
+    },
+    {
+     "call": "safe_role(\"\")",
+     "expect": "user",
+     "hidden": true
+    }
+   ],
+   "solution": "ALLOWED = {\"user\", \"editor\"}\n\ndef safe_role(value):\n    return value if value in ALLOWED else \"user\"\n",
+   "hints": [
+    "اسمح فقط بما في القائمة."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: الثقة بالعميل",
+   "instructions": [
+    "الكود يعتمد على حقل `is_admin` القادم من النموذج. أصلحه ليتجاهله ويطبع `False` دائماً (الصلاحية تُحدد من الخادم)."
+   ],
+   "starter": "from urllib.parse import parse_qs\ndata = parse_qs(\"name=x&is_admin=true\")\nprint(data.get(\"is_admin\", [\"false\"])[0] == \"true\")\n",
+   "tests": [
+    {
+     "expect_stdout": "False"
+    }
+   ],
+   "solution": "SERVER_SIDE_ADMINS = {\"root\"}\nname = \"x\"\nprint(name in SERVER_SIDE_ADMINS)\n",
+   "hints": [
+    "لا تقرأ الصلاحية من الطلب."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "أين نتحقق من المدخلات؟",
+     "options": [
+      "على الخادم دائماً",
+      "في المتصفح فقط",
+      "لا حاجة"
+     ],
+     "answer": 0,
+     "why": "المهاجم يتجاوز المتصفح."
+    },
+    {
+     "q": "وش هجوم CSRF؟",
+     "options": [
+      "إرسال طلب باسمك من موقع خبيث",
+      "سرقة كلمة المرور بالتخمين",
+      "حقن SQL"
+     ],
+     "answer": 0,
+     "why": "المتصفح يرسل الكوكيز تلقائياً."
+    },
+    {
+     "q": "وش يمنع CSRF؟",
+     "options": [
+      "رمز عشوائي مرتبط بالجلسة + SameSite",
+      "إخفاء النموذج",
+      "HTTPS فقط"
+     ],
+     "answer": 0,
+     "why": "الرمز لا يعرفه المهاجم."
+    },
+    {
+     "q": "ليش GET لا يغيّر الحالة؟",
+     "options": [
+      "لأن الروابط يمكن تفعيلها بسهولة من مواقع أخرى",
+      "لتسريعه",
+      "اصطلاح فقط"
+     ],
+     "answer": 0,
+     "why": "يقلل مساحة CSRF."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "تحقق من كل مدخل على الخادم بقائمة بيضاء.",
+    "رمز CSRF عشوائي ومقارنة آمنة.",
+    "الصلاحيات تُحدد من الخادم لا من النموذج."
+   ]
+  }
+ ]
+}

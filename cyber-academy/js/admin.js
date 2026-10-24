@@ -28,7 +28,7 @@ function ago(s) {
 const daysSince = (s) => { const d = parseUtc(s); return d ? (Date.now() - d.getTime()) / 864e5 : Infinity; };
 
 const levelsOf = (cur) => cur.levels;
-const lv = (l) => (l.track === 'python' ? `P${l.id - 10}` : `م${l.id}`);
+const lv = (l) => (l.track === 'python' ? `P${l.id - 10}` : l.track === 'extras' ? `X${l.id - 20}` : `م${l.id}`);
 const lessonTitle = (cur, id) => cur.levels.flatMap((l) => l.modules).find((m) => m.id === id)?.title_ar || id;
 const pct = (done, total) => (total ? Math.round((done / total) * 100) : 0);
 const displayName = (u) => esc(u.name || u.username);

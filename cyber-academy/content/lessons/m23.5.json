@@ -1,0 +1,189 @@
+{
+ "title_ar": "مشروع: موجّه ويب مصغّر",
+ "title_en": "Project: Mini Router",
+ "duration_min": 25,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🧩",
+   "goal": "تبني تطبيق ويب مصغراً (بدون خادم حقيقي) يستقبل طلبات نصية، فيه مسارات وتسجيل دخول وجلسة موقّعة وصلاحيات."
+  },
+  {
+   "type": "text",
+   "title": "مواصفات المشروع",
+   "body": [
+    "**الفكرة:** بدل خادم حقيقي، البرنامج يقرأ أسطر طلبات `METHOD /path [query] [cookie=...]` ويطبع `status body`. هكذا نتدرب على منطق تطبيقات Flask: مسارات، نماذج، جلسات، وصلاحيات.",
+    "**المراحل:** (1) الموجّه والمسارات، (2) تسجيل الدخول وإصدار كوكي موقّع، (3) مسار محمي بالمصادقة والصلاحية (401 وَ403).",
+    "**الأمن في التصميم:** الكوكي موقّع، ولا نثق بما في الطلب، ورسالة دخول موحدة."
+   ],
+   "layer": "🟢 ببساطة"
+  },
+  {
+   "type": "text",
+   "title": "نصائح التصميم",
+   "body": [
+    "افصل المنطق: `route` مزخرف، `handle` يحلل الطلب، والمعالجات تعيد `(status, body)`.",
+    "التحقق من الجلسة يتم في كل طلب عبر `verify(cookie)`.",
+    "على جهازك الفكرة نفسها بـ Flask: `session[\"user\"] = name`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "ابنِ المشروع على مراحل، واختبر كل مرحلة قبل الانتقال للتالية."
+  },
+  {
+   "type": "code",
+   "title": "1) الموجّه",
+   "instructions": [
+    "اكتب موجّهاً بسيطاً: `route(method, path)` تسجل في `ROUTES`، ومسار `GET /` يطبع `200 hello guest`، وأي مسار آخر `404 not found`. اقرأ الطلبات حتى `exit` وطبع `status body`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "200 hello guest\n404 not found\n404 not found",
+     "stdin": [
+      "GET /",
+      "GET /nope",
+      "POST /",
+      "exit"
+     ]
+    },
+    {
+     "expect_stdout": "404 not found",
+     "stdin": [
+      "GET /x",
+      "exit"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "ROUTES = {}\n\ndef route(method, path):\n    def deco(f):\n        ROUTES[(method, path)] = f\n        return f\n    return deco\n\n@route(\"GET\", \"/\")\ndef home():\n    return 200, \"hello guest\"\n\nwhile True:\n    line = input()\n    if line == \"exit\":\n        break\n    method, path = line.split()[:2]\n    f = ROUTES.get((method, path))\n    if f is None:\n        print(404, \"not found\")\n    else:\n        status, body = f()\n        print(status, body)\n",
+   "hints": [
+    "المفتاح `(method, path)`.",
+    "احسب `404` لو لم يوجد."
+   ],
+   "stdin": [
+    "GET /",
+    "GET /nope",
+    "exit"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "2) تسجيل الدخول",
+   "instructions": [
+    "الإطار جاهز في الكود. أكمل معالج `login`: اقرأ `user` و`pw` من `form` (قاموس قوائم)، وإن كانت `pw` غير فارغة وتطابق `USERS` ارجع `(200, \"cookie=\" + sign(name))` وإلا `(401, \"bad credentials\")`."
+   ],
+   "starter": "import hmac\nimport secrets\nfrom urllib.parse import parse_qs\n\nKEY = b\"app-secret\"\nUSERS = {\"sara\": \"pw1\", \"bob\": \"pw2\"}\nROUTES = {}\n\ndef route(method, path):\n    def deco(f):\n        ROUTES[(method, path)] = f\n        return f\n    return deco\n\ndef sign(v):\n    return v + \".\" + hmac.new(KEY, v.encode(), \"sha256\").hexdigest()[:12]\n\ndef verify(c):\n    if not c or \".\" not in c:\n        return None\n    v, s = c.rsplit(\".\", 1)\n    return v if hmac.compare_digest(sign(v).rsplit(\".\", 1)[1], s) else None\n\n@route(\"GET\", \"/\")\ndef home(form, user):\n    return 200, \"hello \" + (user or \"guest\")\n\n@route(\"POST\", \"/login\")\ndef login(form, user):\n    # TODO: اقرأ user وpw من form؛ لو صحيحة ارجع (200, \"cookie=\" + sign(name)) وإلا (401, \"bad credentials\")\n    return 500, \"not implemented\"\n\n@route(\"GET\", \"/admin\")\ndef admin(form, user):\n    if user is None:\n        return 401, \"login required\"\n    if user != \"sara\":\n        return 403, \"forbidden\"\n    return 200, \"admin panel\"\n\ndef handle(line):\n    parts = line.split(\" \", 2)\n    method, path = parts[0], parts[1]\n    rest = parts[2] if len(parts) > 2 else \"\"\n    cookie = None\n    query = \"\"\n    for token in rest.split():\n        if token.startswith(\"cookie=\"):\n            cookie = token[7:]\n        else:\n            query = token\n    f = ROUTES.get((method, path))\n    if f is None:\n        return 404, \"not found\"\n    return f(parse_qs(query), verify(cookie))\n\nwhile True:\n    line = input()\n    if line == \"exit\":\n        break\n    status, body = handle(line)\n    print(status, body)\n",
+   "tests": [
+    {
+     "expect_stdout": "200 cookie=sara.68ec359a7690\n401 bad credentials\n401 bad credentials\n401 bad credentials",
+     "stdin": [
+      "POST /login user=sara&pw=pw1",
+      "POST /login user=sara&pw=bad",
+      "POST /login user=ghost&pw=x",
+      "POST /login user=sara&pw=",
+      "exit"
+     ]
+    },
+    {
+     "expect_stdout": "200 cookie=bob.b2d42d02d931",
+     "stdin": [
+      "POST /login user=bob&pw=pw2",
+      "exit"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import hmac\nimport secrets\nfrom urllib.parse import parse_qs\n\nKEY = b\"app-secret\"\nUSERS = {\"sara\": \"pw1\", \"bob\": \"pw2\"}\nROUTES = {}\n\ndef route(method, path):\n    def deco(f):\n        ROUTES[(method, path)] = f\n        return f\n    return deco\n\ndef sign(v):\n    return v + \".\" + hmac.new(KEY, v.encode(), \"sha256\").hexdigest()[:12]\n\ndef verify(c):\n    if not c or \".\" not in c:\n        return None\n    v, s = c.rsplit(\".\", 1)\n    return v if hmac.compare_digest(sign(v).rsplit(\".\", 1)[1], s) else None\n\n@route(\"GET\", \"/\")\ndef home(form, user):\n    return 200, \"hello \" + (user or \"guest\")\n\n@route(\"POST\", \"/login\")\ndef login(form, user):\n    name = form.get(\"user\", [\"\"])[0]\n    pw = form.get(\"pw\", [\"\"])[0]\n    if pw and USERS.get(name) == pw:\n        return 200, \"cookie=\" + sign(name)\n    return 401, \"bad credentials\"\n\n@route(\"GET\", \"/admin\")\ndef admin(form, user):\n    if user is None:\n        return 401, \"login required\"\n    if user != \"sara\":\n        return 403, \"forbidden\"\n    return 200, \"admin panel\"\n\ndef handle(line):\n    parts = line.split(\" \", 2)\n    method, path = parts[0], parts[1]\n    rest = parts[2] if len(parts) > 2 else \"\"\n    cookie = None\n    query = \"\"\n    for token in rest.split():\n        if token.startswith(\"cookie=\"):\n            cookie = token[7:]\n        else:\n            query = token\n    f = ROUTES.get((method, path))\n    if f is None:\n        return 404, \"not found\"\n    return f(parse_qs(query), verify(cookie))\n\nwhile True:\n    line = input()\n    if line == \"exit\":\n        break\n    status, body = handle(line)\n    print(status, body)\n",
+   "hints": [
+    "`form.get(\"user\", [\"\"])[0]`",
+    "ارفض كلمة المرور الفاضية."
+   ],
+   "stdin": [
+    "POST /login user=sara&pw=pw1",
+    "exit"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "3) المسار المحمي",
+   "instructions": [
+    "أكمل معالج `admin`: لا مستخدم (`user is None`) ← `(401, \"login required\")`، مستخدم غير `sara` ← `(403, \"forbidden\")`، وإلا `(200, \"admin panel\")`. جرّب بكوكي sara وbob ومزوَّر."
+   ],
+   "starter": "import hmac\nimport secrets\nfrom urllib.parse import parse_qs\n\nKEY = b\"app-secret\"\nUSERS = {\"sara\": \"pw1\", \"bob\": \"pw2\"}\nROUTES = {}\n\ndef route(method, path):\n    def deco(f):\n        ROUTES[(method, path)] = f\n        return f\n    return deco\n\ndef sign(v):\n    return v + \".\" + hmac.new(KEY, v.encode(), \"sha256\").hexdigest()[:12]\n\ndef verify(c):\n    if not c or \".\" not in c:\n        return None\n    v, s = c.rsplit(\".\", 1)\n    return v if hmac.compare_digest(sign(v).rsplit(\".\", 1)[1], s) else None\n\n@route(\"GET\", \"/\")\ndef home(form, user):\n    return 200, \"hello \" + (user or \"guest\")\n\n@route(\"POST\", \"/login\")\ndef login(form, user):\n    name = form.get(\"user\", [\"\"])[0]\n    pw = form.get(\"pw\", [\"\"])[0]\n    if pw and USERS.get(name) == pw:\n        return 200, \"cookie=\" + sign(name)\n    return 401, \"bad credentials\"\n\n@route(\"GET\", \"/admin\")\ndef admin(form, user):\n    # TODO: بدون مستخدم ← (401, \"login required\")، ومستخدم غير sara ← (403, \"forbidden\")\n    return 200, \"admin panel\"\n\ndef handle(line):\n    parts = line.split(\" \", 2)\n    method, path = parts[0], parts[1]\n    rest = parts[2] if len(parts) > 2 else \"\"\n    cookie = None\n    query = \"\"\n    for token in rest.split():\n        if token.startswith(\"cookie=\"):\n            cookie = token[7:]\n        else:\n            query = token\n    f = ROUTES.get((method, path))\n    if f is None:\n        return 404, \"not found\"\n    return f(parse_qs(query), verify(cookie))\n\nwhile True:\n    line = input()\n    if line == \"exit\":\n        break\n    status, body = handle(line)\n    print(status, body)\n",
+   "tests": [
+    {
+     "expect_stdout": "401 login required\n401 login required\n401 login required\n401 login required",
+     "stdin": [
+      "GET /admin",
+      "GET /admin cookie=sara.149a7f023a488ace",
+      "GET /admin cookie=bob.16c4154bddbae290",
+      "GET /admin cookie=sara.000000000000",
+      "exit"
+     ]
+    },
+    {
+     "expect_stdout": "200 hello guest\n200 hello guest",
+     "stdin": [
+      "GET / cookie=bob.16c4154bddbae290",
+      "GET /",
+      "exit"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import hmac\nimport secrets\nfrom urllib.parse import parse_qs\n\nKEY = b\"app-secret\"\nUSERS = {\"sara\": \"pw1\", \"bob\": \"pw2\"}\nROUTES = {}\n\ndef route(method, path):\n    def deco(f):\n        ROUTES[(method, path)] = f\n        return f\n    return deco\n\ndef sign(v):\n    return v + \".\" + hmac.new(KEY, v.encode(), \"sha256\").hexdigest()[:12]\n\ndef verify(c):\n    if not c or \".\" not in c:\n        return None\n    v, s = c.rsplit(\".\", 1)\n    return v if hmac.compare_digest(sign(v).rsplit(\".\", 1)[1], s) else None\n\n@route(\"GET\", \"/\")\ndef home(form, user):\n    return 200, \"hello \" + (user or \"guest\")\n\n@route(\"POST\", \"/login\")\ndef login(form, user):\n    name = form.get(\"user\", [\"\"])[0]\n    pw = form.get(\"pw\", [\"\"])[0]\n    if pw and USERS.get(name) == pw:\n        return 200, \"cookie=\" + sign(name)\n    return 401, \"bad credentials\"\n\n@route(\"GET\", \"/admin\")\ndef admin(form, user):\n    if user is None:\n        return 401, \"login required\"\n    if user != \"sara\":\n        return 403, \"forbidden\"\n    return 200, \"admin panel\"\n\ndef handle(line):\n    parts = line.split(\" \", 2)\n    method, path = parts[0], parts[1]\n    rest = parts[2] if len(parts) > 2 else \"\"\n    cookie = None\n    query = \"\"\n    for token in rest.split():\n        if token.startswith(\"cookie=\"):\n            cookie = token[7:]\n        else:\n            query = token\n    f = ROUTES.get((method, path))\n    if f is None:\n        return 404, \"not found\"\n    return f(parse_qs(query), verify(cookie))\n\nwhile True:\n    line = input()\n    if line == \"exit\":\n        break\n    status, body = handle(line)\n    print(status, body)\n",
+   "hints": [
+    "الكوكي المزوَّر يفشل في `verify` فيصير `user` هو `None`.",
+    "افحص None أولاً ثم الاسم."
+   ],
+   "stdin": [
+    "GET /admin",
+    "exit"
+   ]
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نتحقق من الكوكي في كل طلب؟",
+     "options": [
+      "لأن المتصفح يمكنه تعديله",
+      "لتسريع الموقع",
+      "لا حاجة"
+     ],
+     "answer": 0,
+     "why": "التوقيع يكشف التلاعب."
+    },
+    {
+     "q": "الفرق بين 401 و403؟",
+     "options": [
+      "401: لم يسجل دخول، 403: مسجل لكن بلا صلاحية",
+      "نفس الشيء",
+      "العكس"
+     ],
+     "answer": 0,
+     "why": "مصادقة مقابل تفويض."
+    },
+    {
+     "q": "ليش رمز الحالة مهم لدى المهاجم؟",
+     "options": [
+      "يكشف وجود الصفحات والصلاحيات إن اختلفت الرسائل",
+      "لا يهم",
+      "يزيد السرعة"
+     ],
+     "answer": 0,
+     "why": "سلوك موحد أفضل."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "الموجّه يربط الطلب بالمعالج.",
+    "الجلسة بكوكي موقّع تمنع التزوير.",
+    "المصادقة (من أنت) غير التفويض (ماذا تملك)."
+   ]
+  }
+ ]
+}

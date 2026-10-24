@@ -1,0 +1,303 @@
+{
+ "title_ar": "نماذج اللغة والواجهات",
+ "title_en": "LLMs & APIs",
+ "duration_min": 11,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "💬",
+   "goal": "تفهم كيف تعمل نماذج اللغة ([[llm]]) وكيف تستدعيها من Python بأمان عبر الواجهات (API)."
+  },
+  {
+   "type": "text",
+   "title": "كيف يعمل النموذج",
+   "body": [
+    "[[llm]] نموذج مدرب على نصوص ضخمة يتوقع **الرمز التالي** (token) مراراً فيولّد جملاً. الرمز قطعة نص (كلمة أو جزء كلمة).",
+    "يستقبل [[prompt]] (المُوجِّه) كقائمة رسائل: `system` (تعليمات المطوّر)، و`user` (سؤال المستخدم)، و`assistant` (ردود سابقة). ولديه **نافذة سياق** محدودة بعدد الرموز؛ ما يزيد عنها يُقطع أو يُرفض.",
+    "`temperature` تتحكم بالعشوائية: قريبة من 0 ثابتة ومتوقعة، وأعلى أكثر تنوعاً. وللنموذج حدود: قد **يهلوس** (يؤلف معلومات خاطئة بثقة)، فتحقق من الحقائق."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "الخدمات المختلفة تتشابه في هذا الشكل مع اختلافات في التفاصيل. راجع وثائق مزودك.",
+   "code": "messages = [\n    {\"role\": \"system\", \"content\": \"أنت مساعد أمني. أجب باختصار.\"},\n    {\"role\": \"user\", \"content\": \"وش هو التصيّد؟\"},\n]\nprint(len(messages))"
+  },
+  {
+   "type": "text",
+   "title": "استدعاء الواجهة بأمان",
+   "body": [
+    "تستدعي الواجهة بطلب HTTP فيه [[api-key]] في ترويسة (لا في الرابط). المفتاح سر: في متغير بيئة `os.environ[\"API_KEY\"]`، ولا يدخل Git ولا الواجهة الأمامية.",
+    "تعامل مع: حد المعدل (429)، المهلة، الأخطاء، وكلفة الرموز (تحدد `max_tokens` وتراقب الفاتورة).",
+    "**ناتج النموذج مدخل غير موثوق**: إن طلبت JSON فتحقق منه (`json.loads` ومفاتيح متوقعة) ولا تنفذه كأمر أو تضعه في SQL/HTML بدون معالجة."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "لا ترسل بيانات حساسة (كلمات مرور، هويات، أسرار الشركة) لخدمة خارجية بدون سياسة واضحة.",
+   "code": "import json\n\nraw = '{\"label\": \"phish\", \"confidence\": 0.9}'\ndata = json.loads(raw)\nassert data[\"label\"] in {\"phish\", \"ok\"}\nprint(data[\"label\"])"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "llm",
+    "prompt",
+    "api-key",
+    "json"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): السياق",
+   "code": "نافذة سياق = 100 رمز. المحادثة 130 رمزاً.\nماذا يحدث غالباً؟",
+   "options": [
+    "تُقطع أو تُلخَّص أقدم الرسائل لتناسب النافذة",
+    "يزيد النموذج حجم نافذته تلقائياً",
+    "يتجاهل آخر رسالة فقط",
+    "لا شيء يتغير"
+   ],
+   "answer": 0,
+   "why": "النافذة حد صلب؛ نقص أو نلخّص الأقدم.",
+   "lang": "text"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): الحرارة",
+   "code": "temperature = 0 مقابل 1.5\nأيهما أنسب لتصنيف رسائل التصيّد بنتائج ثابتة؟",
+   "options": [
+    "temperature قريبة من 0",
+    "temperature عالية 1.5",
+    "لا فرق",
+    "لا تُستخدم في التصنيف"
+   ],
+   "answer": 0,
+   "why": "التصنيف يحتاج ثباتاً وتكراراً.",
+   "lang": "text"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): JSON",
+   "code": "import json\nraw = '{\"label\": \"ok\"}'\nprint(json.loads(raw)[\"label\"])\n",
+   "options": [
+    "ok",
+    "{\"label\": \"ok\"}",
+    "label"
+   ],
+   "answer": 0,
+   "why": "نحلل النص لقاموس ونقرأ المفتاح."
+  },
+  {
+   "type": "match",
+   "title": "طابق الدور بمعناه",
+   "pairs": [
+    [
+     "system",
+     "تعليمات المطوّر للنموذج"
+    ],
+    [
+     "user",
+     "سؤال المستخدم"
+    ],
+    [
+     "assistant",
+     "رد النموذج السابق"
+    ],
+    [
+     "token",
+     "قطعة نص يعالجها النموذج"
+    ]
+   ],
+   "why": "مكونات المحادثة."
+  },
+  {
+   "type": "order",
+   "title": "رتّب استدعاءً آمناً",
+   "items": [
+    "نقرأ المفتاح من متغير بيئة",
+    "نبني رسائل system وuser",
+    "نرسل الطلب بمهلة وحد رموز",
+    "نتحقق من ناتج النموذج قبل استخدامه",
+    "نسجل الاستخدام والأخطاء بدون الأسرار"
+   ],
+   "why": "كل خطوة تقلل خطراً."
+  },
+  {
+   "type": "code",
+   "title": "ابنِ الرسائل",
+   "instructions": [
+    "عرّف `build_messages(system, user)` ترجع قائمة رسالتين: system أولاً ثم user، كل واحدة قاموس بـ `role` و`content`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "build_messages(\"s\", \"u\")",
+     "expect": [
+      {
+       "role": "system",
+       "content": "s"
+      },
+      {
+       "role": "user",
+       "content": "u"
+      }
+     ]
+    },
+    {
+     "call": "len(build_messages(\"a\", \"b\"))",
+     "expect": 2,
+     "hidden": true
+    }
+   ],
+   "solution": "def build_messages(system, user):\n    return [\n        {\"role\": \"system\", \"content\": system},\n        {\"role\": \"user\", \"content\": user},\n    ]\n",
+   "hints": [
+    "قائمة من قاموسين."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "قص السياق",
+   "instructions": [
+    "عرّف `trim(messages, max_tokens)`: قدّر عدد رموز كل رسالة بـ `len(content) // 4 + 1`، وأبقِ **أحدث** الرسائل التي مجموعها ≤ `max_tokens` (بالترتيب الأصلي). الرسالة الأولى (system) تُحفظ دائماً."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "trim([{\"role\": \"system\", \"content\": \"s\" * 8}, {\"role\": \"user\", \"content\": \"a\" * 40}, {\"role\": \"user\", \"content\": \"b\" * 40}], 20)",
+     "expect": [
+      {
+       "role": "system",
+       "content": "ssssssss"
+      },
+      {
+       "role": "user",
+       "content": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      }
+     ]
+    },
+    {
+     "call": "len(trim([{\"role\": \"system\", \"content\": \"s\"}, {\"role\": \"user\", \"content\": \"hi\"}], 100))",
+     "expect": 2,
+     "hidden": true
+    }
+   ],
+   "solution": "def tokens(m):\n    return len(m[\"content\"]) // 4 + 1\n\ndef trim(messages, max_tokens):\n    system, rest = messages[0], messages[1:]\n    budget = max_tokens - tokens(system)\n    kept = []\n    for m in reversed(rest):\n        if tokens(m) <= budget:\n            kept.append(m)\n            budget -= tokens(m)\n        else:\n            break\n    return [system] + list(reversed(kept))\n",
+   "hints": [
+    "ابدأ من الأحدث وارجع.",
+    "توقف عند أول رسالة لا تتسع."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تحقق من ناتج النموذج",
+   "instructions": [
+    "عرّف `parse_label(raw)`: حلّل نص JSON وارجع `label` لو هو `\"phish\"` أو `\"ok\"`، وإلا (JSON تالف أو قيمة غير متوقعة أو مفتاح ناقص) ارجع `\"unknown\"`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport json\n",
+   "tests": [
+    {
+     "call": "parse_label('{\"label\": \"phish\"}')",
+     "expect": "phish"
+    },
+    {
+     "call": "parse_label(\"not json\")",
+     "expect": "unknown"
+    },
+    {
+     "call": "parse_label('{\"label\": \"delete everything\"}')",
+     "expect": "unknown"
+    },
+    {
+     "call": "parse_label('{\"x\": 1}')",
+     "expect": "unknown",
+     "hidden": true
+    },
+    {
+     "call": "parse_label(\"[1,2]\")",
+     "expect": "unknown",
+     "hidden": true
+    }
+   ],
+   "solution": "import json\n\ndef parse_label(raw):\n    try:\n        data = json.loads(raw)\n        label = data[\"label\"]\n    except (ValueError, KeyError, TypeError):\n        return \"unknown\"\n    return label if label in (\"phish\", \"ok\") else \"unknown\"\n",
+   "hints": [
+    "امسك ValueError وKeyError وTypeError.",
+    "قائمة بيضاء للقيم."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: المفتاح في الكود",
+   "instructions": [
+    "المفتاح مكتوب داخل الكود. اجعله يُقرأ من قاموس البيئة `env` بالمفتاح `API_KEY` ويطبع `key loaded` لو وُجد وإلا `missing key`."
+   ],
+   "starter": "env = {\"API_KEY\": \"sk-test\"}\nAPI_KEY = \"sk-hardcoded\"\nprint(\"key loaded\" if API_KEY else \"missing key\")\n",
+   "tests": [
+    {
+     "expect_stdout": "key loaded"
+    }
+   ],
+   "solution": "env = {\"API_KEY\": \"sk-test\"}\nAPI_KEY = env.get(\"API_KEY\")\nprint(\"key loaded\" if API_KEY else \"missing key\")\n",
+   "hints": [
+    "اقرأه من البيئة بدل الكتابة المباشرة."
+   ],
+   "checks": [
+    {
+     "regex": "sk-hardcoded",
+     "must": false,
+     "msg": "احذف المفتاح من الكود"
+    }
+   ],
+   "variant": "bugfix",
+   "allow_starter_pass": true
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يتوقع النموذج اللغوي؟",
+     "options": [
+      "الرمز التالي",
+      "الحقيقة",
+      "أمر النظام"
+     ],
+     "answer": 0,
+     "why": "لذلك قد يهلوس."
+    },
+    {
+     "q": "أين نخزن مفتاح API؟",
+     "options": [
+      "متغير بيئة أو مدير أسرار",
+      "في الكود",
+      "في الواجهة الأمامية"
+     ],
+     "answer": 0,
+     "why": "سر الخادم."
+    },
+    {
+     "q": "ناتج النموذج يعامل كـ؟",
+     "options": [
+      "مدخل غير موثوق يُتحقق منه",
+      "أمر موثوق",
+      "ثابت"
+     ],
+     "answer": 0,
+     "why": "لا تنفذه بلا فحص."
+    },
+    {
+     "q": "ماذا نفعل لو الرسائل أكبر من النافذة؟",
+     "options": [
+      "نقصّ أو نلخّص الأقدم",
+      "نرسلها كما هي",
+      "نحذف system"
+     ],
+     "answer": 0,
+     "why": "مع حفظ التعليمات."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "النموذج يتوقع الرمز التالي ونافذته محدودة.",
+    "المفتاح سر في البيئة، ومهلة وحد رموز وتعامل مع 429.",
+    "ناتج النموذج غير موثوق: تحقق منه."
+   ]
+  }
+ ]
+}

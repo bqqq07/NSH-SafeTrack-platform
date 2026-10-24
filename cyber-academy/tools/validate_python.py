@@ -4,7 +4,7 @@
 - parsons  : الأسطر مرتبة لازم تشتغل بدون أخطاء (وتطابق expect_stdout إن وُجد).
 - fillcode : بعد تعبئة الإجابات الصحيحة لازم يشتغل الكود (ويطابق expect_stdout إن وُجد).
 يُستدعى من validate_content.py، أو مباشرة: python3 tools/validate_python.py [lesson-id ...]"""
-import glob, json, os, subprocess, sys
+import glob, json, os, shutil, subprocess, sys, tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 HARNESS = os.path.join(HERE, '..', 'js', 'pyharness.py')
@@ -19,12 +19,48 @@ def harness(payload, timeout=8):
     return json.loads(p.stdout)
 
 
+def run_lang(lang, code, files=None, stdin=None):
+    """تشغيل كود بلغات غير Python (bash/git) أو مكتبات خارجية (pandas) للتحقق من نواتج الدروس الملحقة.
+    lang=text: لا يُشغَّل (تعليمي فقط). يرجع نفس شكل نتيجة harness: {stdout, error}."""
+    if lang in (None, 'python'):
+        return harness({'mode': 'run', 'code': code, 'stdin': stdin, 'files': files})
+    tmp = tempfile.mkdtemp(prefix='ex_')
+    try:
+        for name, content in (files or {}).items():
+            path = os.path.join(tmp, name)
+            os.makedirs(os.path.dirname(path), exist_ok=True)
+            with open(path, 'w', encoding='utf-8', newline='') as fh:
+                fh.write(content)
+        env = {'PATH': os.environ['PATH'], 'HOME': tmp, 'LC_ALL': 'C.UTF-8', 'GIT_CONFIG_NOSYSTEM': '1',
+               'GIT_AUTHOR_NAME': 'Sara', 'GIT_AUTHOR_EMAIL': 'sara@example.com', 'GIT_COMMITTER_NAME': 'Sara', 'GIT_COMMITTER_EMAIL': 'sara@example.com',
+               'GIT_AUTHOR_DATE': '2025-01-05T10:00:00', 'GIT_COMMITTER_DATE': '2025-01-05T10:00:00', 'GIT_CONFIG_COUNT': '1',
+               'GIT_CONFIG_KEY_0': 'init.defaultBranch', 'GIT_CONFIG_VALUE_0': 'main'}
+        if lang in ('bash', 'git'):
+            cmd = ['bash', '-c', ('set -e\n' if lang == 'git' else '') + code]
+        elif lang == 'pandas':
+            env['PYTHONPATH'] = os.pathsep.join(sys.path)
+            cmd = [sys.executable, '-c', code]
+        else:
+            raise ValueError('unknown lang ' + lang)
+        p = subprocess.run(cmd, cwd=tmp, env=env, input=stdin and '\n'.join(stdin) + '\n', capture_output=True, text=True, timeout=20)
+        if p.returncode:
+            return {'stdout': p.stdout, 'error': {'type': 'ExitCode', 'msg': f'{p.returncode}: {p.stderr[-300:]}'}}
+        return {'stdout': p.stdout, 'error': None}
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def norm(s):
     return '\n'.join(l.rstrip() for l in (s or '').rstrip('\n').split('\n'))
 
 
 def check_slide(s):
     t, errs = s['type'], []
+    lang = s.get('lang')
+    if t == 'predict' and lang == 'text':
+        if len(set(s['options'])) != len(s['options']):
+            errs.append('predict: duplicate options')
+        return errs
     if t == 'code':
         for k in ('title', 'instructions', 'solution', 'hints'):
             if not s.get(k):
@@ -51,7 +87,7 @@ def check_slide(s):
         opts = s['options']
         if len(set(opts)) != len(opts):
             errs.append('predict: duplicate options')
-        r = harness({'mode': 'run', 'code': s['code'], 'stdin': s.get('stdin')})
+        r = run_lang(lang, s['code'], s.get('files'), s.get('stdin'))
         if r['error']:
             errs.append(f"predict: code raises {r['error']['type']}: {r['error']['msg']}")
         else:
@@ -63,7 +99,7 @@ def check_slide(s):
                     errs.append(f'predict: wrong option {i} equals the real output')
     elif t == 'parsons':
         for order in [s['lines']] + s.get('alt', []):
-            r = harness({'mode': 'run', 'code': '\n'.join(order) + '\n', 'stdin': s.get('stdin')})
+            r = run_lang(lang, '\n'.join(order) + '\n', s.get('files'), s.get('stdin'))
             if r['error']:
                 errs.append(f"parsons: solution raises {r['error']['type']}: {r['error']['msg']}")
             elif 'expect_stdout' in s and norm(r['stdout']) != norm(s['expect_stdout']):
@@ -75,7 +111,7 @@ def check_slide(s):
             parts = s['code'].split('____')
             answers = [b['answer'][0] if isinstance(b['answer'], list) else b['answer'] for b in s['blanks']]
             code = ''.join(p + (answers[i] if i < len(answers) else '') for i, p in enumerate(parts))
-            r = harness({'mode': 'run', 'code': code, 'stdin': s.get('stdin')})
+            r = run_lang(lang, code, s.get('files'), s.get('stdin'))
             if r['error']:
                 errs.append(f"fillcode: filled code raises {r['error']['type']}: {r['error']['msg']}")
             elif 'expect_stdout' in s and norm(r['stdout']) != norm(s['expect_stdout']):

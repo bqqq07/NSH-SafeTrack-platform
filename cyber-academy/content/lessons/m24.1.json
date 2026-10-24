@@ -1,0 +1,227 @@
+{
+ "title_ar": "Series و DataFrame",
+ "title_en": "Series & DataFrame",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🐼",
+   "goal": "تتعامل مع الجداول بـ[[pandas]]: [[dataframe]] للجدول و[[series]] للعمود."
+  },
+  {
+   "type": "text",
+   "title": "جدول في الذاكرة",
+   "body": [
+    "[[pandas]] أشهر مكتبة لتحليل البيانات. الهيكل الأساسي [[dataframe]]: جدول صفوف وأعمدة، كل عمود [[series]] بنوع محدد (أرقام، نص، تاريخ).",
+    "ننشئه من قاموس أعمدة: `pd.DataFrame({\"ip\": [...], \"status\": [...]})`. وأهم أدوات الفحص: `df.shape` (صفوف، أعمدة)، `df.columns`، `df.head()`، `df.dtypes`، `df.describe()`.",
+    "العمود: `df[\"status\"]`، والعملية عليه تطبَّق على كل القيم مرة واحدة (vectorized): `df[\"bytes\"] / 1000`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "مكتبة pandas غير مثبتة داخل المتصفح هنا، فتجرّب الأكواد على جهازك (pip install pandas)؛ والنواتج في التمارين مُتحقَّق منها فعلياً.",
+   "code": "import pandas as pd\n\ndf = pd.DataFrame({\n    \"ip\": [\"10.0.0.5\", \"10.0.0.9\"],\n    \"status\": [401, 200],\n})\nprint(df.shape)\nprint(df[\"status\"].tolist())"
+  },
+  {
+   "type": "text",
+   "title": "بدل الحلقات",
+   "body": [
+    "في بايثون العادية تكتب حلقة للمرور على كل صف. في pandas تكتب عملية على العمود كله، وهي أسرع وأوضح.",
+    "دوال سريعة على العمود: `.sum()` `.mean()` `.max()` `.min()` `.count()` `.nunique()` (عدد القيم الفريدة).",
+    "إضافة عمود جديد: `df[\"kb\"] = df[\"bytes\"] / 1000`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "pandas مبنية فوق NumPy، لذا العمليات سريعة على ملايين الصفوف.",
+   "code": "df[\"kb\"] = df[\"bytes\"] / 1000\nprint(df[\"bytes\"].sum())\nprint(df[\"ip\"].nunique())"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "pandas",
+    "dataframe",
+    "series"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): الأبعاد",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\nprint(df.shape)\n",
+   "options": [
+    "(4, 3)",
+    "(3, 4)",
+    "4"
+   ],
+   "answer": 0,
+   "why": "4 صفوف و3 أعمدة.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): مجموع",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\nprint(df[\"bytes\"].sum())\n",
+   "options": [
+    "1550",
+    "4",
+    "120"
+   ],
+   "answer": 0,
+   "why": "120+900+80+450.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): فريدة",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\nprint(df[\"ip\"].nunique())\n",
+   "options": [
+    "3",
+    "4",
+    "2"
+   ],
+   "answer": 0,
+   "why": "ثلاثة عناوين مختلفة.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (4): عمود جديد",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\ndf[\"kb\"] = df[\"bytes\"] / 1000\nprint(df[\"kb\"].max())\n",
+   "options": [
+    "0.9",
+    "900",
+    "9.0"
+   ],
+   "answer": 0,
+   "why": "أكبر قيمة 900 ÷ 1000.",
+   "lang": "pandas"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: مجموع عمود",
+   "lines": [
+    "import pandas as pd",
+    "df = pd.DataFrame({\"n\": [1, 2, 3]})",
+    "total = df[\"n\"].sum()",
+    "print(total)"
+   ],
+   "expect_stdout": "6",
+   "lang": "pandas",
+   "intro": "رتّب لإنشاء جدول وحساب مجموع عموده.",
+   "explain": "ننشئ الجدول ثم نجمع ثم نطبع."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: استيراد",
+   "code": "import pandas as pd\ndf = pd.____({\"a\": [1, 2]})\nprint(len(df))\n",
+   "blanks": [
+    {
+     "answer": "DataFrame"
+    }
+   ],
+   "expect_stdout": "2",
+   "show_output": false,
+   "lang": "pandas",
+   "bank": [
+    "DataFrame",
+    "Series",
+    "Table",
+    "read_csv"
+   ],
+   "intro": "وش الكلاس اللي ينشئ جدولاً؟",
+   "explain": "`pd.DataFrame`."
+  },
+  {
+   "type": "code",
+   "title": "نفس الفكرة بدون pandas",
+   "instructions": [
+    "`rows` قائمة قواميس (كل صف). احسب بدون pandas: **مجموع** عمود `bytes` وعدد قيم `ip` الفريدة، واطبعهما: `1550 3`."
+   ],
+   "starter": "rows = [\n    {\"ip\": \"10.0.0.5\", \"bytes\": 120},\n    {\"ip\": \"10.0.0.9\", \"bytes\": 900},\n    {\"ip\": \"10.0.0.5\", \"bytes\": 80},\n    {\"ip\": \"10.0.0.2\", \"bytes\": 450},\n]\n",
+   "tests": [
+    {
+     "expect_stdout": "1550 3"
+    }
+   ],
+   "solution": "rows = [\n    {\"ip\": \"10.0.0.5\", \"bytes\": 120},\n    {\"ip\": \"10.0.0.9\", \"bytes\": 900},\n    {\"ip\": \"10.0.0.5\", \"bytes\": 80},\n    {\"ip\": \"10.0.0.2\", \"bytes\": 450},\n]\nprint(sum(r[\"bytes\"] for r in rows), len({r[\"ip\"] for r in rows}))\n",
+   "hints": [
+    "`sum(...)` على تعبير مولّد.",
+    "`set` للفريدة."
+   ]
+  },
+  {
+   "type": "match",
+   "title": "طابق pandas بما يقابله في بايثون",
+   "pairs": [
+    [
+     "df[\"col\"].sum()",
+     "sum(r[\"col\"] for r in rows)"
+    ],
+    [
+     "df[\"col\"].nunique()",
+     "len(set(...))"
+    ],
+    [
+     "len(df)",
+     "len(rows)"
+    ],
+    [
+     "df[\"col\"].max()",
+     "max(r[\"col\"] for r in rows)"
+    ]
+   ],
+   "why": "نفس المفاهيم بصيغة أقصر."
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش الـ DataFrame؟",
+     "options": [
+      "جدول صفوف وأعمدة",
+      "قائمة أرقام فقط",
+      "ملف نصي"
+     ],
+     "answer": 0,
+     "why": "مثل ورقة إكسل."
+    },
+    {
+     "q": "وش df.shape؟",
+     "options": [
+      "(عدد الصفوف، عدد الأعمدة)",
+      "أسماء الأعمدة",
+      "مجموع القيم"
+     ],
+     "answer": 0,
+     "why": "tuple."
+    },
+    {
+     "q": "وش nunique؟",
+     "options": [
+      "عدد القيم الفريدة",
+      "مجموع القيم",
+      "أكبر قيمة"
+     ],
+     "answer": 0,
+     "why": "unique count."
+    },
+    {
+     "q": "ميزة العمليات على العمود؟",
+     "options": [
+      "تُطبَّق على كل القيم دفعة واحدة",
+      "أبطأ من الحلقات",
+      "تحتاج حلقة"
+     ],
+     "answer": 0,
+     "why": "vectorized."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "DataFrame جدول، وSeries عمود.",
+    "shape وcolumns وdtypes لفحص الجدول.",
+    "عمليات الأعمدة تغني عن الحلقات."
+   ]
+  }
+ ]
+}

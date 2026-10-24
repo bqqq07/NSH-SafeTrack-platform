@@ -1,0 +1,185 @@
+{
+ "title_ar": "الأسرار و gitignore",
+ "title_en": "Secrets & .gitignore",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔑",
+   "goal": "تمنع أخطر أخطاء المطورين: رفع [[secret]] (أسرار) إلى مستودع، باستخدام [[gitignore]]."
+  },
+  {
+   "type": "text",
+   "title": "أخطر خطأ شائع",
+   "body": [
+    "مفاتيح API وكلمات مرور قواعد البيانات وملفات `.env` ورموز الوصول إذا دخلت Git **تبقى في التاريخ** حتى لو حذفتها في كوميت لاحق، وأي أحد عنده المستودع يقدر يسترجعها.",
+    "روبوتات تفحص GitHub العام كل دقيقة بحثاً عن المفاتيح، وكثير من الحوادث بدأت بمفتاح AWS مسرّب خلال دقائق من رفعه.",
+    "الحماية: ملف [[gitignore]] يمنع تتبع الملفات الحساسة، والأسرار في متغيرات بيئة أو مدير أسرار، وفحص تلقائي قبل الكوميت."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "warn",
+   "note": ".gitignore يمنع إضافة ملف **جديد** فقط؛ لو سبق وتتبّعه Git فيبقى متتبَّعاً.",
+   "code": "# .gitignore\n.env\n*.key\n__pycache__/\nvenv/"
+  },
+  {
+   "type": "text",
+   "title": "لو سرّبت سراً",
+   "body": [
+    "افترض أنه **مكشوف نهائياً**: أول خطوة **ألغِ المفتاح وولّد غيره** (rotate). حذف الملف أو إعادة كتابة التاريخ لا يكفيان لوحدهما (قد توجد نسخ ومنسوخات).",
+    "ثم أزل السر من التاريخ بأدوات مخصصة (مثل git filter-repo) إن لزم، وراجع سجلات الاستخدام لمعرفة هل استُغل.",
+    "الوقاية الأفضل: `.env.example` بقيم وهمية، وأدوات فحص أسرار (secret scanning / pre-commit hooks)."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "`--cached` يحذفه من التتبع فقط ويبقيه على جهازك.",
+   "code": "# تتبع الملف قبل .gitignore؟ أوقفه:\ngit rm --cached .env\necho \".env\" >> .gitignore\ngit commit -m \"stop tracking .env\""
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "secret",
+    "gitignore"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): تجاهل",
+   "code": "git init -q\necho \".env\" > .gitignore\necho \"KEY=abc\" > .env\necho \"print(1)\" > app.py\ngit status --short\n",
+   "options": [
+    "?? .gitignore\n?? app.py",
+    "?? .env\n?? .gitignore\n?? app.py",
+    "?? app.py"
+   ],
+   "answer": 0,
+   "why": ".env متجاهَل فلا يظهر.",
+   "lang": "git"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): السر في التاريخ",
+   "code": "git init -q\necho \"KEY=abc\" > .env\ngit add .env\ngit commit -qm \"oops\"\ngit rm -q .env\ngit commit -qm \"remove secret\"\ngit log --oneline -- .env | wc -l\n",
+   "options": [
+    "2",
+    "0",
+    "1"
+   ],
+   "answer": 0,
+   "why": "الكوميت اللي أضاف السر والكوميت اللي حذفه، كلاهما بالتاريخ: السر قابل للاسترجاع.",
+   "lang": "git"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): كان متتبَّعاً",
+   "code": "git init -q\necho \"KEY=abc\" > .env\ngit add .env\ngit commit -qm \"oops\"\necho \".env\" > .gitignore\necho \"KEY=new\" > .env\ngit status --short\n",
+   "options": [
+    " M .env\n?? .gitignore",
+    "?? .gitignore",
+    ""
+   ],
+   "answer": 0,
+   "why": "الملف كان متتبعاً قبل gitignore فتغييراته ما زالت تظهر.",
+   "lang": "git"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (4): إيقاف التتبع",
+   "code": "git init -q\necho \"KEY=abc\" > .env\ngit add .env\ngit commit -qm \"oops\"\necho \".env\" > .gitignore\ngit rm -q --cached .env\ngit status --short\n",
+   "options": [
+    "D  .env\n?? .gitignore",
+    "?? .gitignore",
+    "D  .env"
+   ],
+   "answer": 0,
+   "why": "--cached حذفه من التتبع فقط، والملف باقٍ على جهازك لكنه متجاهَل.",
+   "lang": "git"
+  },
+  {
+   "type": "order",
+   "title": "رتّب الاستجابة لتسريب مفتاح",
+   "items": [
+    "نلغي المفتاح المسرّب فوراً",
+    "نصدر مفتاحاً جديداً ونخزنه بأمان",
+    "نوقف تتبع الملف ونضيفه لـ gitignore",
+    "نراجع سجلات الاستخدام للكشف عن استغلال",
+    "نفعّل فحص الأسرار لمنع التكرار"
+   ],
+   "why": "الإلغاء أولاً لأن الحذف وحده لا يكفي."
+  },
+  {
+   "type": "match",
+   "title": "طابق السر بمكان تخزينه الأفضل",
+   "pairs": [
+    [
+     "كلمة مرور قاعدة البيانات",
+     "متغير بيئة أو مدير أسرار"
+    ],
+    [
+     "مفتاح API",
+     "خارج الكود وخارج Git"
+    ],
+    [
+     "قالب الإعدادات",
+     ".env.example بقيم وهمية"
+    ],
+    [
+     "ملفات مؤقتة وكاش",
+     ".gitignore"
+    ]
+   ],
+   "why": "الأسرار لا تدخل المستودع."
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "هل حذف ملف السر في كوميت جديد يكفي؟",
+     "options": [
+      "لا، يبقى في التاريخ",
+      "نعم",
+      "أحياناً"
+     ],
+     "answer": 0,
+     "why": "يجب إلغاء المفتاح."
+    },
+    {
+     "q": "أول خطوة عند تسريب مفتاح؟",
+     "options": [
+      "إلغاؤه واستبداله",
+      "حذف المستودع",
+      "تجاهل"
+     ],
+     "answer": 0,
+     "why": "افترض أنه مكشوف."
+    },
+    {
+     "q": "وش يسوي git rm --cached؟",
+     "options": [
+      "يوقف تتبع الملف ويبقيه محلياً",
+      "يحذفه نهائياً",
+      "يشفره"
+     ],
+     "answer": 0,
+     "why": "مع gitignore."
+    },
+    {
+     "q": "وين نحفظ الأسرار؟",
+     "options": [
+      "متغيرات بيئة أو مدير أسرار",
+      "في الكود",
+      "في README"
+     ],
+     "answer": 0,
+     "why": "خارج المستودع."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "الأسرار في Git تبقى بالتاريخ حتى بعد الحذف.",
+    "gitignore وrm --cached وإلغاء المفتاح فوراً.",
+    "متغيرات بيئة ومدير أسرار وفحص تلقائي."
+   ]
+  }
+ ]
+}

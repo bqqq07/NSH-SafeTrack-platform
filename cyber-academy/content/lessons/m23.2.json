@@ -1,0 +1,229 @@
+{
+ "title_ar": "القوالب والتهريب",
+ "title_en": "Templates & Escaping",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🖼️",
+   "goal": "تبني صفحات HTML ديناميكية بـ[[template]] وتمنع ثغرة XSS بتهريب المخرجات."
+  },
+  {
+   "type": "text",
+   "title": "قالب بفراغات",
+   "body": [
+    "بدل دمج النصوص يدوياً، نكتب [[template]]: `<h1>Hello {{ name }}</h1>` ونمرر `name`. في Flask: `render_template(\"hello.html\", name=name)` (محرك Jinja2).",
+    "Jinja2 **يهرّب تلقائياً** ما بين `{{ }}`: لو name = `<script>` يظهر نصاً لا يُنفَّذ.",
+    "الخطر الأكبر: تجاوز التهريب بـ `|safe` أو بناء HTML بدمج النصوص (`\"<p>\" + user_input + \"</p>\"`)، وهو ما يفتح [[xss]]."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "warn",
+   "note": "لا تستخدم `|safe` على أي بيانات جاءت من مستخدم.",
+   "code": "<!-- hello.html -->\n<h1>Hello {{ name }}</h1>\n<ul>\n{% for item in items %}\n  <li>{{ item }}</li>\n{% endfor %}\n</ul>"
+  },
+  {
+   "type": "text",
+   "title": "تهريب يدوياً وبنفس الفكرة",
+   "body": [
+    "التهريب يستبدل `<` بـ `&lt;` و`>` بـ `&gt;` و`&` بـ `&amp;` والاقتباس بـ `&quot;`. في Python: `html.escape(text)`.",
+    "نبني قالباً مصغراً: نستبدل `{{ name }}` بقيمة مهرَّبة. هذا بالضبط ما يفعله Jinja.",
+    "التهريب يكون **عند الإخراج** وبحسب السياق (HTML يختلف عن JavaScript عن URL)."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "القاعدة: هرّب عند الإخراج، ولا تثق بأي بيانات من خارج برنامجك.",
+   "code": "import html\n\ndef render(tpl, **ctx):\n    for k, v in ctx.items():\n        tpl = tpl.replace(\"{{ \" + k + \" }}\", html.escape(str(v)))\n    return tpl\n\nprint(render(\"<h1>{{ name }}</h1>\", name=\"<b>x</b>\"))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "template",
+    "xss"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): escape",
+   "code": "import html\nprint(html.escape(\"<script>alert(1)</script>\"))\n",
+   "options": [
+    "&lt;script&gt;alert(1)&lt;/script&gt;",
+    "<script>alert(1)</script>",
+    "alert(1)"
+   ],
+   "answer": 0,
+   "why": "الوسوم صارت نصاً."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): الاقتباس",
+   "code": "import html\nprint(html.escape('a \"b\" & c'))\n",
+   "options": [
+    "a &quot;b&quot; &amp; c",
+    "a \"b\" & c",
+    "a &quot;b&quot; & c"
+   ],
+   "answer": 0,
+   "why": "يهرّب الاقتباس المزدوج و&."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): قالب",
+   "code": "import html\ntpl = \"<p>{{ x }}</p>\"\nprint(tpl.replace(\"{{ x }}\", html.escape(\"<i>\")))\n",
+   "options": [
+    "<p>&lt;i&gt;</p>",
+    "<p><i></p>",
+    "<p>{{ x }}</p>"
+   ],
+   "answer": 0,
+   "why": "القيمة المهرَّبة داخل القالب."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: التهريب",
+   "code": "import html\nuser_input = \"<b>hi</b>\"\nprint(html.____(user_input))\n",
+   "blanks": [
+    {
+     "answer": "escape"
+    }
+   ],
+   "expect_stdout": "&lt;b&gt;hi&lt;/b&gt;",
+   "show_output": true,
+   "bank": [
+    "escape",
+    "unescape",
+    "quote",
+    "strip"
+   ],
+   "intro": "وش الدالة اللي تهرّب HTML؟",
+   "explain": "`html.escape`."
+  },
+  {
+   "type": "code",
+   "title": "قالب آمن",
+   "instructions": [
+    "عرّف `render(tpl, **ctx)` تستبدل كل `{{ key }}` (بمسافة بعد القوسين وقبلهما) بقيمة **مهرَّبة** من `ctx`."
+   ],
+   "starter": "# اكتب كودك هنا\nimport html\n",
+   "tests": [
+    {
+     "call": "render(\"<h1>{{ name }}</h1>\", name=\"sara\")",
+     "expect": "<h1>sara</h1>"
+    },
+    {
+     "call": "render(\"<h1>{{ name }}</h1>\", name=\"<script>\")",
+     "expect": "<h1>&lt;script&gt;</h1>"
+    },
+    {
+     "call": "render(\"{{ a }}-{{ b }}\", a=\"x&y\", b=1)",
+     "expect": "x&amp;y-1",
+     "hidden": true
+    }
+   ],
+   "solution": "import html\n\ndef render(tpl, **ctx):\n    for k, v in ctx.items():\n        tpl = tpl.replace(\"{{ \" + k + \" }}\", html.escape(str(v)))\n    return tpl\n",
+   "hints": [
+    "كرر على `ctx.items()`.",
+    "هرّب `str(v)` قبل الاستبدال."
+   ],
+   "checks": [
+    {
+     "regex": "escape",
+     "msg": "استخدم html.escape"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "قائمة آمنة",
+   "instructions": [
+    "عرّف `render_list(items)` ترجع `<ul>` فيه `<li>` لكل عنصر **مهرَّباً**، كل عنصر في سطر داخل الناتج."
+   ],
+   "starter": "# اكتب كودك هنا\nimport html\n",
+   "tests": [
+    {
+     "call": "render_list([\"a\", \"<b>\"])",
+     "expect": "<ul>\n<li>a</li>\n<li>&lt;b&gt;</li>\n</ul>"
+    },
+    {
+     "call": "render_list([])",
+     "expect": "<ul>\n</ul>",
+     "hidden": true
+    }
+   ],
+   "solution": "import html\n\ndef render_list(items):\n    lines = [\"<ul>\"]\n    for item in items:\n        lines.append(\"<li>\" + html.escape(str(item)) + \"</li>\")\n    lines.append(\"</ul>\")\n    return \"\\n\".join(lines)\n",
+   "hints": [
+    "ابنِ قائمة أسطر ثم اجمعها بـ `\"\\n\".join`."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: ثغرة XSS",
+   "instructions": [
+    "الدالة تدمج مدخل المستخدم مباشرة. أصلحها لتهرّبه فيطبع `<p>Hello &lt;b&gt;sara&lt;/b&gt;</p>`."
+   ],
+   "starter": "def greet(name):\n    return \"<p>Hello \" + name + \"</p>\"\n\nprint(greet(\"<b>sara</b>\"))\n",
+   "tests": [
+    {
+     "expect_stdout": "<p>Hello &lt;b&gt;sara&lt;/b&gt;</p>"
+    }
+   ],
+   "solution": "import html\n\ndef greet(name):\n    return \"<p>Hello \" + html.escape(name) + \"</p>\"\n\nprint(greet(\"<b>sara</b>\"))\n",
+   "hints": [
+    "استورد html واستخدم escape."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يفعل Jinja2 تلقائياً؟",
+     "options": [
+      "يهرّب قيم {{ }}",
+      "يشفّر الصفحة",
+      "يحذف الوسوم"
+     ],
+     "answer": 0,
+     "why": "autoescape."
+    },
+    {
+     "q": "وش خطر |safe؟",
+     "options": [
+      "يوقف التهريب فيسمح بـ XSS",
+      "يبطئ الصفحة",
+      "لا خطر"
+     ],
+     "answer": 0,
+     "why": "لا تستخدمه على مدخلات المستخدم."
+    },
+    {
+     "q": "متى نهرّب؟",
+     "options": [
+      "عند الإخراج وبحسب السياق",
+      "عند الحفظ فقط",
+      "لا حاجة"
+     ],
+     "answer": 0,
+     "why": "HTML ليس كـ JS."
+    },
+    {
+     "q": "وش الأفضل لبناء HTML؟",
+     "options": [
+      "قالب مع تهريب تلقائي",
+      "دمج نصوص",
+      "eval"
+     ],
+     "answer": 0,
+     "why": "يمنع النسيان."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "القالب يفصل الشكل عن البيانات.",
+    "التهريب عند الإخراج يمنع XSS.",
+    "تجنب |safe ودمج النصوص."
+   ]
+  }
+ ]
+}

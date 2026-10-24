@@ -1,0 +1,205 @@
+{
+ "title_ar": "GitHub والتعاون",
+ "title_en": "GitHub Collaboration",
+ "duration_min": 11,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🐙",
+   "goal": "تشارك مشروعك مع الآخرين عبر [[remote]] (مستودع بعيد) مثل GitHub، وتعمل بنمط الـ[[pull-request]]."
+  },
+  {
+   "type": "text",
+   "title": "نسخة على الخادم",
+   "body": [
+    "[[remote]] نسخة من مستودعك على خادم. الاسم الشائع `origin`. `git push` يرفع كوميتاتك له، `git pull` يسحب تغييرات غيرك، و[[clone]] ينسخ مستودعاً كاملاً: `git clone URL`.",
+    "GitHub موقع يستضيف مستودعات Git ويضيف التعاون: المشاكل (issues)، والمراجعات، والأتمتة (Actions).",
+    "في هذا الدرس نحاكي الخادم بمستودع bare محلي، والأوامر نفسها تعمل مع GitHub."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "ما تحتاج حساباً هنا؛ التمارين تشتغل على مستودع محلي يحاكي GitHub.",
+   "code": "git remote add origin https://github.com/you/project.git\ngit push -u origin main\ngit pull\ngit clone https://github.com/team/app.git"
+  },
+  {
+   "type": "text",
+   "title": "نمط العمل الاحترافي",
+   "body": [
+    "1) `git switch -c fix-login` ← 2) كوميتات ← 3) `git push -u origin fix-login` ← 4) تفتح [[pull-request]] على GitHub ← 5) زملاؤك يراجعون ويعلّقون ← 6) تُدمج في main.",
+    "المراجعة تلتقط الأخطاء والثغرات قبل الإنتاج. وفي الأمن: افعل حماية الفرع الرئيسي (لا push مباشر، مراجعة إلزامية، فحوص ناجحة).",
+    "`fork` نسخة لك من مستودع غيرك لتقترح عليه تغييراً عبر PR (شائع في المشاريع المفتوحة)."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "PR صغير يُراجع أسرع ويعلق فيه أخطاء أقل.",
+   "code": "git switch -c fix-login\n# commits...\ngit push -u origin fix-login\n# ثم افتح Pull Request على GitHub"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "remote",
+    "clone",
+    "pull-request"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): بعد الدفع",
+   "code": "mkdir remote.git work\ncd remote.git\ngit init -q --bare\ncd ../work\ngit init -q\ngit remote add origin ../remote.git\necho a > f.txt\ngit add f.txt\ngit commit -qm base\ngit push -q origin main\ngit ls-remote ../remote.git | wc -l\n",
+   "options": [
+    "2",
+    "1",
+    "0"
+   ],
+   "answer": 0,
+   "why": "الخادم صار فيه مرجع واحد: main.",
+   "lang": "git"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): قبل الدفع",
+   "code": "mkdir remote.git work\ncd remote.git\ngit init -q --bare\ncd ../work\ngit init -q\ngit remote add origin ../remote.git\necho a > f.txt\ngit add f.txt\ngit commit -qm base\ngit ls-remote ../remote.git | wc -l\n",
+   "options": [
+    "0",
+    "1",
+    "2"
+   ],
+   "answer": 0,
+   "why": "ما دفعنا شيئاً بعد، فالخادم فاضي.",
+   "lang": "git"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): الاستنساخ",
+   "code": "mkdir remote.git work\ncd remote.git\ngit init -q --bare\ncd ../work\ngit init -q\ngit remote add origin ../remote.git\necho a > f.txt\ngit add f.txt\ngit commit -qm base\ngit push -q origin main\ncd ..\ngit clone -q remote.git copy\ncat copy/f.txt\n",
+   "options": [
+    "a",
+    "base",
+    "f.txt"
+   ],
+   "answer": 0,
+   "why": "النسخة المستنسخة فيها نفس الملف.",
+   "lang": "git"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (4): السحب",
+   "code": "mkdir remote.git work\ncd remote.git\ngit init -q --bare\ncd ../work\ngit init -q\ngit remote add origin ../remote.git\necho a > f.txt\ngit add f.txt\ngit commit -qm base\ngit push -q origin main\ncd ..\ngit clone -q remote.git other\ncd other\necho b >> f.txt\ngit commit -qam more\ngit push -q origin main\ncd ../work\ngit pull -q origin main\nwc -l < f.txt\n",
+   "options": [
+    "2",
+    "1",
+    "3"
+   ],
+   "answer": 0,
+   "why": "سحبنا كوميت الزميل فصار سطران.",
+   "lang": "git"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: ارفع مشروعك",
+   "lines": [
+    "mkdir remote.git work",
+    "cd remote.git",
+    "git init -q --bare",
+    "cd ../work",
+    "git init -q",
+    "git remote add origin ../remote.git",
+    "echo a > f.txt",
+    "git add f.txt",
+    "git commit -qm base",
+    "git push -q origin main",
+    "git ls-remote ../remote.git | wc -l"
+   ],
+   "expect_stdout": "2",
+   "lang": "git",
+   "intro": "رتّب الأوامر: اربط origin وسوّ كوميت وادفع.",
+   "explain": "remote add ثم commit ثم push."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الرفع",
+   "code": "mkdir remote.git work\ncd remote.git\ngit init -q --bare\ncd ../work\ngit init -q\ngit remote add origin ../remote.git\necho a > f.txt\ngit add f.txt\ngit commit -qm base\ngit ____ -q origin main\ngit ls-remote ../remote.git | wc -l\n",
+   "blanks": [
+    {
+     "answer": "push"
+    }
+   ],
+   "expect_stdout": "2",
+   "show_output": false,
+   "lang": "git",
+   "bank": [
+    "push",
+    "pull",
+    "clone",
+    "fetch"
+   ],
+   "intro": "وش الأمر اللي يرفع كوميتاتك للخادم؟",
+   "explain": "`git push`."
+  },
+  {
+   "type": "order",
+   "title": "رتّب دورة Pull Request",
+   "items": [
+    "ننشئ فرعاً جديداً",
+    "نسوّي كوميتات للتغيير",
+    "ندفع الفرع للخادم",
+    "نفتح Pull Request",
+    "الزملاء يراجعون ثم يُدمج"
+   ],
+   "why": "العمل على فرع ثم مراجعة ثم دمج."
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش git clone؟",
+     "options": [
+      "ينسخ مستودعاً بعيداً كاملاً لجهازك",
+      "يحذف المستودع",
+      "يدمج فرعين"
+     ],
+     "answer": 0,
+     "why": "مع كامل تاريخه."
+    },
+    {
+     "q": "وش Pull Request؟",
+     "options": [
+      "طلب دمج فرعك بعد مراجعته",
+      "أمر طرفية",
+      "ملف"
+     ],
+     "answer": 0,
+     "why": "مراجعة قبل الدمج."
+    },
+    {
+     "q": "ليش نحمي الفرع الرئيسي؟",
+     "options": [
+      "نمنع تغييرات غير مراجعة",
+      "لتصغيره",
+      "للتشفير"
+     ],
+     "answer": 0,
+     "why": "لا push مباشر."
+    },
+    {
+     "q": "وش الفرق بين push وpull؟",
+     "options": [
+      "push يرفع وpull يسحب",
+      "العكس",
+      "نفس الشيء"
+     ],
+     "answer": 0,
+     "why": "اتجاهان."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "الـ remote نسخة على خادم، وpush/pull للمزامنة.",
+    "العمل الاحترافي: فرع ← PR ← مراجعة ← دمج.",
+    "احمِ الفرع الرئيسي بالمراجعة."
+   ]
+  }
+ ]
+}

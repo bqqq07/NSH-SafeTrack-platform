@@ -1,0 +1,213 @@
+{
+ "title_ar": "التراجع والتاريخ",
+ "title_en": "Undo & History",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "⏪",
+   "goal": "تتراجع عن الأخطاء بأمان: `restore` للملفات، و[[revert]] للكوميتات، و`reset` بحذر."
+  },
+  {
+   "type": "text",
+   "title": "ثلاث مستويات للتراجع",
+   "body": [
+    "**ملف عدّلته ولم تحفظه:** `git restore file` يرجعه لآخر كوميت.",
+    "**كوميت شاركته مع غيرك:** `git revert <id>` ينشئ كوميتاً **جديداً** يعكس تأثير القديم؛ التاريخ يبقى سليماً (آمن).",
+    "**كوميت محلي لم تدفعه:** `git reset --hard HEAD~1` يحذف آخر كوميت ويرجع حالة الملفات (خطر: يضيع التغيير غير المحفوظ)."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "warn",
+   "note": "لا تستخدم reset --hard على كوميتات دفعتها وشاركها غيرك.",
+   "code": "git restore app.py\ngit revert abc1234\ngit reset --hard HEAD~1"
+  },
+  {
+   "type": "text",
+   "title": "قراءة التاريخ",
+   "body": [
+    "`git log --oneline` ملخص، و`git show <id>` تفاصيل كوميت، و`git diff A B` فرق بين لقطتين، و`git blame file` من غيّر كل سطر.",
+    "`git reflog` يسجل تنقلات HEAD ويساعدك تسترجع كوميتاً \"ضاع\" بعد reset بالخطأ.",
+    "في الاستجابة للحوادث: التاريخ دليل: من أضاف الكود المشبوه ومتى؟"
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "Git نادراً يفقد شيئاً نهائياً قبل مرور وقت على آخر ظهور في reflog.",
+   "code": "git log --oneline\ngit show abc1234\ngit blame app.py\ngit reflog"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "revert",
+    "commit",
+    "git"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): restore",
+   "code": "git init -q\necho \"v1\" > app.txt\ngit add app.txt\ngit commit -qm \"first\"\necho \"oops\" > app.txt\ngit restore app.txt\ncat app.txt\n",
+   "options": [
+    "v1",
+    "oops",
+    ""
+   ],
+   "answer": 0,
+   "why": "restore رجّع الملف لآخر كوميت.",
+   "lang": "git"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): reset",
+   "code": "git init -q\necho \"v1\" > app.txt\ngit add app.txt\ngit commit -qm \"first\"\necho \"v2\" > app.txt\ngit commit -qam second\ngit reset -q --hard HEAD~1\ncat app.txt\n",
+   "options": [
+    "v1",
+    "v2",
+    "second"
+   ],
+   "answer": 0,
+   "why": "reset حذف الكوميت الثاني ورجّع الملف.",
+   "lang": "git"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): revert",
+   "code": "git init -q\necho \"v1\" > app.txt\ngit add app.txt\ngit commit -qm \"first\"\necho \"bad\" > app.txt\ngit commit -qam \"bad change\"\ngit revert --no-edit HEAD >/dev/null\ncat app.txt\ngit log --oneline | wc -l\n",
+   "options": [
+    "v1\n3",
+    "v1\n2",
+    "bad\n3"
+   ],
+   "answer": 0,
+   "why": "revert أضاف كوميتاً ثالثاً يعكس التغيير، والملف رجع v1.",
+   "lang": "git"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (4): من غيّر؟",
+   "code": "git init -q\necho \"v1\" > app.txt\ngit add app.txt\ngit commit -qm \"first\"\ngit log --format=%an\n",
+   "options": [
+    "Sara",
+    "first",
+    "sara@example.com"
+   ],
+   "answer": 0,
+   "why": "%an اسم المؤلف.",
+   "lang": "git"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: تراجع آمن",
+   "lines": [
+    "git init -q",
+    "echo \"v1\" > app.txt",
+    "git add app.txt",
+    "git commit -qm \"first\"",
+    "echo \"bad\" > app.txt",
+    "git commit -qam \"bad change\"",
+    "git revert --no-edit HEAD >/dev/null",
+    "cat app.txt"
+   ],
+   "expect_stdout": "v1",
+   "lang": "git",
+   "intro": "رتّب: كوميت أول ثم تغيير سيئ ثم عكسه.",
+   "explain": "revert بعد الكوميت السيئ."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: التراجع",
+   "code": "git init -q\necho \"v1\" > app.txt\ngit add app.txt\ngit commit -qm \"first\"\necho \"oops\" > app.txt\ngit ____ app.txt\ncat app.txt\n",
+   "blanks": [
+    {
+     "answer": "restore"
+    }
+   ],
+   "expect_stdout": "v1",
+   "show_output": false,
+   "lang": "git",
+   "bank": [
+    "restore",
+    "revert",
+    "reset",
+    "undo"
+   ],
+   "intro": "وش الأمر اللي يرجع ملفاً غير محفوظ لآخر كوميت؟",
+   "explain": "`git restore`."
+  },
+  {
+   "type": "match",
+   "title": "اختر أمر التراجع المناسب",
+   "pairs": [
+    [
+     "ملف عدّلته ولم تحفظه",
+     "git restore"
+    ],
+    [
+     "كوميت شاركته مع الفريق",
+     "git revert"
+    ],
+    [
+     "كوميت محلي لم تدفعه",
+     "git reset"
+    ],
+    [
+     "كوميت ضاع بعد reset",
+     "git reflog"
+    ]
+   ],
+   "why": "حسب أمان التاريخ المشترك."
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "أي أمر آمن للكوميتات المشتركة؟",
+     "options": [
+      "revert",
+      "reset --hard",
+      "rm"
+     ],
+     "answer": 0,
+     "why": "لا يعيد كتابة التاريخ."
+    },
+    {
+     "q": "وش يضيّع التغيير غير المحفوظ؟",
+     "options": [
+      "reset --hard",
+      "revert",
+      "log"
+     ],
+     "answer": 0,
+     "why": "احذر."
+    },
+    {
+     "q": "وين نعرف من غيّر سطراً؟",
+     "options": [
+      "git blame",
+      "git add",
+      "git init"
+     ],
+     "answer": 0,
+     "why": "يربط كل سطر بكوميت."
+    },
+    {
+     "q": "وش reflog؟",
+     "options": [
+      "سجل تنقلات HEAD لاسترجاع ما ضاع",
+      "سجل الأخطاء",
+      "ضغط"
+     ],
+     "answer": 0,
+     "why": "شبكة أمان."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "restore للملف، revert للمشترك، reset للمحلي بحذر.",
+    "التاريخ دليل: log وshow وblame.",
+    "reflog يساعد على الاسترجاع."
+   ]
+  }
+ ]
+}

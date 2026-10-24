@@ -1,0 +1,224 @@
+{
+ "title_ar": "الحلقات والدوال",
+ "title_en": "Loops & Functions",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔁",
+   "goal": "تكرر المهام وتنظم سكربتك بحلقات ودوال في [[bash]]."
+  },
+  {
+   "type": "text",
+   "title": "الحلقات",
+   "body": [
+    "`for f in *.log; do ...; done` تمر على الملفات. و`for i in {1..3}` على نطاق. و`while read -r line; do ...; done < file` تقرأ ملفاً سطراً سطراً.",
+    "`$f` يحمل العنصر الحالي، و**لازم** نقتبسه `\"$f\"` لتحمّل الأسماء التي فيها مسافات.",
+    "`break` و`continue` تعمل مثل Python."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "`read -r` تمنع تفسير الشرطة المائلة العكسية في السطور.",
+   "code": "for i in 1 2 3; do\n  echo \"n=$i\"\ndone\nwhile read -r line; do\n  echo \"> $line\"\ndone < f.txt"
+  },
+  {
+   "type": "text",
+   "title": "الدوال والاختيار",
+   "body": [
+    "`greet() { echo \"hi $1\"; }` ثم `greet sara`. الوسطاء `$1` `$2` و`$@` كلها و`$#` عددها. والنتيجة تعود بـ `echo` أو برمز `return`.",
+    "`case \"$x\" in a) ...;; b|c) ...;; *) ...;; esac` بديل أنظف من سلسلة if.",
+    "`local var=...` داخل الدالة تمنع تسريب المتغير للخارج."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "`4*` نمط يطابق أي رمز يبدأ بـ 4.",
+   "code": "check() {\n  local code=$1\n  case \"$code\" in\n    200) echo ok ;;\n    4*) echo client-error ;;\n    *) echo other ;;\n  esac\n}\ncheck 404"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "bash",
+    "script",
+    "variable"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): for",
+   "code": "for i in 1 2 3; do\n  echo \"n=$i\"\ndone\n",
+   "options": [
+    "n=1\nn=2\nn=3",
+    "n=3",
+    "n=i\nn=i\nn=i"
+   ],
+   "answer": 0,
+   "why": "تكرار على القيم الثلاث.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): نطاق",
+   "code": "for i in {1..4}; do\n  printf \"%s \" \"$i\"\ndone\necho\n",
+   "options": [
+    "1 2 3 4",
+    "1 4",
+    "4"
+   ],
+   "answer": 0,
+   "why": "{1..4} تعطي 1 إلى 4.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): دالة",
+   "code": "greet() { echo \"hi $1\"; }\ngreet sara\ngreet ali\n",
+   "options": [
+    "hi sara\nhi ali",
+    "hi $1\nhi $1",
+    "hi sara"
+   ],
+   "answer": 0,
+   "why": "$1 أول وسيط في كل استدعاء.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (4): while read",
+   "code": "printf 'a\\nb\\n' > f.txt\nwhile read -r line; do\n  echo \"> $line\"\ndone < f.txt\n",
+   "options": [
+    "> a\n> b",
+    "a\nb",
+    "> a"
+   ],
+   "answer": 0,
+   "why": "نقرأ سطراً بسطر.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (5): case",
+   "code": "x=404\ncase \"$x\" in\n  200) echo ok ;;\n  4*) echo client ;;\n  *) echo other ;;\nesac\n",
+   "options": [
+    "client",
+    "ok",
+    "other"
+   ],
+   "answer": 0,
+   "why": "404 يطابق النمط 4*.",
+   "lang": "bash"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: عدّ الملفات",
+   "lines": [
+    "touch a.log b.log c.txt",
+    "n=0",
+    "for f in *.log; do",
+    "  n=$((n+1))",
+    "done",
+    "echo \"$n logs\""
+   ],
+   "expect_stdout": "2 logs",
+   "lang": "bash",
+   "intro": "رتّب سكربتاً يعدّ ملفات log.",
+   "explain": "ننشئ الملفات ثم نعدّها بالحلقة."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: انتهاء الحلقة",
+   "code": "for i in 1 2; do\n  echo $i\n____\n",
+   "blanks": [
+    {
+     "answer": "done"
+    }
+   ],
+   "expect_stdout": "1\n2",
+   "show_output": false,
+   "lang": "bash",
+   "bank": [
+    "done",
+    "end",
+    "fi",
+    "esac"
+   ],
+   "intro": "وش الكلمة اللي تقفل حلقة for؟",
+   "explain": "`done`."
+  },
+  {
+   "type": "match",
+   "title": "طابق التركيب بإغلاقه",
+   "pairs": [
+    [
+     "if ... then",
+     "fi"
+    ],
+    [
+     "for ... do",
+     "done"
+    ],
+    [
+     "case ... in",
+     "esac"
+    ],
+    [
+     "while ... do",
+     "done"
+    ]
+   ],
+   "why": "لكل تركيب إغلاق مختلف."
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نقتبس \"$f\" في الحلقة؟",
+     "options": [
+      "لتحمل الأسماء التي فيها مسافات",
+      "لتسريعها",
+      "لا فرق"
+     ],
+     "answer": 0,
+     "why": "وإلا ينقسم الاسم لعدة كلمات."
+    },
+    {
+     "q": "وش $#؟",
+     "options": [
+      "عدد الوسطاء",
+      "الوسيط الأول",
+      "رمز الخروج"
+     ],
+     "answer": 0,
+     "why": "مثل len(argv)."
+    },
+    {
+     "q": "وش تفعل local؟",
+     "options": [
+      "تحصر المتغير داخل الدالة",
+      "تجعله عاماً",
+      "تحذفه"
+     ],
+     "answer": 0,
+     "why": "تمنع التسريب."
+    },
+    {
+     "q": "وش يقرأ while read؟",
+     "options": [
+      "مدخلاً سطراً سطراً",
+      "ملفاً كاملاً دفعة واحدة",
+      "الأرقام فقط"
+     ],
+     "answer": 0,
+     "why": "مع < file."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "for وwhile للتكرار، و\"$var\" دائماً مقتبسة.",
+    "الدوال بـ $1 و$@ وlocal.",
+    "case لتفريع أنظف."
+   ]
+  }
+ ]
+}

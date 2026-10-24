@@ -18,8 +18,8 @@ const isDone = (id) => !!store.get().lessons[id]?.done;
 const trackOf = (id) => lessonsOf().find((m) => m.id === id)?.level.track || 'security';
 const readyList = (track) => lessonsOf().filter((m) => m.ready && (!track || m.level.track === track));
 const prevOf = (id) => { const l = readyList(trackOf(id)); const i = l.findIndex((m) => m.id === id); return i > 0 ? l[i - 1] : null; };
-const levelLabel = (l) => (l.track === 'python' ? `P${l.id - 10}` : `المستوى ${l.id}`);
-const TRACKS = { security: ['🛡️', 'الأمن السيبراني'], python: ['🐍', 'Python'] };
+const levelLabel = (l) => (l.track === 'python' ? `P${l.id - 10}` : l.track === 'extras' ? `ملحق ${l.id - 20}` : `المستوى ${l.id}`);
+const TRACKS = { security: ['🛡️', 'الأمن السيبراني'], python: ['🐍', 'Python'], extras: ['🧰', 'ملحقات'] };
 let pathTrack = 'security';
 // تحكم المشرف: إيقاف التدريب، وسقف للمستوى، وفتح كل الدروس
 const me = () => sync.currentUser();
@@ -59,6 +59,9 @@ function home() {
   const done = ready.filter((m) => isDone(m.id)).length;
   const pyReady = readyList('python');
   const pyDone = pyReady.filter((m) => isDone(m.id)).length;
+  const exNext = nextLesson('extras');
+  const exReady = readyList('extras');
+  const exDone = exReady.filter((m) => isDone(m.id)).length;
   const terms = allTerms();
   // "مصطلح اليوم" يتغير كل يوم ويثبت طول اليوم
   const wod = terms[Math.floor(Date.now() / 864e5) % terms.length];
@@ -88,6 +91,10 @@ function home() {
       <div class="row between"><b>🐍 مسار Python</b><span class="muted">${pyDone}/${pyReady.length} دروس</span></div>
       <div class="bar" style="margin:8px 0"><i style="width:${(pyDone / pyReady.length) * 100}%;background:var(--blue)"></i></div>
       <small class="muted">${pyNext ? `${pyDone ? 'كمّل' : 'ابدأ'}: ${esc(pyNext.title_ar)}` : 'خلصت الدروس المتاحة'}</small></a>` : ''}
+    ${exReady.length ? `<a class="card" style="display:block;text-decoration:none;color:inherit;border-color:var(--orange, var(--blue))" href="${exNext ? `#/lesson/${exNext.id}` : '#/path'}">
+      <div class="row between"><b>🧰 ملحقات (Git وBash وFlask وpandas)</b><span class="muted">${exDone}/${exReady.length} دروس</span></div>
+      <div class="bar" style="margin:8px 0"><i style="width:${(exDone / exReady.length) * 100}%;background:var(--orange, var(--blue))"></i></div>
+      <small class="muted">${exNext ? `${exDone ? 'كمّل' : 'ابدأ'}: ${esc(exNext.title_ar)}` : 'خلصت الدروس المتاحة'}</small></a>` : ''}
     <a class="card" style="display:block;text-decoration:none;color:inherit" href="#/review"><b>🔁 مراجعة المصطلحات</b><p class="muted" style="margin:0">ثبّت اللي تعلمته بتكرار متباعد.</p></a>
     <div class="card">
       <span class="badge">🔤 مصطلح اليوم</span>

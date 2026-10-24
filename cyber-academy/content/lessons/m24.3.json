@@ -1,0 +1,204 @@
+{
+ "title_ar": "التجميع groupby",
+ "title_en": "groupby",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🧮",
+   "goal": "تحسب إحصاءات لكل مجموعة (لكل IP، لكل يوم) بـ[[groupby]]."
+  },
+  {
+   "type": "text",
+   "title": "قسّم، احسب، اجمع",
+   "body": [
+    "[[groupby]] تقسم الجدول لمجموعات حسب قيمة عمود، وتحسب لكل مجموعة: `df.groupby(\"ip\").size()` عدد صفوف كل IP، و`df.groupby(\"ip\")[\"bytes\"].sum()` مجموع البايتات لكل IP.",
+    "وأسرع طريقة لـ\"أكثر العناصر تكراراً\": `df[\"ip\"].value_counts()` (تنازلياً تلقائياً).",
+    "النتيجة Series فهرسها اسم المجموعة. `.to_dict()` أو `.idxmax()` (اسم الأكبر)."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "هذا مثل Counter في بايثون، لكن على جداول كاملة.",
+   "code": "print(df.groupby(\"ip\").size().to_dict())\nprint(df[\"ip\"].value_counts().idxmax())"
+  },
+  {
+   "type": "text",
+   "title": "تجميعات متعددة",
+   "body": [
+    "`.agg` تحسب أكثر من شيء: `df.groupby(\"ip\").agg(n=(\"status\", \"size\"), total=(\"bytes\", \"sum\"))`.",
+    "نفلتر قبل التجميع (محاولات الفشل فقط) ثم نجمع ونرتب: `df[df[\"status\"]==401].groupby(\"ip\").size().sort_values(ascending=False)`.",
+    "التقاط المشتبه بهم: `counts[counts >= 3].index.tolist()`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "هذا بالضبط كاشف التخمين: عدّ الفشل لكل IP ثم عتبة.",
+   "code": "fails = df[df[\"status\"] == 401]\ncounts = fails.groupby(\"ip\").size()\nprint(counts[counts >= 2].index.tolist())"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "groupby",
+    "dataframe"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): size",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\nprint(df.groupby(\"ip\").size().to_dict())\n",
+   "options": [
+    "{'10.0.0.2': 1, '10.0.0.5': 2, '10.0.0.9': 1}",
+    "{'10.0.0.5': 2, '10.0.0.9': 1, '10.0.0.2': 1}",
+    "{'10.0.0.2': 1, '10.0.0.5': 3, '10.0.0.9': 1}"
+   ],
+   "answer": 0,
+   "why": "groupby ترتب المفاتيح: 10.0.0.2 ثم .5 ثم .9.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): مجموع لكل مجموعة",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\nprint(df.groupby(\"ip\")[\"bytes\"].sum().to_dict())\n",
+   "options": [
+    "{'10.0.0.2': 450, '10.0.0.5': 200, '10.0.0.9': 900}",
+    "{'10.0.0.2': 450, '10.0.0.5': 120, '10.0.0.9': 900}",
+    "{'10.0.0.5': 200, '10.0.0.9': 900}"
+   ],
+   "answer": 0,
+   "why": "120+80=200 للعنوان .5.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): الأكثر تكراراً",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\nprint(df[\"ip\"].value_counts().idxmax())\n",
+   "options": [
+    "10.0.0.5",
+    "10.0.0.9",
+    "10.0.0.2"
+   ],
+   "answer": 0,
+   "why": ".5 ظهر مرتين.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (4): عتبة",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\ncounts = df[df[\"status\"] == 401].groupby(\"ip\").size()\nprint(counts[counts >= 2].index.tolist())\n",
+   "options": [
+    "['10.0.0.5']",
+    "['10.0.0.9']",
+    "[]"
+   ],
+   "answer": 0,
+   "why": "فقط .5 فشل مرتين.",
+   "lang": "pandas"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: أكثر IP فشلاً",
+   "lines": [
+    "import pandas as pd",
+    "df = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})",
+    "fails = df[df[\"status\"] == 401]",
+    "top = fails[\"ip\"].value_counts().idxmax()",
+    "print(top)"
+   ],
+   "expect_stdout": "10.0.0.5",
+   "lang": "pandas",
+   "intro": "رتّب لتجد أكثر IP فشلاً.",
+   "explain": "نفلتر ثم نعدّ ثم نأخذ الأعلى."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: التجميع",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\nprint(df.____(\"ip\").size().max())\n",
+   "blanks": [
+    {
+     "answer": "groupby"
+    }
+   ],
+   "expect_stdout": "2",
+   "show_output": false,
+   "lang": "pandas",
+   "bank": [
+    "groupby",
+    "group",
+    "split",
+    "sort_values"
+   ],
+   "intro": "وش الدالة اللي تقسم الجدول لمجموعات؟",
+   "explain": "`groupby`."
+  },
+  {
+   "type": "code",
+   "title": "نفس التجميع بدون pandas",
+   "instructions": [
+    "من `ips` اطبع قاموس عدد تكرار كل IP بترتيب العناوين: `{'10.0.0.2': 1, '10.0.0.5': 2, '10.0.0.9': 1}`"
+   ],
+   "starter": "ips = [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"]\n",
+   "tests": [
+    {
+     "expect_stdout": "{'10.0.0.2': 1, '10.0.0.5': 2, '10.0.0.9': 1}"
+    }
+   ],
+   "solution": "ips = [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"]\ncounts = {}\nfor ip in ips:\n    counts[ip] = counts.get(ip, 0) + 1\nprint({k: counts[k] for k in sorted(counts)})\n",
+   "hints": [
+    "نمط العدّ بالقاموس.",
+    "رتّب المفاتيح عند الطباعة."
+   ]
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش تسوي groupby(\"ip\").size()؟",
+     "options": [
+      "عدد صفوف كل IP",
+      "مجموع البايتات",
+      "أكبر قيمة"
+     ],
+     "answer": 0,
+     "why": "لكل مجموعة."
+    },
+    {
+     "q": "أسرع طريقة لأكثر قيمة تكراراً؟",
+     "options": [
+      "value_counts().idxmax()",
+      "حلقة",
+      "sort فقط"
+     ],
+     "answer": 0,
+     "why": "مثل Counter."
+    },
+    {
+     "q": "متى نفلتر؟",
+     "options": [
+      "قبل التجميع لو نريد جزءاً من البيانات",
+      "بعده دائماً",
+      "لا نفلتر"
+     ],
+     "answer": 0,
+     "why": "مثل محاولات الفشل فقط."
+    },
+    {
+     "q": "وش agg؟",
+     "options": [
+      "حساب عدة إحصاءات للمجموعة",
+      "حذف الصفوف",
+      "ترتيب"
+     ],
+     "answer": 0,
+     "why": "مثل size وsum."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "groupby تقسم وتحسب لكل مجموعة.",
+    "value_counts اختصار لأكثر العناصر تكراراً.",
+    "فلتر ثم جمّع ثم طبّق عتبة."
+   ]
+  }
+ ]
+}

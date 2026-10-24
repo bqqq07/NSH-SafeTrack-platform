@@ -1,0 +1,247 @@
+{
+ "title_ar": "قياس الجودة",
+ "title_en": "Evaluating Models",
+ "duration_min": 11,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "📏",
+   "goal": "تقيس نموذجك بمقاييس مناسبة للأمن: الدقة و[[precision]] و[[recall]]، وتفهم لماذا «دقة 99%» قد تكون مضللة."
+  },
+  {
+   "type": "text",
+   "title": "مصفوفة الالتباس",
+   "body": [
+    "عند كشف خبيث/سليم أربع نتائج: **TP** خبيث وكشفناه، **FP** سليم وأنذرنا (إنذار كاذب)، **FN** خبيث وفاتنا، **TN** سليم وتجاهلناه.",
+    "[[precision]] = TP ÷ (TP+FP): من كل إنذاراتنا، كم صحيح؟ و[[recall]] = TP ÷ (TP+FN): من كل الهجمات، كم اكتشفنا؟",
+    "الدقة العامة = (TP+TN) ÷ المجموع. ولا تكفي وحدها."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "هنا precision=0.8 وrecall≈0.67 والدقة العامة 0.94.",
+   "code": "tp, fp, fn, tn = 8, 2, 4, 86\nprint(tp / (tp + fp))\nprint(tp / (tp + fn))\nprint((tp + tn) / (tp + fp + fn + tn))"
+  },
+  {
+   "type": "text",
+   "title": "فخ البيانات غير المتوازنة",
+   "body": [
+    "لو 1% فقط من الرسائل تصيّد، نموذج يقول «سليمة» دائماً يحقق دقة 99% وهو **عديم الفائدة** (recall = 0).",
+    "في الأمن: الإنذارات الكاذبة الكثيرة تُنهك فريق المراقبة (alert fatigue)، والفائت (FN) قد يعني اختراقاً. نوازن بين precision وrecall حسب الكلفة.",
+    "`F1 = 2·P·R ÷ (P+R)` يجمعهما في رقم واحد."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "اسأل دائماً: وش كلفة الإنذار الكاذب مقابل كلفة الهجوم الفائت؟",
+   "code": "print(round(2 * 0.8 * 0.5 / (0.8 + 0.5), 3))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "precision",
+    "recall",
+    "classifier"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): precision",
+   "code": "tp, fp = 9, 1\nprint(tp / (tp + fp))\n",
+   "options": [
+    "0.9",
+    "0.1",
+    "9.0"
+   ],
+   "answer": 0,
+   "why": "9 ÷ 10."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): recall",
+   "code": "tp, fn = 6, 4\nprint(tp / (tp + fn))\n",
+   "options": [
+    "0.6",
+    "0.4",
+    "1.5"
+   ],
+   "answer": 0,
+   "why": "6 ÷ 10."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): الفخ",
+   "code": "total, attacks = 1000, 10\naccuracy_if_always_ok = (total - attacks) / total\nprint(accuracy_if_always_ok)\n",
+   "options": [
+    "0.99",
+    "1.0",
+    "0.01"
+   ],
+   "answer": 0,
+   "why": "نموذج «سليم دائماً» دقته 99% لكنه لا يكتشف أي هجوم."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الاستدعاء",
+   "code": "tp, fp, fn = 8, 2, 8\nprint(tp / (tp + ____))\n",
+   "blanks": [
+    {
+     "answer": "fn"
+    }
+   ],
+   "expect_stdout": "0.5",
+   "show_output": true,
+   "bank": [
+    "fn",
+    "fp",
+    "tn",
+    "tp"
+   ],
+   "intro": "مقام recall فيه TP مع ماذا؟",
+   "explain": "`TP+FN` كل الهجمات الفعلية."
+  },
+  {
+   "type": "code",
+   "title": "احسب المقاييس",
+   "instructions": [
+    "عرّف `metrics(tp, fp, fn, tn)` ترجع `(precision, recall, accuracy)` كل منها مقرّب لـ 3 خانات (`round(x, 3)`). لو المقام صفر فالقيمة `0.0`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "metrics(8, 2, 4, 86)",
+     "expect": [
+      0.8,
+      0.667,
+      0.94
+     ]
+    },
+    {
+     "call": "metrics(0, 0, 10, 90)",
+     "expect": [
+      0.0,
+      0.0,
+      0.9
+     ]
+    },
+    {
+     "call": "metrics(5, 5, 0, 0)",
+     "expect": [
+      0.5,
+      1.0,
+      0.5
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "def metrics(tp, fp, fn, tn):\n    precision = tp / (tp + fp) if tp + fp else 0.0\n    recall = tp / (tp + fn) if tp + fn else 0.0\n    accuracy = (tp + tn) / (tp + fp + fn + tn)\n    return round(precision, 3), round(recall, 3), round(accuracy, 3)\n",
+   "hints": [
+    "احذر القسمة على صفر."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "من التنبؤات",
+   "instructions": [
+    "`actual` و`predicted` قائمتان (`1` خبيث، `0` سليم). احسب TP وFP وFN وTN واطبعها بالترتيب `tp fp fn tn`."
+   ],
+   "starter": "actual    = [1, 1, 1, 0, 0, 0, 0, 1]\npredicted = [1, 0, 1, 0, 1, 0, 0, 1]\n",
+   "tests": [
+    {
+     "expect_stdout": "3 1 1 3"
+    }
+   ],
+   "solution": "actual    = [1, 1, 1, 0, 0, 0, 0, 1]\npredicted = [1, 0, 1, 0, 1, 0, 0, 1]\npairs = list(zip(actual, predicted))\ntp = sum(1 for a, p in pairs if a == 1 and p == 1)\nfp = sum(1 for a, p in pairs if a == 0 and p == 1)\nfn = sum(1 for a, p in pairs if a == 1 and p == 0)\ntn = sum(1 for a, p in pairs if a == 0 and p == 0)\nprint(tp, fp, fn, tn)\n",
+   "hints": [
+    "`zip(actual, predicted)`",
+    "عدّ كل حالة بشرطها."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أي نموذج أفضل؟",
+   "instructions": [
+    "لدينا نموذجان: A (precision 0.9, recall 0.5) وB (precision 0.6, recall 0.9). عرّف `f1(p, r)` ثم اطبع اسم الأعلى F1 (`A` أو `B`)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "B"
+    }
+   ],
+   "solution": "def f1(p, r):\n    return 2 * p * r / (p + r) if p + r else 0.0\n\na = f1(0.9, 0.5)\nb = f1(0.6, 0.9)\nprint(\"A\" if a > b else \"B\")\n",
+   "hints": [
+    "F1 = 2PR/(P+R)."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: القسمة على صفر",
+   "instructions": [
+    "`precision` تنهار لو لا يوجد تنبيهات. أصلحها لترجع `0.0` ويطبع الكود `0.0`."
+   ],
+   "starter": "def precision(tp, fp):\n    return tp / (tp + fp)\n\nprint(precision(0, 0))\n",
+   "tests": [
+    {
+     "expect_stdout": "0.0"
+    }
+   ],
+   "solution": "def precision(tp, fp):\n    return tp / (tp + fp) if tp + fp else 0.0\n\nprint(precision(0, 0))\n",
+   "hints": [
+    "افحص المقام."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش precision؟",
+     "options": [
+      "من إنذاراتنا كم صحيح",
+      "كم هجوماً اكتشفنا من الكل",
+      "سرعة النموذج"
+     ],
+     "answer": 0,
+     "why": "TP/(TP+FP)."
+    },
+    {
+     "q": "وش recall؟",
+     "options": [
+      "من الهجمات الفعلية كم اكتشفنا",
+      "من الإنذارات كم صحيح",
+      "حجم البيانات"
+     ],
+     "answer": 0,
+     "why": "TP/(TP+FN)."
+    },
+    {
+     "q": "ليش الدقة العامة تضلل؟",
+     "options": [
+      "مع بيانات غير متوازنة قد تكون عالية بنموذج عديم الفائدة",
+      "لأنها دائماً خطأ",
+      "لا تضلل"
+     ],
+     "answer": 0,
+     "why": "مثل 99% بدون اكتشاف شيء."
+    },
+    {
+     "q": "ما أثر الإنذارات الكاذبة الكثيرة؟",
+     "options": [
+      "إنهاك فريق المراقبة وتجاهل التنبيهات",
+      "لا شيء",
+      "تسريع الكشف"
+     ],
+     "answer": 0,
+     "why": "alert fatigue."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "TP وFP وFN وTN أساس المقاييس.",
+    "precision وrecall وF1 أفضل من الدقة العامة.",
+    "وازن حسب كلفة الإنذار الكاذب والهجوم الفائت."
+   ]
+  }
+ ]
+}

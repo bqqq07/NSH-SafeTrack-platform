@@ -1,0 +1,191 @@
+{
+ "title_ar": "مشروع: تحليل سجل بسطر أوامر",
+ "title_en": "Project: Log One-liners",
+ "duration_min": 16,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🕵️",
+   "goal": "تحلل سجل ويب بسلاسل أوامر قصيرة قوية: عدّ ورتّب وافلتر واكشف."
+  },
+  {
+   "type": "text",
+   "title": "المهمة",
+   "body": [
+    "عندك سجل `access.log` بالشكل: `IP METHOD PATH STATUS`. المطلوب سلاسل أوامر تجيب: أكثر IP طلباً، عدد أخطاء 401، المسارات الأكثر فشلاً، والـ IP اللي جرّبت تسجيل الدخول 3 مرات فأكثر.",
+    "كل خطوة هنا مُتحقَّق منها بتشغيلها فعلياً. فكّر قبل ما تجيب الجواب: وش المطلوب بالضبط، وأي أدوات تركّبها؟",
+    "(في الواقع تحفظ السلاسل في سكربت وتشغله بجدولة cron.)"
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "جرّب على جهازك: انسخ الأمر على أي ملف نصي.",
+   "code": "cut -d' ' -f1 access.log | sort | uniq -c | sort -rn | head -n 3"
+  },
+  {
+   "type": "text",
+   "title": "خطوات التفكير",
+   "body": [
+    "1) افلتر ما تحتاجه (`grep`/`awk`)، 2) اقتطع الحقل (`cut`/`awk`)، 3) رتّب (`sort`)، 4) عدّ (`uniq -c`)، 5) رتّب بالعدد (`sort -rn`)، 6) خذ الأعلى (`head`).",
+    "اختبر كل مرحلة على حدة وأضف الأنبوب التالي بعدها.",
+    "للنتيجة المنظمة استخدم `awk` لإعادة ترتيب الحقول."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "هنا awk الثانية تفلتر بعد العد: كل IP عدده ≥ 3.",
+   "code": "awk '$4 == 401 {print $1}' access.log | sort | uniq -c | awk '$1 >= 3 {print $2}'"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "grep",
+    "pipe",
+    "log"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "1) أكثر IP",
+   "code": "printf '10.0.0.5 GET /login 401\\n10.0.0.5 GET /login 401\\n10.0.0.9 GET /home 200\\n10.0.0.5 GET /admin 403\\n10.0.0.2 GET /home 200\\n10.0.0.9 GET /login 401\\n10.0.0.5 GET /login 401\\n' > access.log\ncut -d' ' -f1 access.log | sort | uniq -c | sort -rn | head -n 1 | awk '{print $2}'\n",
+   "options": [
+    "10.0.0.5",
+    "10.0.0.9",
+    "10.0.0.2"
+   ],
+   "answer": 0,
+   "why": "10.0.0.5 ظهر 4 مرات.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "2) عدد 401",
+   "code": "printf '10.0.0.5 GET /login 401\\n10.0.0.5 GET /login 401\\n10.0.0.9 GET /home 200\\n10.0.0.5 GET /admin 403\\n10.0.0.2 GET /home 200\\n10.0.0.9 GET /login 401\\n10.0.0.5 GET /login 401\\n' > access.log\nawk '$4 == 401' access.log | wc -l\n",
+   "options": [
+    "4",
+    "3",
+    "7"
+   ],
+   "answer": 0,
+   "why": "4 أسطر برمز 401.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "3) المسار الأكثر فشلاً",
+   "code": "printf '10.0.0.5 GET /login 401\\n10.0.0.5 GET /login 401\\n10.0.0.9 GET /home 200\\n10.0.0.5 GET /admin 403\\n10.0.0.2 GET /home 200\\n10.0.0.9 GET /login 401\\n10.0.0.5 GET /login 401\\n' > access.log\nawk '$4 >= 400 {print $3}' access.log | sort | uniq -c | sort -rn | head -n 1 | awk '{print $2}'\n",
+   "options": [
+    "/login",
+    "/admin",
+    "/home"
+   ],
+   "answer": 0,
+   "why": "أخطاء 4xx أكثرها على /login.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "4) المشتبه بهم",
+   "code": "printf '10.0.0.5 GET /login 401\\n10.0.0.5 GET /login 401\\n10.0.0.9 GET /home 200\\n10.0.0.5 GET /admin 403\\n10.0.0.2 GET /home 200\\n10.0.0.9 GET /login 401\\n10.0.0.5 GET /login 401\\n' > access.log\nawk '$3 == \"/login\" && $4 == 401 {print $1}' access.log | sort | uniq -c | awk '$1 >= 3 {print $2}'\n",
+   "options": [
+    "10.0.0.5",
+    "10.0.0.9",
+    "10.0.0.5\n10.0.0.9"
+   ],
+   "answer": 0,
+   "why": "فقط 10.0.0.5 فشل 3 مرات على /login.",
+   "lang": "bash"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: السلسلة الكاملة",
+   "lines": [
+    "printf '10.0.0.5 GET /login 401\\n10.0.0.5 GET /login 401\\n10.0.0.9 GET /home 200\\n10.0.0.5 GET /admin 403\\n10.0.0.2 GET /home 200\\n10.0.0.9 GET /login 401\\n10.0.0.5 GET /login 401\\n' > access.log",
+    "cut -d' ' -f1 access.log |",
+    "sort |",
+    "uniq -c |",
+    "sort -rn |",
+    "head -n 1 |",
+    "awk '{print $2, $1}'"
+   ],
+   "expect_stdout": "10.0.0.5 4",
+   "lang": "bash",
+   "intro": "رتّب أجزاء السلسلة لتطبع أكثر IP وعدد طلباته.",
+   "explain": "cut ثم sort ثم uniq -c ثم sort -rn ثم head ثم awk."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الفلترة",
+   "code": "printf '10.0.0.5 GET /login 401\\n10.0.0.5 GET /login 401\\n10.0.0.9 GET /home 200\\n10.0.0.5 GET /admin 403\\n10.0.0.2 GET /home 200\\n10.0.0.9 GET /login 401\\n10.0.0.5 GET /login 401\\n' > access.log\nawk '$4 ____ 401' access.log | wc -l\n",
+   "blanks": [
+    {
+     "answer": "=="
+    }
+   ],
+   "expect_stdout": "4",
+   "show_output": false,
+   "lang": "bash",
+   "bank": [
+    "==",
+    "=",
+    "!=",
+    "<"
+   ],
+   "intro": "وش عامل المقارنة بالتساوي في awk؟",
+   "explain": "`==`."
+  },
+  {
+   "type": "order",
+   "title": "رتّب مراحل الاستجابة للتخمين",
+   "items": [
+    "نكشف العناوين ذات الفشل المتكرر بالسجل",
+    "نتحقق أنها ليست مستخدماً شرعياً",
+    "نحظرها مؤقتاً في الجدار الناري",
+    "نراجع سجلات النجاح من نفس العناوين",
+    "نوثق الحادثة ونضبط التنبيه"
+   ],
+   "why": "الكشف ثم التحقق ثم الاحتواء ثم التوثيق."
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "ليش نختبر كل مرحلة في السلسلة؟",
+     "options": [
+      "لنكتشف الخطأ مبكراً",
+      "لتسريعها",
+      "لا حاجة"
+     ],
+     "answer": 0,
+     "why": "نبني السلسلة تدريجياً."
+    },
+    {
+     "q": "وش يسوي sort -rn؟",
+     "options": [
+      "يرتب رقمياً تنازلياً",
+      "يعدّ",
+      "يحذف المكرر"
+     ],
+     "answer": 0,
+     "why": "r عكسي وn رقمي."
+    },
+    {
+     "q": "وش يسوي awk '$1 >= 3'؟",
+     "options": [
+      "يفلتر الأسطر اللي حقلها الأول ≥ 3",
+      "يجمع",
+      "يطبع كل شيء"
+     ],
+     "answer": 0,
+     "why": "شرط على حقل."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "فلترة ثم اقتطاع ثم ترتيب ثم عدّ ثم أعلى N.",
+    "ابنِ السلسلة تدريجياً.",
+    "اربطها بجدولة cron لتصير مراقباً دائماً."
+   ]
+  }
+ ]
+}

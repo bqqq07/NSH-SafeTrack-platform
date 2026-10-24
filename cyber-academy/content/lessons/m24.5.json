@@ -1,0 +1,220 @@
+{
+ "title_ar": "تحليل سجلات الدخول",
+ "title_en": "Login Log Analysis",
+ "duration_min": 14,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔬",
+   "goal": "تجمع كل ما تعلمته لتحلل سجل دخول: الفشل لكل IP، الحسابات المجربة، والنشاط عبر الزمن."
+  },
+  {
+   "type": "text",
+   "title": "تحليل سجل دخول",
+   "body": [
+    "السجل: `time,ip,user,ok` (ok=1 نجاح و0 فشل). الأسئلة: من أكثر عنوان فاشل؟ كم حساباً جربه كل عنوان (spraying)؟ هل فشل ثم نجح (اختراق محتمل)؟ في أي ساعة الذروة؟",
+    "الأدوات: تصفية `ok == 0`، `groupby(\"ip\")`، `nunique` للحسابات، و`dt.hour` لاستخراج الساعة من عمود التاريخ.",
+    "اجعل التحليل خطوات صغيرة، واطبع كل نتيجة وسيطة."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "مكتبة pandas غير مثبتة داخل المتصفح هنا، فتجرّب الأكواد على جهازك (pip install pandas)؛ والنواتج في التمارين مُتحقَّق منها فعلياً.",
+   "code": "fails = df[df[\"ok\"] == 0]\nprint(fails.groupby(\"ip\").size().to_dict())\nprint(fails.groupby(\"ip\")[\"user\"].nunique().to_dict())\nprint(df[\"time\"].dt.hour.value_counts().to_dict())"
+  },
+  {
+   "type": "text",
+   "title": "من الأرقام إلى القرار",
+   "body": [
+    "عتبة: `ip` فشل 3+ مرات = تنبيه. وعتبة ثانية: 3+ حسابات مختلفة من نفس IP = spraying.",
+    "فشل ثم نجاح لنفس الحساب من نفس IP قد يعني تخميناً نجح: `df.groupby([\"ip\",\"user\"])[\"ok\"].agg([\"sum\",\"count\"])`.",
+    "دوّن الاستنتاج مع الدليل، وفي الواقع تصدّره تقريراً (JSON/HTML) كما تعلمت."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "lambda داخل agg تحسب أي منطق مخصص لكل مجموعة.",
+   "code": "g = df.groupby(\"ip\").agg(fails=(\"ok\", lambda s: (s == 0).sum()), users=(\"user\", \"nunique\"))\nprint(g[g[\"fails\"] >= 3].index.tolist())"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "groupby",
+    "dataframe",
+    "brute-force"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): الفشل لكل IP",
+   "code": "import pandas as pd\nimport io\nraw = \"time,ip,user,ok\\n2025-01-05 10:00:01,10.0.0.5,root,0\\n2025-01-05 10:00:05,10.0.0.5,admin,0\\n2025-01-05 10:00:09,10.0.0.2,sara,1\\n2025-01-05 10:00:12,10.0.0.5,test,0\\n2025-01-05 11:30:00,10.0.0.9,sara,0\\n2025-01-05 11:30:30,10.0.0.9,sara,1\\n\"\ndf = pd.read_csv(io.StringIO(raw), parse_dates=[\"time\"])\nfails = df[df[\"ok\"] == 0]\nprint(fails.groupby(\"ip\").size().to_dict())\n",
+   "options": [
+    "{'10.0.0.5': 3, '10.0.0.9': 1}",
+    "{'10.0.0.2': 1, '10.0.0.5': 3, '10.0.0.9': 1}",
+    "{'10.0.0.5': 3}"
+   ],
+   "answer": 0,
+   "why": "الفشل: .5 ثلاث مرات، .9 مرة.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): spraying",
+   "code": "import pandas as pd\nimport io\nraw = \"time,ip,user,ok\\n2025-01-05 10:00:01,10.0.0.5,root,0\\n2025-01-05 10:00:05,10.0.0.5,admin,0\\n2025-01-05 10:00:09,10.0.0.2,sara,1\\n2025-01-05 10:00:12,10.0.0.5,test,0\\n2025-01-05 11:30:00,10.0.0.9,sara,0\\n2025-01-05 11:30:30,10.0.0.9,sara,1\\n\"\ndf = pd.read_csv(io.StringIO(raw), parse_dates=[\"time\"])\nfails = df[df[\"ok\"] == 0]\nprint(fails.groupby(\"ip\")[\"user\"].nunique().to_dict())\n",
+   "options": [
+    "{'10.0.0.5': 3, '10.0.0.9': 1}",
+    "{'10.0.0.5': 1, '10.0.0.9': 1}",
+    "{'10.0.0.5': 3}"
+   ],
+   "answer": 0,
+   "why": ".5 جرّب root وadmin وtest: 3 حسابات.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): الساعة",
+   "code": "import pandas as pd\nimport io\nraw = \"time,ip,user,ok\\n2025-01-05 10:00:01,10.0.0.5,root,0\\n2025-01-05 10:00:05,10.0.0.5,admin,0\\n2025-01-05 10:00:09,10.0.0.2,sara,1\\n2025-01-05 10:00:12,10.0.0.5,test,0\\n2025-01-05 11:30:00,10.0.0.9,sara,0\\n2025-01-05 11:30:30,10.0.0.9,sara,1\\n\"\ndf = pd.read_csv(io.StringIO(raw), parse_dates=[\"time\"])\nprint(sorted(df[\"time\"].dt.hour.unique().tolist()))\n",
+   "options": [
+    "[10, 11]",
+    "[10]",
+    "[11, 10]"
+   ],
+   "answer": 0,
+   "why": "السجل يغطي الساعتين 10 و11.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (4): فشل ثم نجاح",
+   "code": "import pandas as pd\nimport io\nraw = \"time,ip,user,ok\\n2025-01-05 10:00:01,10.0.0.5,root,0\\n2025-01-05 10:00:05,10.0.0.5,admin,0\\n2025-01-05 10:00:09,10.0.0.2,sara,1\\n2025-01-05 10:00:12,10.0.0.5,test,0\\n2025-01-05 11:30:00,10.0.0.9,sara,0\\n2025-01-05 11:30:30,10.0.0.9,sara,1\\n\"\ndf = pd.read_csv(io.StringIO(raw), parse_dates=[\"time\"])\ng = df.groupby([\"ip\", \"user\"])[\"ok\"].agg([\"sum\", \"count\"])\nboth = g[(g[\"sum\"] > 0) & (g[\"sum\"] < g[\"count\"])]\nprint(both.index.tolist())\n",
+   "options": [
+    "[('10.0.0.9', 'sara')]",
+    "[('10.0.0.2', 'sara')]",
+    "[]"
+   ],
+   "answer": 0,
+   "why": "sara من .9 فشلت مرة ثم نجحت.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (5): تنبيه",
+   "code": "import pandas as pd\nimport io\nraw = \"time,ip,user,ok\\n2025-01-05 10:00:01,10.0.0.5,root,0\\n2025-01-05 10:00:05,10.0.0.5,admin,0\\n2025-01-05 10:00:09,10.0.0.2,sara,1\\n2025-01-05 10:00:12,10.0.0.5,test,0\\n2025-01-05 11:30:00,10.0.0.9,sara,0\\n2025-01-05 11:30:30,10.0.0.9,sara,1\\n\"\ndf = pd.read_csv(io.StringIO(raw), parse_dates=[\"time\"])\nfails = df[df[\"ok\"] == 0]\nc = fails.groupby(\"ip\").size()\nprint(c[c >= 3].index.tolist())\n",
+   "options": [
+    "['10.0.0.5']",
+    "['10.0.0.9']",
+    "['10.0.0.5', '10.0.0.9']"
+   ],
+   "answer": 0,
+   "why": "فقط .5 وصل 3 فشل.",
+   "lang": "pandas"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: كاشف التخمين",
+   "lines": [
+    "import pandas as pd",
+    "import io",
+    "raw = \"time,ip,user,ok\\n2025-01-05 10:00:01,10.0.0.5,root,0\\n2025-01-05 10:00:05,10.0.0.5,admin,0\\n2025-01-05 10:00:09,10.0.0.2,sara,1\\n2025-01-05 10:00:12,10.0.0.5,test,0\\n2025-01-05 11:30:00,10.0.0.9,sara,0\\n2025-01-05 11:30:30,10.0.0.9,sara,1\\n\"",
+    "df = pd.read_csv(io.StringIO(raw), parse_dates=[\"time\"])",
+    "fails = df[df[\"ok\"] == 0]",
+    "counts = fails.groupby(\"ip\").size()",
+    "suspects = counts[counts >= 3].index.tolist()",
+    "print(suspects)"
+   ],
+   "expect_stdout": "['10.0.0.5']",
+   "lang": "pandas",
+   "intro": "رتّب كاشف تخمين كامل.",
+   "explain": "فلتر ثم جمّع ثم عتبة."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الحسابات المختلفة",
+   "code": "import pandas as pd\nimport io\nraw = \"time,ip,user,ok\\n2025-01-05 10:00:01,10.0.0.5,root,0\\n2025-01-05 10:00:05,10.0.0.5,admin,0\\n2025-01-05 10:00:09,10.0.0.2,sara,1\\n2025-01-05 10:00:12,10.0.0.5,test,0\\n2025-01-05 11:30:00,10.0.0.9,sara,0\\n2025-01-05 11:30:30,10.0.0.9,sara,1\\n\"\ndf = pd.read_csv(io.StringIO(raw), parse_dates=[\"time\"])\nfails = df[df[\"ok\"] == 0]\nprint(fails.groupby(\"ip\")[\"user\"].____().max())\n",
+   "blanks": [
+    {
+     "answer": "nunique"
+    }
+   ],
+   "expect_stdout": "3",
+   "show_output": false,
+   "lang": "pandas",
+   "bank": [
+    "nunique",
+    "size",
+    "sum",
+    "count"
+   ],
+   "intro": "وش الدالة اللي تعدّ القيم الفريدة؟",
+   "explain": "`nunique`."
+  },
+  {
+   "type": "code",
+   "title": "نفس الكاشف بدون pandas",
+   "instructions": [
+    "من `rows` (ip، ok) اطبع قائمة مرتبة بعناوين IP اللي فشلت **3 مرات أو أكثر**: `['10.0.0.5']`"
+   ],
+   "starter": "rows = [(\"10.0.0.5\", 0), (\"10.0.0.5\", 0), (\"10.0.0.2\", 1), (\"10.0.0.5\", 0), (\"10.0.0.9\", 0), (\"10.0.0.9\", 1)]\n",
+   "tests": [
+    {
+     "expect_stdout": "['10.0.0.5']"
+    }
+   ],
+   "solution": "rows = [(\"10.0.0.5\", 0), (\"10.0.0.5\", 0), (\"10.0.0.2\", 1), (\"10.0.0.5\", 0), (\"10.0.0.9\", 0), (\"10.0.0.9\", 1)]\nfails = {}\nfor ip, ok in rows:\n    if ok == 0:\n        fails[ip] = fails.get(ip, 0) + 1\nprint(sorted(ip for ip in fails if fails[ip] >= 3))\n",
+   "hints": [
+    "عدّ الفشل لكل IP ثم طبّق العتبة."
+   ]
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "كيف نكتشف password spraying؟",
+     "options": [
+      "عنوان واحد جرّب حسابات كثيرة (nunique)",
+      "عنوان فشل مرة واحدة",
+      "نجاح متكرر"
+     ],
+     "answer": 0,
+     "why": "عدد الحسابات لكل IP."
+    },
+    {
+     "q": "وش يدل فشل ثم نجاح لنفس الحساب؟",
+     "options": [
+      "قد يعني تخميناً نجح فيستحق المراجعة",
+      "سلوك طبيعي دائماً",
+      "لا شيء"
+     ],
+     "answer": 0,
+     "why": "مؤشر."
+    },
+    {
+     "q": "وش dt.hour؟",
+     "options": [
+      "ساعة التاريخ",
+      "مجموع",
+      "نوع العمود"
+     ],
+     "answer": 0,
+     "why": "من عمود datetime."
+    },
+    {
+     "q": "ماذا نفعل بعد الكشف؟",
+     "options": [
+      "نوثّق الدليل ونحتوي (حظر/قفل)",
+      "نتجاهل",
+      "نحذف السجل"
+     ],
+     "answer": 0,
+     "why": "استجابة للحوادث."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "فلتر الفشل ثم جمّع لكل IP وطبّق عتبة.",
+    "nunique لكشف spraying، وdt.hour لتحليل الزمن.",
+    "وثّق الاستنتاج بدليل وصدّره تقريراً."
+   ]
+  }
+ ]
+}

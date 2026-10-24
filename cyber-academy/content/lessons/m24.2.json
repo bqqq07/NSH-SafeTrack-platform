@@ -1,0 +1,215 @@
+{
+ "title_ar": "التحديد والتصفية",
+ "title_en": "Selecting & Filtering",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🎯",
+   "goal": "تختار الأعمدة والصفوف وتفلتر الجدول بشروط، مثل «كل محاولات 401»."
+  },
+  {
+   "type": "text",
+   "title": "اختيار وتصفية",
+   "body": [
+    "عمود واحد `df[\"ip\"]`، وعدة أعمدة `df[[\"ip\", \"status\"]]` (قوسان). والصفوف حسب شرط: `df[df[\"status\"] == 401]`.",
+    "شروط مركبة: `&` و`|` و`~` (ليس) **مع أقواس** حول كل شرط: `df[(df[\"status\"] == 401) & (df[\"bytes\"] > 100)]`.",
+    "`isin`: `df[df[\"ip\"].isin([\"10.0.0.5\", \"10.0.0.2\"])]`. و`.str.contains(\"log\")` للنصوص."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "warn",
+   "note": "نسيان الأقواس حول الشروط خطأ شائع يعطي ValueError. ولا تستخدم and/or.",
+   "code": "fails = df[df[\"status\"] == 401]\nprint(len(fails))\nbig = df[(df[\"bytes\"] > 100) & (df[\"status\"] == 200)]\nprint(big[\"ip\"].tolist())"
+  },
+  {
+   "type": "text",
+   "title": "loc والترتيب",
+   "body": [
+    "`df.loc[شرط, \"العمود\"]` تحدد الصفوف والأعمدة معاً. و`df.iloc[0]` بالموضع.",
+    "`df.sort_values(\"bytes\", ascending=False)` ترتب. و`.head(n)` تأخذ أول n. و`.reset_index(drop=True)` تعيد ترقيم الفهرس.",
+    "التصفية ترجع **جدولاً جديداً** ولا تغيّر الأصل."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "تغيير الأعمدة على نسخة مفلترة قد يعطي SettingWithCopyWarning؛ استخدم `.copy()` عند الحاجة.",
+   "code": "top = df.sort_values(\"bytes\", ascending=False).head(2)\nprint(top[\"ip\"].tolist())\nprint(df.loc[df[\"status\"] == 401, \"bytes\"].sum())"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "dataframe",
+    "series"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): تصفية",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\nprint(len(df[df[\"status\"] == 401]))\n",
+   "options": [
+    "2",
+    "1",
+    "4"
+   ],
+   "answer": 0,
+   "why": "صفان برمز 401.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): شرطان",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\nprint(df[(df[\"status\"] == 200) & (df[\"bytes\"] > 500)][\"ip\"].tolist())\n",
+   "options": [
+    "['10.0.0.9']",
+    "['10.0.0.9', '10.0.0.2']",
+    "[]"
+   ],
+   "answer": 0,
+   "why": "فقط 10.0.0.9 (900 بايت).",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): isin",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\nprint(df[df[\"ip\"].isin([\"10.0.0.2\", \"10.0.0.9\"])][\"bytes\"].tolist())\n",
+   "options": [
+    "[900, 450]",
+    "[120, 80]",
+    "[900]"
+   ],
+   "answer": 0,
+   "why": "العنوانان 10.0.0.9 وَ10.0.0.2.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (4): ترتيب",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\nprint(df.sort_values(\"bytes\", ascending=False).head(2)[\"ip\"].tolist())\n",
+   "options": [
+    "['10.0.0.9', '10.0.0.2']",
+    "['10.0.0.5', '10.0.0.5']",
+    "['10.0.0.2', '10.0.0.9']"
+   ],
+   "answer": 0,
+   "why": "أكبر حجمين: 900 ثم 450.",
+   "lang": "pandas"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (5): loc",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\nprint(df.loc[df[\"status\"] == 401, \"bytes\"].sum())\n",
+   "options": [
+    "200",
+    "120",
+    "1550"
+   ],
+   "answer": 0,
+   "why": "120+80 لصفي 401.",
+   "lang": "pandas"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: تصفية وعدّ",
+   "lines": [
+    "import pandas as pd",
+    "df = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})",
+    "fails = df[df[\"status\"] == 401]",
+    "print(len(fails))"
+   ],
+   "expect_stdout": "2",
+   "lang": "pandas",
+   "intro": "رتّب لتفلتر محاولات 401 وتعدّها.",
+   "explain": "ننشئ الجدول ثم نفلتر ثم نطبع."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الشرط",
+   "code": "import pandas as pd\ndf = pd.DataFrame({\"ip\": [\"10.0.0.5\", \"10.0.0.9\", \"10.0.0.5\", \"10.0.0.2\"], \"status\": [401, 200, 401, 200], \"bytes\": [120, 900, 80, 450]})\nprint(len(df[(df[\"status\"] == 200) ____ (df[\"bytes\"] > 500)]))\n",
+   "blanks": [
+    {
+     "answer": "&"
+    }
+   ],
+   "expect_stdout": "1",
+   "show_output": false,
+   "lang": "pandas",
+   "bank": [
+    "&",
+    "and",
+    "+",
+    "|"
+   ],
+   "intro": "وش عامل \"و\" بين شرطين في pandas؟",
+   "explain": "`&` مع أقواس."
+  },
+  {
+   "type": "code",
+   "title": "نفس التصفية بدون pandas",
+   "instructions": [
+    "من `rows` (قائمة قواميس) اطبع قائمة `ip` للصفوف اللي `status == 401`: `['10.0.0.5', '10.0.0.5']`"
+   ],
+   "starter": "rows = [\n    {\"ip\": \"10.0.0.5\", \"status\": 401},\n    {\"ip\": \"10.0.0.9\", \"status\": 200},\n    {\"ip\": \"10.0.0.5\", \"status\": 401},\n]\n",
+   "tests": [
+    {
+     "expect_stdout": "['10.0.0.5', '10.0.0.5']"
+    }
+   ],
+   "solution": "rows = [\n    {\"ip\": \"10.0.0.5\", \"status\": 401},\n    {\"ip\": \"10.0.0.9\", \"status\": 200},\n    {\"ip\": \"10.0.0.5\", \"status\": 401},\n]\nprint([r[\"ip\"] for r in rows if r[\"status\"] == 401])\n",
+   "hints": [
+    "قائمة شاملة بشرط."
+   ]
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "كيف نفلتر صفوف status = 401؟",
+     "options": [
+      "df[df[\"status\"] == 401]",
+      "df.status(401)",
+      "df.where(401)"
+     ],
+     "answer": 0,
+     "why": "شرط داخل أقواس مربعة."
+    },
+    {
+     "q": "وش نستخدم لـ\"و\" بين شرطين؟",
+     "options": [
+      "& مع أقواس",
+      "and",
+      "+"
+     ],
+     "answer": 0,
+     "why": "and لا تعمل على الأعمدة."
+    },
+    {
+     "q": "هل التصفية تغيّر الجدول الأصلي؟",
+     "options": [
+      "لا، ترجع جدولاً جديداً",
+      "نعم",
+      "أحياناً"
+     ],
+     "answer": 0,
+     "why": "الأصل ثابت."
+    },
+    {
+     "q": "وش يسوي sort_values؟",
+     "options": [
+      "يرتب الجدول بعمود",
+      "يحذف الأعمدة",
+      "يجمع"
+     ],
+     "answer": 0,
+     "why": "مع ascending."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "df[شرط] للتصفية و& و| بأقواس.",
+    "isin وloc وsort_values وhead.",
+    "التصفية ترجع جدولاً جديداً."
+   ]
+  }
+ ]
+}

@@ -205,9 +205,9 @@ export function renderPredict(s, box, done, ctx) {
     if (!ok) box.querySelector(`[data-i="${answer}"]`).classList.add('right');
     ctx.results[`${ctx.i}:predict`] = ok;
     box.querySelector('#fb').innerHTML = `<div class="feedback ${ok ? 'ok' : 'no'}"><b>${ok ? '🎉 توقعك صح!' : '🤔 مو بالضبط'}</b>${rich(s.why || '')}</div>
-      <button class="btn blue small" id="runit">▶ شغّل الكود وشوف الناتج الحقيقي</button>`;
+      ${s.lang && s.lang !== 'python' ? '' : '<button class="btn blue small" id="runit">▶ شغّل الكود وشوف الناتج الحقيقي</button>'}`;
     done();
-    box.querySelector('#runit').addEventListener('click', async (e) => {
+    box.querySelector('#runit')?.addEventListener('click', async (e) => {
       e.target.disabled = true;
       const out = box.querySelector('#out');
       out.innerHTML = `<p class="muted">${LOADING}</p>`;

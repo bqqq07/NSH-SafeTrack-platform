@@ -1175,6 +1175,212 @@
      "ready": true
     }
    ]
+  },
+  {
+   "id": 21,
+   "icon": "🌿",
+   "color": "#2faa5c",
+   "track": "extras",
+   "title_ar": "Git وGitHub",
+   "title_en": "Git & GitHub",
+   "modules": [
+    {
+     "id": "m21.1",
+     "title_ar": "أساسيات Git",
+     "title_en": "Git Basics",
+     "ready": true
+    },
+    {
+     "id": "m21.2",
+     "title_ar": "الفروع والدمج",
+     "title_en": "Branches & Merge",
+     "ready": true
+    },
+    {
+     "id": "m21.3",
+     "title_ar": "GitHub والتعاون",
+     "title_en": "GitHub Collaboration",
+     "ready": true
+    },
+    {
+     "id": "m21.4",
+     "title_ar": "الأسرار و gitignore",
+     "title_en": "Secrets & .gitignore",
+     "ready": true
+    },
+    {
+     "id": "m21.5",
+     "title_ar": "التراجع والتاريخ",
+     "title_en": "Undo & History",
+     "ready": true
+    }
+   ]
+  },
+  {
+   "id": 22,
+   "icon": "🐚",
+   "color": "#4a4a4a",
+   "track": "extras",
+   "title_ar": "سكربتات Bash",
+   "title_en": "Bash Scripting",
+   "modules": [
+    {
+     "id": "m22.1",
+     "title_ar": "التنقل والملفات",
+     "title_en": "Files & Navigation",
+     "ready": true
+    },
+    {
+     "id": "m22.2",
+     "title_ar": "الأنابيب والتحويل",
+     "title_en": "Pipes & Redirection",
+     "ready": true
+    },
+    {
+     "id": "m22.3",
+     "title_ar": "أدوات النص",
+     "title_en": "Text Tools",
+     "ready": true
+    },
+    {
+     "id": "m22.4",
+     "title_ar": "المتغيرات والشروط",
+     "title_en": "Variables & Conditions",
+     "ready": true
+    },
+    {
+     "id": "m22.5",
+     "title_ar": "الحلقات والدوال",
+     "title_en": "Loops & Functions",
+     "ready": true
+    },
+    {
+     "id": "m22.6",
+     "title_ar": "سكربتات آمنة",
+     "title_en": "Safe Scripts",
+     "ready": true
+    },
+    {
+     "id": "m22.7",
+     "title_ar": "مشروع: تحليل سجل بسطر أوامر",
+     "title_en": "Project: Log One-liners",
+     "ready": true
+    }
+   ]
+  },
+  {
+   "id": 23,
+   "icon": "🌶️",
+   "color": "#d9534f",
+   "track": "extras",
+   "title_ar": "الويب بـ Flask",
+   "title_en": "Web with Flask",
+   "modules": [
+    {
+     "id": "m23.1",
+     "title_ar": "مبدأ الويب والمسارات",
+     "title_en": "Routes",
+     "ready": true
+    },
+    {
+     "id": "m23.2",
+     "title_ar": "القوالب والتهريب",
+     "title_en": "Templates & Escaping",
+     "ready": true
+    },
+    {
+     "id": "m23.3",
+     "title_ar": "النماذج والتحقق",
+     "title_en": "Forms & Validation",
+     "ready": true
+    },
+    {
+     "id": "m23.4",
+     "title_ar": "الجلسات والمصادقة",
+     "title_en": "Sessions & Auth",
+     "ready": true
+    },
+    {
+     "id": "m23.5",
+     "title_ar": "مشروع: موجّه ويب مصغّر",
+     "title_en": "Project: Mini Router",
+     "ready": true
+    }
+   ]
+  },
+  {
+   "id": 24,
+   "icon": "🐼",
+   "color": "#7a5cc4",
+   "track": "extras",
+   "title_ar": "تحليل البيانات بـ pandas",
+   "title_en": "Data with pandas",
+   "modules": [
+    {
+     "id": "m24.1",
+     "title_ar": "Series و DataFrame",
+     "title_en": "Series & DataFrame",
+     "ready": true
+    },
+    {
+     "id": "m24.2",
+     "title_ar": "التحديد والتصفية",
+     "title_en": "Selecting & Filtering",
+     "ready": true
+    },
+    {
+     "id": "m24.3",
+     "title_ar": "التجميع groupby",
+     "title_en": "groupby",
+     "ready": true
+    },
+    {
+     "id": "m24.4",
+     "title_ar": "قراءة CSV والتنظيف",
+     "title_en": "CSV & Cleaning",
+     "ready": true
+    },
+    {
+     "id": "m24.5",
+     "title_ar": "تحليل سجلات الدخول",
+     "title_en": "Login Log Analysis",
+     "ready": true
+    }
+   ]
+  },
+  {
+   "id": 25,
+   "icon": "🤖",
+   "color": "#1f8fbf",
+   "track": "extras",
+   "title_ar": "Python والذكاء الاصطناعي",
+   "title_en": "Python & AI",
+   "modules": [
+    {
+     "id": "m25.1",
+     "title_ar": "كيف يتعلم الحاسوب",
+     "title_en": "How Machines Learn",
+     "ready": true
+    },
+    {
+     "id": "m25.2",
+     "title_ar": "قياس الجودة",
+     "title_en": "Evaluating Models",
+     "ready": true
+    },
+    {
+     "id": "m25.3",
+     "title_ar": "نماذج اللغة والواجهات",
+     "title_en": "LLMs & APIs",
+     "ready": true
+    },
+    {
+     "id": "m25.4",
+     "title_ar": "أمن الذكاء الاصطناعي",
+     "title_en": "AI Security",
+     "ready": true
+    }
+   ]
   }
  ]
 }

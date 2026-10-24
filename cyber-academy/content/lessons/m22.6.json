@@ -1,0 +1,242 @@
+{
+ "title_ar": "سكربتات آمنة",
+ "title_en": "Safe Scripts",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🛡️",
+   "goal": "تكتب [[script]] قابلاً للتشغيل وآمناً: [[shebang]] وصلاحيات وأوضاع صارمة واقتباس صحيح."
+  },
+  {
+   "type": "text",
+   "title": "جعل السكربت قابلاً للتشغيل",
+   "body": [
+    "السطر الأول [[shebang]] `#!/usr/bin/env bash` يحدد المفسر. ثم `chmod +x backup.sh` يعطيه صلاحية التنفيذ و`./backup.sh` يشغله.",
+    "الوضع الصارم في أول كل سكربت: `set -euo pipefail` — `-e` يتوقف عند أي فشل، `-u` يمنع المتغيرات غير المعرفة، `pipefail` يكشف فشل أي حلقة في الأنبوب.",
+    "نتحقق من الوسطاء: `if [[ $# -lt 1 ]]; then echo \"usage: $0 file\" >&2; exit 1; fi`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "`${1:?رسالة}` توقف السكربت برسالة لو الوسيط ناقص.",
+   "code": "#!/usr/bin/env bash\nset -euo pipefail\n\nfile=\"${1:?usage: $0 file}\"\nwc -l \"$file\""
+  },
+  {
+   "type": "text",
+   "title": "أخطاء أمنية قاتلة",
+   "body": [
+    "**ترك المتغيرات بلا اقتباس:** `rm -rf $dir/` لو `$dir` فارغ يصير `rm -rf /`! دائماً `\"$dir\"` ومع `set -u`.",
+    "**حقن الأوامر:** لا تمرر مدخل المستخدم لـ `eval` أو `bash -c`. `file=\"x; rm -rf ~\"` يصير خطيراً لو وُضع بلا اقتباس في أمر.",
+    "ملفات مؤقتة: `tmp=$(mktemp)` وليس `/tmp/file` (يمكن التنبؤ باسمه). ونظّف بـ `trap 'rm -f \"$tmp\"' EXIT`.",
+    "الأسرار: لا تضعها في سطر الأوامر (تظهر في `ps`) ولا في السكربت؛ اقرأها من متغير بيئة أو ملف بصلاحية 600."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "سكربت بصلاحيات root وأخطاء اقتباس = تصعيد صلاحيات للمهاجم.",
+   "code": "tmp=$(mktemp)\ntrap 'rm -f \"$tmp\"' EXIT\necho \"work\" > \"$tmp\"\ncat \"$tmp\""
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "script",
+    "shebang",
+    "quoting",
+    "permissions",
+    "chmod",
+    "exit-code"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): بدون اقتباس",
+   "code": "name=\"my file\"\ntouch $name\nls | wc -l\n",
+   "options": [
+    "2",
+    "1",
+    "0"
+   ],
+   "answer": 0,
+   "why": "بدون اقتباس انقسم الاسم لملفين: my وfile.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): مع اقتباس",
+   "code": "name=\"my file\"\ntouch \"$name\"\nls | wc -l\n",
+   "options": [
+    "1",
+    "2",
+    "0"
+   ],
+   "answer": 0,
+   "why": "مع الاقتباس ملف واحد اسمه \"my file\".",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): متغير فارغ",
+   "code": "dir=\"\"\necho \"[${dir}]\"\necho \"[${dir:-default}]\"\n",
+   "options": [
+    "[]\n[default]",
+    "[default]\n[default]",
+    "[]\n[]"
+   ],
+   "answer": 0,
+   "why": "${var:-x} تعطي قيمة بديلة لو فارغ.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (4): رمز الخروج",
+   "code": "bash -c \"exit 3\"\necho \"code=$?\"\n",
+   "options": [
+    "code=3",
+    "code=0",
+    "code=1"
+   ],
+   "answer": 0,
+   "why": "$? يحمل رمز خروج الأمر الأخير.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (5): pipefail",
+   "code": "(set -o pipefail; false | true; echo \"pf=$?\")\n(false | true; echo \"nopf=$?\")\n",
+   "options": [
+    "pf=1\nnopf=0",
+    "pf=0\nnopf=0",
+    "pf=1\nnopf=1"
+   ],
+   "answer": 0,
+   "why": "pipefail يكشف فشل false داخل الأنبوب.",
+   "lang": "bash"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: سكربت آمن",
+   "lines": [
+    "set -eu",
+    "file=\"data.txt\"",
+    "printf 'a\\nb\\n' > \"$file\"",
+    "wc -l < \"$file\""
+   ],
+   "expect_stdout": "2",
+   "lang": "bash",
+   "intro": "رتّب سكربتاً صغيراً بوضع صارم ومتغير مقتبس.",
+   "explain": "الوضع الصارم أولاً ثم المتغير ثم الاستخدام."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الصلاحية",
+   "code": "touch run.sh\n____ +x run.sh\nls -l run.sh | cut -c4\n",
+   "blanks": [
+    {
+     "answer": "chmod"
+    }
+   ],
+   "expect_stdout": "x",
+   "show_output": false,
+   "lang": "bash",
+   "bank": [
+    "chmod",
+    "chown",
+    "mkdir",
+    "chroot"
+   ],
+   "intro": "وش الأمر اللي يعطي ملفاً صلاحية التنفيذ؟",
+   "explain": "`chmod +x`."
+  },
+  {
+   "type": "order",
+   "title": "رتّب كتابة سكربت جيد",
+   "items": [
+    "نكتب shebang في السطر الأول",
+    "نفعّل set -euo pipefail",
+    "نتحقق من الوسطاء المطلوبة",
+    "نقتبس كل المتغيرات",
+    "ننظّف الملفات المؤقتة بـ trap"
+   ],
+   "why": "هذا هيكل سكربت موثوق."
+  },
+  {
+   "type": "match",
+   "title": "طابق الخطر بعلاجه",
+   "pairs": [
+    [
+     "متغير بلا اقتباس",
+     "اقتبس \"$var\""
+    ],
+    [
+     "متغير غير معرّف",
+     "set -u"
+    ],
+    [
+     "فشل داخل أنبوب مخفي",
+     "set -o pipefail"
+    ],
+    [
+     "اسم ملف مؤقت متوقع",
+     "mktemp"
+    ],
+    [
+     "سر في سطر الأوامر",
+     "متغير بيئة أو ملف 600"
+    ]
+   ],
+   "why": "كل مشكلة لها حل معروف."
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يسوي set -e؟",
+     "options": [
+      "يوقف السكربت عند أول فشل",
+      "يخفي الأخطاء",
+      "يطبع الأوامر"
+     ],
+     "answer": 0,
+     "why": "يمنع الاستمرار بعد خطأ."
+    },
+    {
+     "q": "ليش rm -rf $dir/ خطير؟",
+     "options": [
+      "لو $dir فارغ يحذف الجذر",
+      "بطيء",
+      "لا يحذف"
+     ],
+     "answer": 0,
+     "why": "اقتبس وفعّل set -u."
+    },
+    {
+     "q": "وش shebang؟",
+     "options": [
+      "سطر تحديد المفسر",
+      "تعليق عادي",
+      "متغير"
+     ],
+     "answer": 0,
+     "why": "#!/usr/bin/env bash"
+    },
+    {
+     "q": "كيف ننشئ ملفاً مؤقتاً آمناً؟",
+     "options": [
+      "mktemp",
+      "/tmp/file",
+      "touch tmp"
+     ],
+     "answer": 0,
+     "why": "اسم عشوائي غير متوقع."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "shebang + chmod +x + set -euo pipefail.",
+    "اقتبس المتغيرات ولا تستخدم eval لمدخلات خارجية.",
+    "mktemp وtrap للمؤقتات، والأسرار خارج السكربت."
+   ]
+  }
+ ]
+}

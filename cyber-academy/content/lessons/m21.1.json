@@ -1,0 +1,203 @@
+{
+ "title_ar": "أساسيات Git",
+ "title_en": "Git Basics",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🌿",
+   "goal": "تحفظ تاريخ مشروعك وتتراجع متى شئت باستخدام [[git]]: init وadd وcommit."
+  },
+  {
+   "type": "text",
+   "title": "كاميرا لمشروعك",
+   "body": [
+    "[[git]] يسجّل **لقطات** لمشروعك مع الزمن. كل لقطة اسمها [[commit]] فيها حالة كل الملفات + رسالة + المؤلف + الوقت. تقدر ترجع لأي لقطة وتعرف من غيّر وش ولماذا.",
+    "[[repository]] هو مجلد مشروعك مع تاريخه (داخل مجلد `.git` المخفي). ننشئه بـ `git init`.",
+    "الرحلة ثلاث مراحل: تعدّل ملفاً ← `git add` ينقله لـ[[staging-area]] ← `git commit` يحفظ اللقطة."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "هذي أوامر طرفية تشغّلها على جهازك. هنا نتدرب عليها بالتوقّع والترتيب (متحقق منها فعلياً).",
+   "code": "git init\necho \"hello\" > notes.txt\ngit add notes.txt\ngit commit -m \"add notes\"\ngit log --oneline"
+  },
+  {
+   "type": "text",
+   "title": "ليش منطقة التجهيز؟",
+   "body": [
+    "`git add` تختار **أي** التغييرات تدخل الكوميت القادم، فتقدر تعدّل 5 ملفات وتحفظ 2 منها فقط في كوميت واحد مرتب.",
+    "`git status` يوريك الحال (جديد؟ معدّل؟ جاهز للحفظ؟)، و`git diff` يوريك التغييرات، و`git log` يوريك التاريخ.",
+    "رسالة الكوميت الجيدة: قصيرة وبصيغة الأمر وتشرح **ماذا ولماذا**: `fix login lockout bug`."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "`?? file` يعني ملف جديد غير متتبَّع، و`M file` معدّل، و`A file` مجهّز.",
+   "code": "git status --short\ngit diff\ngit log --oneline"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "git",
+    "repository",
+    "commit",
+    "staging-area"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): عدد الكوميتات",
+   "code": "git init -q\necho \"v1\" > app.txt\ngit add app.txt\ngit commit -qm \"first\"\necho \"v2\" > app.txt\ngit commit -qam \"second\"\ngit log --oneline | wc -l\n",
+   "options": [
+    "2",
+    "1",
+    "3",
+    "0"
+   ],
+   "answer": 0,
+   "why": "كوميتان: first وsecond.",
+   "lang": "git"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): الحالة",
+   "code": "git init -q\necho \"a\" > a.txt\necho \"b\" > b.txt\ngit add a.txt\ngit status --short\n",
+   "options": [
+    "A  a.txt\n?? b.txt",
+    "?? a.txt\n?? b.txt",
+    "A  a.txt\nA  b.txt"
+   ],
+   "answer": 0,
+   "why": "a.txt جُهّز (A) وb.txt لسه غير متتبع (??).",
+   "lang": "git"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): رسائل التاريخ",
+   "code": "git init -q\necho \"v1\" > app.txt\ngit add app.txt\ngit commit -qm \"first\"\necho \"v2\" > app.txt\ngit commit -qam \"update\"\ngit log --format=%s\n",
+   "options": [
+    "update\nfirst",
+    "first\nupdate",
+    "update"
+   ],
+   "answer": 0,
+   "why": "الأحدث يظهر أولاً.",
+   "lang": "git"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: أول كوميت",
+   "lines": [
+    "git init -q",
+    "echo \"hello\" > notes.txt",
+    "git add notes.txt",
+    "git commit -qm \"add notes\"",
+    "git log --format=%s"
+   ],
+   "expect_stdout": "add notes",
+   "lang": "git",
+   "intro": "رتّب الأوامر لإنشاء مستودع وحفظ أول لقطة وعرض رسالتها.",
+   "explain": "init ثم ملف ثم add ثم commit ثم log."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: التجهيز",
+   "code": "git init -q\necho \"x\" > f.txt\ngit ____ f.txt\ngit commit -qm \"add f\"\ngit log --format=%s\n",
+   "blanks": [
+    {
+     "answer": "add"
+    }
+   ],
+   "expect_stdout": "add f",
+   "show_output": false,
+   "lang": "git",
+   "bank": [
+    "add",
+    "push",
+    "save",
+    "stage"
+   ],
+   "intro": "وش الأمر اللي ينقل الملف لمنطقة التجهيز؟",
+   "explain": "`git add`."
+  },
+  {
+   "type": "match",
+   "title": "طابق الأمر بوظيفته",
+   "pairs": [
+    [
+     "git init",
+     "ينشئ مستودعاً جديداً"
+    ],
+    [
+     "git add",
+     "يجهّز التغييرات للكوميت"
+    ],
+    [
+     "git commit",
+     "يحفظ لقطة بالتاريخ"
+    ],
+    [
+     "git status",
+     "يعرض حال الملفات"
+    ],
+    [
+     "git log",
+     "يعرض تاريخ الكوميتات"
+    ]
+   ],
+   "why": "أوامر الدورة الأساسية."
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش الكوميت؟",
+     "options": [
+      "لقطة محفوظة من حالة المشروع",
+      "ملف مضغوط",
+      "فرع جديد"
+     ],
+     "answer": 0,
+     "why": "مع رسالة ومؤلف ووقت."
+    },
+    {
+     "q": "ليش git add قبل commit؟",
+     "options": [
+      "لنختار ما يدخل اللقطة",
+      "لتسريع الحفظ",
+      "للتشفير"
+     ],
+     "answer": 0,
+     "why": "منطقة التجهيز."
+    },
+    {
+     "q": "وش يدل ?? في status؟",
+     "options": [
+      "ملف جديد غير متتبَّع",
+      "ملف محذوف",
+      "تعارض"
+     ],
+     "answer": 0,
+     "why": "لم يُضَف بعد."
+    },
+    {
+     "q": "رسالة كوميت جيدة؟",
+     "options": [
+      "fix login lockout bug",
+      "changes",
+      "asdf"
+     ],
+     "answer": 0,
+     "why": "واضحة تشرح التغيير."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "Git يسجّل لقطات (commits) لمشروعك.",
+    "الدورة: تعديل ← add ← commit.",
+    "status وlog وdiff لفهم الحال والتاريخ."
+   ]
+  }
+ ]
+}

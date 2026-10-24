@@ -1,0 +1,264 @@
+{
+ "title_ar": "مبدأ الويب والمسارات",
+ "title_en": "Routes",
+ "duration_min": 11,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🌶️",
+   "goal": "تفهم كيف يربط إطار الويب مثل [[flask]] كل رابط بدالة، وتبني المبدأ بنفسك."
+  },
+  {
+   "type": "text",
+   "title": "طلب ← مسار ← دالة ← رد",
+   "body": [
+    "المتصفح يرسل طلب HTTP: طريقة (`GET` للقراءة، `POST` للإرسال) + مسار (`/login`). الخادم يرد برمز حالة (200، 404…) وجسم (HTML أو JSON).",
+    "في [[flask]] نربط المسار بدالة بمزخرف: `@app.route(\"/hello\")` فوق دالة ترجع نص الرد. هذا [[route]] (مسار).",
+    "مسارات بمتغير: `@app.route(\"/user/<name>\")` والدالة تستقبل `name`. وللطرق: `methods=[\"GET\", \"POST\"]`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "Flask غير متاح داخل المتصفح، فنبني نسخة مصغرة من فكرتها بالمزخرفات التي تعلمتها.",
+   "code": "from flask import Flask\napp = Flask(__name__)\n\n@app.route(\"/hello\")\ndef hello():\n    return \"Hello\"\n\n@app.route(\"/user/<name>\")\ndef user(name):\n    return \"Hi \" + name\n\n# app.run()  # على جهازك: flask run"
+  },
+  {
+   "type": "text",
+   "title": "مزخرف يسجل المسارات",
+   "body": [
+    "سر Flask: المزخرف يخزّن الدالة في قاموس `ROUTES` باسم المسار. وعند وصول طلب نبحث في القاموس، فإن لم نجد نرد 404.",
+    "رموز الحالة: 200 نجاح، 301/302 تحويل، 400 طلب سيئ، 401 غير مصرح، 403 ممنوع، 404 غير موجود، 500 خطأ في الخادم.",
+    "أمنياً: لا تعرض تفاصيل الأخطاء الداخلية للمستخدم (stack traces)، وأوقف وضع `debug` في الإنتاج."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "وضع debug في Flask يتيح تنفيذ كود عن بعد لو انكشف؛ لا تفعّله على خادم عام أبداً.",
+   "code": "ROUTES = {}\n\ndef route(path):\n    def deco(f):\n        ROUTES[path] = f\n        return f\n    return deco\n\ndef dispatch(path):\n    f = ROUTES.get(path)\n    if f is None:\n        return 404, \"not found\"\n    return 200, f()\n\nprint(1)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "flask",
+    "route",
+    "http",
+    "api"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): Flask",
+   "code": "@app.route(\"/hi/<name>\")\ndef hi(name):\n    return \"Hi \" + name\n\n# طلب: GET /hi/sara",
+   "options": [
+    "Hi sara",
+    "Hi name",
+    "name",
+    "404 Not Found"
+   ],
+   "answer": 0,
+   "why": "الجزء <name> من الرابط يمرَّر للدالة فيصير sara.",
+   "lang": "text"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): مسار غير موجود",
+   "code": "@app.route(\"/home\")\ndef home():\n    return \"home\"\n\n# طلب: GET /about",
+   "options": [
+    "404 Not Found",
+    "home",
+    "200 OK",
+    "500 Internal Server Error"
+   ],
+   "answer": 0,
+   "why": "ما فيه مسار /about فيرد Flask بـ 404.",
+   "lang": "text"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): مزخرف المسارات",
+   "code": "ROUTES = {}\n\ndef route(path):\n    def deco(f):\n        ROUTES[path] = f\n        return f\n    return deco\n\ndef dispatch(path):\n    f = ROUTES.get(path)\n    if f is None:\n        return 404, \"not found\"\n    return 200, f()\n\n@route(\"/a\")\ndef a():\n    return \"A\"\n\nprint(dispatch(\"/a\"))\nprint(dispatch(\"/b\"))\n",
+   "options": [
+    "(200, 'A')\n(404, 'not found')",
+    "(200, 'A')\n(200, 'A')",
+    "(404, 'not found')\n(404, 'not found')"
+   ],
+   "answer": 0,
+   "why": "المسار /a مسجَّل، أما /b فلا."
+  },
+  {
+   "type": "match",
+   "title": "طابق الرمز بمعناه",
+   "pairs": [
+    [
+     "200",
+     "نجاح"
+    ],
+    [
+     "301",
+     "تحويل دائم"
+    ],
+    [
+     "401",
+     "غير مصرح (لم يسجل دخول)"
+    ],
+    [
+     "403",
+     "ممنوع (لا صلاحية)"
+    ],
+    [
+     "404",
+     "غير موجود"
+    ],
+    [
+     "500",
+     "خطأ في الخادم"
+    ]
+   ],
+   "why": "رموز HTTP الأساسية."
+  },
+  {
+   "type": "code",
+   "title": "ابنِ الموجّه",
+   "instructions": [
+    "اكتب `route(path)` (مزخرف يسجل الدالة في `ROUTES`) و`dispatch(path)` ترجع `(200, ناتج الدالة)` أو `(404, \"not found\")`. اختبرها بمسارين."
+   ],
+   "starter": "# اكتب كودك هنا\nROUTES = {}\n",
+   "tests": [
+    {
+     "call": "(lambda: (route(\"/a\")(lambda: \"A\"), dispatch(\"/a\"))[1])()",
+     "expect": [
+      200,
+      "A"
+     ]
+    },
+    {
+     "call": "dispatch(\"/zzz\")",
+     "expect": [
+      404,
+      "not found"
+     ]
+    },
+    {
+     "call": "(lambda: (route(\"/h\")(lambda: \"H\"), dispatch(\"/h\"))[1])()",
+     "expect": [
+      200,
+      "H"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "ROUTES = {}\n\ndef route(path):\n    def deco(f):\n        ROUTES[path] = f\n        return f\n    return deco\n\ndef dispatch(path):\n    f = ROUTES.get(path)\n    if f is None:\n        return 404, \"not found\"\n    return 200, f()\n\n",
+   "hints": [
+    "المزخرف يرجع الدالة نفسها بعد تسجيلها.",
+    "استخدم `ROUTES.get(path)`."
+   ],
+   "checks": [
+    {
+     "regex": "def\\s+route",
+     "msg": "عرّف route"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "مسار بمتغير",
+   "instructions": [
+    "عرّف `match_user(path)`: لو المسار `/user/<اسم>` رجّع الاسم، وإلا `None`. (استخدم `startswith` و`split`)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "match_user(\"/user/sara\")",
+     "expect": "sara"
+    },
+    {
+     "call": "match_user(\"/user/\")",
+     "expect": null
+    },
+    {
+     "call": "match_user(\"/home\")",
+     "expect": null
+    },
+    {
+     "call": "match_user(\"/user/ali/edit\")",
+     "expect": null,
+     "hidden": true
+    }
+   ],
+   "solution": "def match_user(path):\n    parts = path.strip(\"/\").split(\"/\")\n    if len(parts) == 2 and parts[0] == \"user\" and parts[1]:\n        return parts[1]\n    return None\n",
+   "hints": [
+    "قسّم المسار بـ `split(\"/\")`.",
+    "تحقق من العدد والأول والثاني."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: 404 مفقودة",
+   "instructions": [
+    "`dispatch` تنهار (`TypeError`) عند مسار غير مسجل. أصلحها لترجع `(404, \"not found\")`."
+   ],
+   "starter": "ROUTES = {\"/a\": lambda: \"A\"}\n\ndef dispatch(path):\n    return 200, ROUTES[path]()\n\nprint(dispatch(\"/zzz\"))\n",
+   "tests": [
+    {
+     "expect_stdout": "(404, 'not found')"
+    }
+   ],
+   "solution": "ROUTES = {\"/a\": lambda: \"A\"}\n\ndef dispatch(path):\n    f = ROUTES.get(path)\n    if f is None:\n        return 404, \"not found\"\n    return 200, f()\n\nprint(dispatch(\"/zzz\"))\n",
+   "hints": [
+    "استخدم `get` وافحص None."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يربطه @app.route؟",
+     "options": [
+      "مساراً بدالة تعالجه",
+      "قاعدة بيانات بملف",
+      "متغيراً بقيمة"
+     ],
+     "answer": 0,
+     "why": "هذي فكرة Flask."
+    },
+    {
+     "q": "وش يعني 404؟",
+     "options": [
+      "المسار غير موجود",
+      "غير مصرح",
+      "خطأ خادم"
+     ],
+     "answer": 0,
+     "why": "Not Found."
+    },
+    {
+     "q": "ليش نوقف debug في الإنتاج؟",
+     "options": [
+      "يتيح تنفيذ كود عن بعد ويكشف تفاصيل داخلية",
+      "يبطئ الخادم فقط",
+      "لا فرق"
+     ],
+     "answer": 0,
+     "why": "خطر أمني كبير."
+    },
+    {
+     "q": "الفرق بين GET وPOST؟",
+     "options": [
+      "GET للقراءة وPOST للإرسال",
+      "نفس الشيء",
+      "GET أسرع دائماً"
+     ],
+     "answer": 0,
+     "why": "POST يحمل بيانات في الجسم."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "المسار يربط رابطاً بدالة، والرد رمز حالة وجسم.",
+    "مزخرف يسجل الدالة في قاموس المسارات.",
+    "لا debug في الإنتاج ولا تعرض أخطاء داخلية."
+   ]
+  }
+ ]
+}

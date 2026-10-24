@@ -1,0 +1,225 @@
+{
+ "title_ar": "الأنابيب والتحويل",
+ "title_en": "Pipes & Redirection",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔗",
+   "goal": "تربط الأوامر ببعض بـ[[pipe]] وتوجّه نواتجها لملفات بـ[[redirection]]."
+  },
+  {
+   "type": "text",
+   "title": "تدفق البيانات",
+   "body": [
+    "كل أمر له ثلاث قنوات: مدخل (stdin)، ناتج (stdout)، أخطاء (stderr).",
+    "[[redirection]]: `>` يكتب الناتج في ملف (ويمسحه)، `>>` يضيف في آخره، `<` يقرأ المدخل من ملف، `2>` يوجّه الأخطاء، و`2>/dev/null` يرميها.",
+    "[[pipe]] `|` يمرر ناتج الأمر الأول مدخلاً للثاني: `cat log | sort | uniq`."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "فلسفة يونكس: أوامر صغيرة تفعل شيئاً واحداً وتُركَّب بالأنابيب.",
+   "code": "echo \"a\" > f.txt\necho \"b\" >> f.txt\ncat f.txt | wc -l\nls missing 2>/dev/null"
+  },
+  {
+   "type": "text",
+   "title": "أنماط مفيدة",
+   "body": [
+    "`cmd > out.txt 2>&1` يجمع الناتج والأخطاء في ملف واحد. و`tee` تكتب في ملف **وتمرر** الناتج للأمر التالي.",
+    "`&&` ينفذ التالي إن نجح الأول، و`||` إن فشل، و`;` بالتتابع دائماً.",
+    "احذر: `>` على ملف مهم يمسحه بدون تحذير."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "تأكد من اسم الملف قبل `>`؛ كثير من الحوادث بدأت بمسح ملف إعدادات بالخطأ.",
+   "code": "mkdir out && echo \"ok\"\ngrep x f.txt || echo \"not found\"\necho hi | tee copy.txt | wc -c"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "pipe",
+    "redirection",
+    "exit-code"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): الإضافة",
+   "code": "echo a > f.txt\necho b >> f.txt\ncat f.txt\n",
+   "options": [
+    "a\nb",
+    "b",
+    "a"
+   ],
+   "answer": 0,
+   "why": "`>>` أضافت b بعد a.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): المسح",
+   "code": "echo a > f.txt\necho b > f.txt\ncat f.txt\n",
+   "options": [
+    "b",
+    "a\nb",
+    "a"
+   ],
+   "answer": 0,
+   "why": "`>` مسحت القديم.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): أنبوب",
+   "code": "printf 'b\\na\\nc\\n' | sort | head -n 1\n",
+   "options": [
+    "a",
+    "b",
+    "c"
+   ],
+   "answer": 0,
+   "why": "sort رتب ثم head أخذ الأول.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (4): الأخطاء",
+   "code": "ls nope 2>/dev/null\necho done\n",
+   "options": [
+    "done",
+    "ls: cannot access",
+    ""
+   ],
+   "answer": 0,
+   "why": "رمينا رسالة الخطأ.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (5): && و||",
+   "code": "true && echo A\nfalse || echo B\nfalse && echo C || echo D\n",
+   "options": [
+    "A\nB\nD",
+    "A\nB\nC",
+    "A\nD"
+   ],
+   "answer": 0,
+   "why": "false && تتخطى C، ثم || ينفذ D.",
+   "lang": "bash"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: رتّب وانقل",
+   "lines": [
+    "printf 'b\\na\\n' > f.txt",
+    "sort f.txt > sorted.txt",
+    "cat sorted.txt"
+   ],
+   "expect_stdout": "a\nb",
+   "lang": "bash",
+   "intro": "رتّب الأوامر: اكتب ملفاً ثم رتّبه لملف جديد ثم اعرضه.",
+   "explain": "كل أمر يعتمد على ناتج السابق."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الإضافة",
+   "code": "echo one > f.txt\necho two ____ f.txt\nwc -l < f.txt\n",
+   "blanks": [
+    {
+     "answer": ">>"
+    }
+   ],
+   "expect_stdout": "2",
+   "show_output": false,
+   "lang": "bash",
+   "bank": [
+    ">>",
+    ">",
+    "|",
+    "<"
+   ],
+   "intro": "وش الرمز اللي يضيف في آخر الملف بدون مسح؟",
+   "explain": "`>>`."
+  },
+  {
+   "type": "match",
+   "title": "طابق الرمز بمعناه",
+   "pairs": [
+    [
+     ">",
+     "يكتب ويمسح"
+    ],
+    [
+     ">>",
+     "يضيف في الآخر"
+    ],
+    [
+     "|",
+     "يمرر الناتج للأمر التالي"
+    ],
+    [
+     "2>",
+     "يوجّه الأخطاء"
+    ],
+    [
+     "&&",
+     "ينفذ التالي إن نجح السابق"
+    ]
+   ],
+   "why": "رموز التوجيه."
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "الفرق بين > و>>؟",
+     "options": [
+      "الأولى تمسح والثانية تضيف",
+      "العكس",
+      "نفس الشيء"
+     ],
+     "answer": 0,
+     "why": "احذر المسح."
+    },
+    {
+     "q": "وش يسوي |؟",
+     "options": [
+      "يمرر ناتج الأمر مدخلاً للتالي",
+      "يحذف الملف",
+      "يكرر"
+     ],
+     "answer": 0,
+     "why": "بناء السلاسل."
+    },
+    {
+     "q": "كيف نرمي الأخطاء؟",
+     "options": [
+      "2>/dev/null",
+      ">/dev/null فقط",
+      "rm"
+     ],
+     "answer": 0,
+     "why": "قناة الأخطاء رقم 2."
+    },
+    {
+     "q": "وش يسوي tee؟",
+     "options": [
+      "يكتب في ملف ويمرر الناتج",
+      "يحذف",
+      "يعدّ"
+     ],
+     "answer": 0,
+     "why": "مثل حرف T."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "> يكتب، >> يضيف، < يقرأ، | يمرر.",
+    "2> للأخطاء و&& و|| للتحكم.",
+    "أوامر صغيرة تُركَّب بأنابيب."
+   ]
+  }
+ ]
+}

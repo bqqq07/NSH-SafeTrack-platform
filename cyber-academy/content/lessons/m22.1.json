@@ -1,0 +1,213 @@
+{
+ "title_ar": "التنقل والملفات",
+ "title_en": "Files & Navigation",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "📂",
+   "goal": "تتحرك في نظام الملفات وتدير الملفات من الطرفية في [[bash]]."
+  },
+  {
+   "type": "text",
+   "title": "الأوامر الأساسية",
+   "body": [
+    "[[shell]] (الصدفة) برنامج تكتب له أوامر نصية. [[bash]] أشهرها. تقرأ المسار الحالي بـ `pwd`، وتعرض الملفات بـ `ls` (و`ls -a` تظهر المخفية، `ls -l` تفاصيل).",
+    "تنتقل بـ `cd مجلد` (و`cd ..` للأعلى). تنشئ مجلداً بـ `mkdir` (و`-p` للمتداخلة)، وملفاً فاضياً بـ `touch`.",
+    "تنسخ `cp` وتنقل/تعيد التسمية `mv` وتحذف `rm` (والمجلدات `rm -r`). ولا يوجد سلة محذوفات!"
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "warn",
+   "note": "`rm -rf` يحذف بدون سؤال؛ دقق في المسار قبل الضغط على Enter.",
+   "code": "mkdir -p project/src\ncd project\ntouch src/app.py README.md\nls\nls src"
+  },
+  {
+   "type": "text",
+   "title": "القراءة والأنماط",
+   "body": [
+    "`cat` يعرض الملف، و`head -n 3` أول 3 أسطر، و`tail -n 3` آخر 3، و`wc -l` يعدّ الأسطر.",
+    "الأنماط البديلة (wildcards): `*.txt` كل ملفات txt، `log?` حرف واحد، `[ab]*` تبدأ بـ a أو b.",
+    "الأسماء التي تبدأ بنقطة (`.env`, `.git`) مخفية عن `ls` العادي."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "الأنماط يوسّعها Bash قبل تشغيل الأمر.",
+   "code": "ls *.log\nhead -n 2 app.log\ntail -n 1 app.log\nwc -l app.log"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "shell",
+    "bash",
+    "command"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "mkdir -p a/b\ntouch a/b/x.txt a/b/y.txt\nls a/b\n",
+   "options": [
+    "x.txt\ny.txt",
+    "a/b",
+    "x.txt"
+   ],
+   "answer": 0,
+   "why": "ls يعرض محتوى المجلد مرتباً، سطراً لكل ملف عند التوجيه.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): النمط",
+   "code": "touch a.txt b.txt c.log\nls *.txt | wc -l\n",
+   "options": [
+    "2",
+    "3",
+    "1"
+   ],
+   "answer": 0,
+   "why": "`*.txt` تطابق a.txt وb.txt فقط.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): mv",
+   "code": "echo hi > old.txt\nmv old.txt new.txt\nls\ncat new.txt\n",
+   "options": [
+    "new.txt\nhi",
+    "old.txt\nhi",
+    "new.txt"
+   ],
+   "answer": 0,
+   "why": "mv غيّر الاسم فبقي new.txt.",
+   "lang": "bash"
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (4): مخفي",
+   "code": "touch visible .hidden\nls\nls -a | wc -l\n",
+   "options": [
+    "visible\n4",
+    "visible\n2",
+    "visible .hidden\n4"
+   ],
+   "answer": 0,
+   "why": "ls -a تضيف `.` و`..` و`.hidden` فالعدد 4.",
+   "lang": "bash"
+  },
+  {
+   "type": "parsons",
+   "title": "رتّب: مشروع جديد",
+   "lines": [
+    "mkdir -p proj/src",
+    "cd proj",
+    "touch src/main.py",
+    "ls src"
+   ],
+   "expect_stdout": "main.py",
+   "lang": "bash",
+   "intro": "رتّب الأوامر: أنشئ مجلدات ثم ادخل ثم ملف ثم اعرض.",
+   "explain": "mkdir ثم cd ثم touch."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: المجلد المتداخل",
+   "code": "____ -p a/b/c\nls a/b\n",
+   "blanks": [
+    {
+     "answer": "mkdir"
+    }
+   ],
+   "expect_stdout": "c",
+   "show_output": false,
+   "lang": "bash",
+   "bank": [
+    "mkdir",
+    "touch",
+    "cd",
+    "ls"
+   ],
+   "intro": "وش الأمر اللي ينشئ مجلدات متداخلة مع -p؟",
+   "explain": "`mkdir -p`."
+  },
+  {
+   "type": "match",
+   "title": "طابق الأمر بوظيفته",
+   "pairs": [
+    [
+     "pwd",
+     "يعرض المسار الحالي"
+    ],
+    [
+     "ls -a",
+     "يعرض كل الملفات بما فيها المخفية"
+    ],
+    [
+     "cp a b",
+     "ينسخ الملف"
+    ],
+    [
+     "mv a b",
+     "ينقل أو يعيد التسمية"
+    ],
+    [
+     "rm -r d",
+     "يحذف مجلداً بمحتوياته"
+    ]
+   ],
+   "why": "أوامر الملفات اليومية."
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يسوي cd ..؟",
+     "options": [
+      "ينتقل للمجلد الأعلى",
+      "يحذف المجلد",
+      "ينسخه"
+     ],
+     "answer": 0,
+     "why": "نقطتان = الأب."
+    },
+    {
+     "q": "هل يوجد سلة محذوفات لـ rm؟",
+     "options": [
+      "لا، الحذف نهائي",
+      "نعم",
+      "أحياناً"
+     ],
+     "answer": 0,
+     "why": "احذر خاصة rm -rf."
+    },
+    {
+     "q": "وش تطابق *.txt؟",
+     "options": [
+      "كل الملفات المنتهية بـ txt",
+      "ملفاً واحداً",
+      "المجلدات فقط"
+     ],
+     "answer": 0,
+     "why": "النجمة أي نص."
+    },
+    {
+     "q": "كيف نعرض الملفات المخفية؟",
+     "options": [
+      "ls -a",
+      "ls -l",
+      "ls -h"
+     ],
+     "answer": 0,
+     "why": "a = all."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "pwd وls وcd وmkdir وtouch وcp وmv وrm أساس الطرفية.",
+    "الأنماط * و? توسّع قبل التنفيذ.",
+    "rm نهائي؛ دقق قبل الحذف."
+   ]
+  }
+ ]
+}
