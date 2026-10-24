@@ -1002,49 +1002,49 @@
      "id": "m18.1",
      "title_ar": "المولّدات Generators",
      "title_en": "Generators",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m18.2",
      "title_ar": "المزخرفات Decorators",
      "title_en": "Decorators",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m18.3",
      "title_ar": "مديرو السياق",
      "title_en": "Context Managers",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m18.4",
      "title_ar": "collections",
      "title_en": "collections",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m18.5",
      "title_ar": "itertools و functools",
      "title_en": "itertools & functools",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m18.6",
      "title_ar": "التزامن",
      "title_en": "Concurrency",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m18.7",
      "title_ar": "الأداء وBig-O",
      "title_en": "Performance",
-     "ready": false
+     "ready": true
     },
     {
      "id": "m18.8",
      "title_ar": "قواعد البيانات sqlite3",
      "title_en": "sqlite3",
-     "ready": false
+     "ready": true
     }
    ]
   },

@@ -1,0 +1,203 @@
+{
+ "title_ar": "التزامن",
+ "title_en": "Concurrency",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🔀",
+   "goal": "تفهم فكرة [[concurrency]] (التزامن)، والخطر الأكبر فيه [[race-condition]]، بنماذج قابلة للتشغيل في المتصفح."
+  },
+  {
+   "type": "text",
+   "title": "عدة مهام بنفس الوقت",
+   "body": [
+    "بدل أن ينتظر البرنامج تحميل صفحة ثم الثانية، نبدأ الكل ونكمل لما ترد. هذا مهم لمهام **الانتظار** (شبكة، ملفات) I/O-bound.",
+    "ثلاث أدوات: `threading` خيوط داخل نفس البرنامج، `multiprocessing` عمليات منفصلة (للحسابات الثقيلة CPU-bound)، و`asyncio` مهام تتناوب بدور ذاتي `async/await`.",
+    "ملاحظة: المتصفح لا يدعم الخيوط الحقيقية، فسنحاكي الفكرة بمولّدات تتناوب (نفس فكرة asyncio)."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "في asyncio كل `await` نقطة تُسلّم فيها المهمة الدور لغيرها.",
+   "code": "# شكل asyncio (للمعرفة، لا يُنفذ هنا)\n# async def fetch(url):\n#     await asyncio.sleep(1)\n#     return url\n# results = await asyncio.gather(fetch(\"a\"), fetch(\"b\"))\n\ndef task(name, steps):\n    for i in range(steps):\n        yield name + str(i)\n\nprint(list(task(\"A\", 2)))"
+  },
+  {
+   "type": "text",
+   "title": "حالة التسابق",
+   "body": [
+    "لو مهمتان تقرآن وتعدلان نفس القيمة وتتداخلان، قد تضيع إحداهما تعديلها: [[race-condition]].",
+    "مثال: رصيد 100، مهمتان تسحبان 70 تقرآن الرصيد معاً (100) فكلتاهما تظن أن السحب ممكن، فينتهي الرصيد بـ 30- أو يضيع أحد السحبين.",
+    "الحل: **أقفال** (locks) تجعل القراءة والتعديل خطوة واحدة غير قابلة للتقطيع. وهي ثغرة أمنية معروفة (TOCTOU)."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "النتيجة 30 مع أن السحب الثاني كان لازم يُرفض؛ رصيد 100 سُحب منه 140.",
+   "code": "balance = 100\n\ndef withdraw(amount):\n    global balance\n    seen = balance        # 1) قراءة\n    yield                 # نقطة تبديل المهمة\n    if seen >= amount:    # 2) فحص على قيمة قديمة\n        balance = seen - amount\n\na, b = withdraw(70), withdraw(70)\nnext(a); next(b)          # كلاهما قرأ 100\nfor g in (a, b):\n    try:\n        next(g)\n    except StopIteration:\n        pass\nprint(balance)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "concurrency",
+    "race-condition",
+    "generator"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): التناوب",
+   "code": "def t(name):\n    yield name + \"1\"\n    yield name + \"2\"\n\na, b = t(\"a\"), t(\"b\")\nout = []\nfor g in (a, b, a, b):\n    out.append(next(g))\nprint(out)\n",
+   "options": [
+    "['a1', 'b1', 'a2', 'b2']",
+    "['a1', 'a2', 'b1', 'b2']",
+    "['a1', 'b1']"
+   ],
+   "answer": 0,
+   "why": "المهمتان تتناوبان."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): التسابق",
+   "code": "balance = 100\ndef w(x):\n    global balance\n    seen = balance\n    yield\n    if seen >= x:\n        balance = seen - x\n\na, b = w(70), w(70)\nnext(a); next(b)\nfor g in (a, b):\n    try:\n        next(g)\n    except StopIteration:\n        pass\nprint(balance)\n",
+   "options": [
+    "30",
+    "-40",
+    "100"
+   ],
+   "answer": 0,
+   "why": "كلاهما قرأ 100 وكتب 100-70=30، فضاع أحد السحبين."
+  },
+  {
+   "type": "order",
+   "title": "رتّب الحل الصحيح لسحب آمن",
+   "items": [
+    "نأخذ القفل",
+    "نقرأ الرصيد",
+    "نفحص أن الرصيد يكفي",
+    "ننقص المبلغ",
+    "نحرر القفل"
+   ],
+   "why": "القراءة والفحص والتعديل داخل القفل خطوة واحدة."
+  },
+  {
+   "type": "match",
+   "title": "طابق المهمة بالأداة الأنسب",
+   "pairs": [
+    [
+     "تحميل 100 صفحة ويب",
+     "asyncio أو threading (I/O)"
+    ],
+    [
+     "حساب ثقيل على كل أنوية المعالج",
+     "multiprocessing"
+    ],
+    [
+     "خطوات بسيطة متتابعة",
+     "بدون تزامن"
+    ],
+    [
+     "حماية بيانات مشتركة",
+     "lock"
+    ]
+   ],
+   "why": "I/O يستفيد من التزامن الخفيف، وCPU يحتاج عمليات."
+  },
+  {
+   "type": "code",
+   "title": "جدولة بالتناوب",
+   "instructions": [
+    "`tasks` قائمة مولّدات. اكتب مجدولاً يأخذ دوراً من كل مهمة بالتتابع (round-robin) حتى تنتهي الكل، ويطبع كل ناتج في سطر. مثال المهمتان `A` و`B` تنتجان خطوتين: `A0 B0 A1 B1` (في أسطر)."
+   ],
+   "starter": "def task(name, n):\n    for i in range(n):\n        yield name + str(i)\n\ntasks = [task(\"A\", 2), task(\"B\", 2)]\n",
+   "tests": [
+    {
+     "expect_stdout": "A0\nB0\nA1\nB1"
+    }
+   ],
+   "solution": "def task(name, n):\n    for i in range(n):\n        yield name + str(i)\n\ntasks = [task(\"A\", 2), task(\"B\", 2)]\nwhile tasks:\n    for t in list(tasks):\n        try:\n            print(next(t))\n        except StopIteration:\n            tasks.remove(t)\n",
+   "hints": [
+    "كرر على نسخة من القائمة.",
+    "احذف المهمة التي تنتهي (StopIteration)."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: التسابق",
+   "instructions": [
+    "السحب يقرأ الرصيد ويتأخر ثم يفحص على القيمة القديمة. أصلح `withdraw` بحيث يعيد قراءة `balance` **بعد** نقطة التبديل ثم يفحص فيطبع الرصيد النهائي `30` والسحب الثاني يُرفض."
+   ],
+   "starter": "balance = 100\n\ndef withdraw(amount):\n    global balance\n    seen = balance\n    yield\n    if seen >= amount:\n        balance = seen - amount\n\na, b = withdraw(70), withdraw(70)\nnext(a)\nnext(b)\nfor g in (a, b):\n    try:\n        next(g)\n    except StopIteration:\n        pass\nprint(balance)\n",
+   "tests": [
+    {
+     "expect_stdout": "30"
+    }
+   ],
+   "solution": "balance = 100\n\ndef withdraw(amount):\n    global balance\n    yield\n    if balance >= amount:\n        balance = balance - amount\n\na, b = withdraw(70), withdraw(70)\nnext(a)\nnext(b)\nfor g in (a, b):\n    try:\n        next(g)\n    except StopIteration:\n        pass\nprint(balance)\n",
+   "hints": [
+    "اقرأ `balance` الحالي وقت الفحص مباشرة.",
+    "الفحص والتعديل يكونان بدون فاصل بينهما."
+   ],
+   "checks": [
+    {
+     "regex": "seen",
+     "must": false,
+     "msg": "لا تعتمد على نسخة قديمة seen"
+    }
+   ],
+   "variant": "bugfix",
+   "allow_starter_pass": true
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش race condition؟",
+     "options": [
+      "نتيجة تتوقف على ترتيب تنفيذ مهام تشارك بيانات",
+      "خطأ إملائي",
+      "بطء الشبكة"
+     ],
+     "answer": 0,
+     "why": "ثغرة شائعة."
+    },
+    {
+     "q": "أنسب أداة لحساب ثقيل؟",
+     "options": [
+      "multiprocessing",
+      "asyncio",
+      "sleep"
+     ],
+     "answer": 0,
+     "why": "CPU-bound يحتاج عمليات."
+    },
+    {
+     "q": "وش يحل التسابق؟",
+     "options": [
+      "قفل يجعل القراءة والتعديل خطوة واحدة",
+      "تكرار الكود",
+      "تسريع المعالج"
+     ],
+     "answer": 0,
+     "why": "lock."
+    },
+    {
+     "q": "متى يفيد asyncio؟",
+     "options": [
+      "مهام تنتظر شبكة أو ملفات",
+      "حسابات رياضية",
+      "بدون فائدة"
+     ],
+     "answer": 0,
+     "why": "I/O-bound."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "التزامن يفيد مهام الانتظار؛ والعمليات للحسابات الثقيلة.",
+    "race condition: مهمتان تعدلان نفس البيانات والنتيجة تتوقف على الترتيب.",
+    "الحل: أقفال وجعل الفحص والتعديل غير قابلين للتقطيع."
+   ]
+  }
+ ]
+}

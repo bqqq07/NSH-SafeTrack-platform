@@ -1,0 +1,273 @@
+{
+ "title_ar": "الأداء وBig-O",
+ "title_en": "Performance",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "⏱️",
+   "goal": "تقيس سرعة الحلول بعدّ الخطوات بدل التخمين، وتفهم [[big-o]] بشكل مبسط."
+  },
+  {
+   "type": "text",
+   "title": "كم خطوة؟",
+   "body": [
+    "[[big-o]] يصف كيف يزيد عدد الخطوات لما يكبر المدخل n. **O(1)** ثابت (فهرس قائمة)، **O(n)** خطي (مرور على كل العناصر)، **O(n²)** تربيعي (حلقة داخل حلقة)، **O(log n)** لوغاريتمي (بحث ثنائي).",
+    "فحص `x in list` يمر على القائمة O(n)، أما `x in set` فغالباً O(1).",
+    "قاعدة: لا تحسّن قبل أن تقيس. لكن اختيار الهيكل الصحيح (set بدل list) يكسبك الكثير ببساطة."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "نعدّ الخطوات بدل الزمن لأن الزمن يتغير من جهاز لآخر.",
+   "code": "def linear_steps(items, target):\n    steps = 0\n    for x in items:\n        steps += 1\n        if x == target:\n            break\n    return steps\n\nprint(linear_steps(list(range(1000)), 999))"
+  },
+  {
+   "type": "text",
+   "title": "القياس بالزمن",
+   "body": [
+    "للقياس الفعلي نستخدم `time.perf_counter()` قبل وبعد، أو `timeit`. نتائج الزمن تختلف من تشغيل لآخر، لذا نقارن النسب لا الأرقام المطلقة.",
+    "**البحث الثنائي** يعمل على قائمة **مرتبة**: يقارن الوسط ثم يرمي نصف القائمة، فيحتاج حوالي log₂(n) خطوة (1000 عنصر ≈ 10 خطوات).",
+    "في الأمن: خوارزميات هش كلمات المرور تُصمم بطيئة عمداً لتصعّب التخمين."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "بحث ثنائي: حوالي 10 خطوات بدل 1000.",
+   "code": "def binary_steps(items, target):\n    lo, hi, steps = 0, len(items) - 1, 0\n    while lo <= hi:\n        steps += 1\n        mid = (lo + hi) // 2\n        if items[mid] == target:\n            return steps\n        if items[mid] < target:\n            lo = mid + 1\n        else:\n            hi = mid - 1\n    return steps\n\nprint(binary_steps(list(range(1000)), 999))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "big-o"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): حلقتان",
+   "code": "count = 0\nfor i in range(10):\n    for j in range(10):\n        count += 1\nprint(count)\n",
+   "options": [
+    "100",
+    "20",
+    "10"
+   ],
+   "answer": 0,
+   "why": "حلقة داخل حلقة = n²."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): عدّ الخطوات",
+   "code": "def steps(items, t):\n    s = 0\n    for x in items:\n        s += 1\n        if x == t:\n            break\n    return s\n\nprint(steps([5, 6, 7, 8], 7))\n",
+   "options": [
+    "3",
+    "4",
+    "2"
+   ],
+   "answer": 0,
+   "why": "وجدناه في الخطوة الثالثة."
+  },
+  {
+   "type": "match",
+   "title": "طابق التعقيد بالمثال",
+   "pairs": [
+    [
+     "O(1)",
+     "الوصول بفهرس items[5]"
+    ],
+    [
+     "O(n)",
+     "المرور على كل عناصر القائمة"
+    ],
+    [
+     "O(n²)",
+     "حلقة داخل حلقة"
+    ],
+    [
+     "O(log n)",
+     "بحث ثنائي في قائمة مرتبة"
+    ]
+   ],
+   "why": "كلما انخفض الصف قلت الخطوات بشكل كبير مع كبر n."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الأسرع للفحص",
+   "code": "allowed = ____([\"a\", \"b\", \"c\"])\nprint(\"b\" in allowed)\n",
+   "blanks": [
+    {
+     "answer": "set"
+    }
+   ],
+   "expect_stdout": "True",
+   "show_output": true,
+   "bank": [
+    "set",
+    "list",
+    "tuple",
+    "str"
+   ],
+   "intro": "أي هيكل فحص العضوية فيه سريع؟",
+   "explain": "`set` غالباً O(1)."
+  },
+  {
+   "type": "code",
+   "title": "عدّ الخطوات",
+   "instructions": [
+    "عرّف `count_steps(items, target)` ترجع **عدد العناصر اللي فحصتها** حتى تجد target (أو كل القائمة لو غير موجود)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "count_steps([5, 6, 7, 8], 7)",
+     "expect": 3
+    },
+    {
+     "call": "count_steps([1, 2], 9)",
+     "expect": 2
+    },
+    {
+     "call": "count_steps([4], 4)",
+     "expect": 1,
+     "hidden": true
+    }
+   ],
+   "solution": "def count_steps(items, target):\n    steps = 0\n    for x in items:\n        steps += 1\n        if x == target:\n            break\n    return steps\n",
+   "hints": [
+    "عداد يزيد مع كل عنصر.",
+    "اخرج بـ break عند الإيجاد."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "بحث ثنائي",
+   "instructions": [
+    "عرّف `binary_search(items, target)` على قائمة **مرتبة** ترجع فهرس target أو `-1`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "binary_search([1, 3, 5, 7, 9], 7)",
+     "expect": 3
+    },
+    {
+     "call": "binary_search([1, 3, 5, 7, 9], 4)",
+     "expect": -1
+    },
+    {
+     "call": "binary_search([2], 2)",
+     "expect": 0,
+     "hidden": true
+    },
+    {
+     "call": "binary_search([], 1)",
+     "expect": -1,
+     "hidden": true
+    }
+   ],
+   "solution": "def binary_search(items, target):\n    lo, hi = 0, len(items) - 1\n    while lo <= hi:\n        mid = (lo + hi) // 2\n        if items[mid] == target:\n            return mid\n        if items[mid] < target:\n            lo = mid + 1\n        else:\n            hi = mid - 1\n    return -1\n",
+   "hints": [
+    "قارن الوسط وارمِ نصف القائمة.",
+    "`lo` و`hi` يضيّقان النطاق."
+   ]
+  },
+  {
+   "type": "code",
+   "title": "قارن الأسلوبين",
+   "instructions": [
+    "`ips` قائمة كبيرة و`blocked` قائمة محظورة. اطبع عدد العناوين المحظورة داخل `ips` باستخدام `set` للفحص السريع."
+   ],
+   "starter": "ips = [\"1.1.1.1\", \"2.2.2.2\", \"3.3.3.3\", \"2.2.2.2\"]\nblocked = [\"2.2.2.2\", \"9.9.9.9\"]\n",
+   "tests": [
+    {
+     "expect_stdout": "2"
+    }
+   ],
+   "solution": "ips = [\"1.1.1.1\", \"2.2.2.2\", \"3.3.3.3\", \"2.2.2.2\"]\nblocked = [\"2.2.2.2\", \"9.9.9.9\"]\nblocked_set = set(blocked)\nprint(sum(1 for ip in ips if ip in blocked_set))\n",
+   "hints": [
+    "حوّل blocked إلى set مرة واحدة."
+   ],
+   "checks": [
+    {
+     "regex": "set\\s*\\(",
+     "msg": "استخدم set"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: تكرار الحساب",
+   "instructions": [
+    "الكود يحسب `len(items)` والفحص داخل حلقة مرتين لكل عنصر بشكل مبذر (O(n²)). أصلحه ليطبع `True` بمرور واحد باستخدام `set`."
+   ],
+   "starter": "items = [1, 2, 3, 4, 1]\ndup = False\nfor i in range(len(items)):\n    for j in range(i + 1, len(items)):\n        if items[i] == items[j]:\n            dup = True\nprint(dup)\n",
+   "tests": [
+    {
+     "expect_stdout": "True"
+    }
+   ],
+   "solution": "items = [1, 2, 3, 4, 1]\nprint(len(set(items)) != len(items))\n",
+   "hints": [
+    "إن كان عدد الفريد أقل من الكل فيه تكرار."
+   ],
+   "checks": [
+    {
+     "regex": "set\\s*\\(",
+     "msg": "استخدم set"
+    }
+   ],
+   "variant": "bugfix",
+   "allow_starter_pass": true
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "كم خطوة تقريباً في بحث ثنائي على 1000 عنصر؟",
+     "options": [
+      "حوالي 10",
+      "1000",
+      "500"
+     ],
+     "answer": 0,
+     "why": "log2(1000)."
+    },
+    {
+     "q": "أسرع فحص عضوية؟",
+     "options": [
+      "set",
+      "list",
+      "string"
+     ],
+     "answer": 0,
+     "why": "متوسط O(1)."
+    },
+    {
+     "q": "ليش نعدّ الخطوات بدل الزمن؟",
+     "options": [
+      "الزمن يختلف من جهاز لآخر",
+      "الزمن لا يقاس",
+      "أسهل فقط"
+     ],
+     "answer": 0,
+     "why": "والعدّ ثابت."
+    },
+    {
+     "q": "وش O(n²)؟",
+     "options": [
+      "حلقة داخل حلقة",
+      "فهرس مباشر",
+      "بحث ثنائي"
+     ],
+     "answer": 0,
+     "why": "تتضاعف الخطوات بشكل كبير."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "Big-O يصف نمو عدد الخطوات مع حجم المدخل.",
+    "set أسرع للفحص من list، والبحث الثنائي يحتاج قائمة مرتبة.",
+    "قس قبل أن تحسّن."
+   ]
+  }
+ ]
+}

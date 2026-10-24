@@ -1,0 +1,289 @@
+{
+ "title_ar": "itertools و functools",
+ "title_en": "itertools & functools",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🧮",
+   "goal": "تستخدم أدوات جاهزة للتكرار والتركيب بدل كتابة حلقات طويلة: `itertools` و`functools`."
+  },
+  {
+   "type": "text",
+   "title": "itertools",
+   "body": [
+    "`chain(a, b)` تدمج متتاليات، و`islice(it, n)` تأخذ أول n عنصر من أي مكرِّر، و`product(a, b)` كل التراكيب (حاصل الضرب الديكارتي)، و`combinations(items, k)` كل اختيارات k عناصر بدون ترتيب.",
+    "كلها تعطي مكرِّرات كسولة، نلفها بـ `list` لنراها.",
+    "مثال أمني: عدد كلمات السر الممكنة بطول 4 من 10 أرقام = `10 ** 4`، ونقدر نعدّها بـ `product` (للحساب والفهم فقط)."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "`product` و`combinations` تتضخم بسرعة؛ لا تحوّلها لقائمة على مدخلات كبيرة.",
+   "code": "from itertools import chain, islice, product, combinations\n\nprint(list(chain([1, 2], [3])))\nprint(list(islice(range(100), 3)))\nprint(list(product(\"ab\", [1, 2])))\nprint(list(combinations(\"abc\", 2)))"
+  },
+  {
+   "type": "text",
+   "title": "functools",
+   "body": [
+    "`reduce(f, items)` تطوي القائمة لقيمة واحدة بتطبيق f تراكمياً (جمع/ضرب). `partial(f, a)` تثبّت بعض وسطاء الدالة وتعطيك دالة جديدة.",
+    "`lru_cache` تحفظ نتائج الدالة لمدخلاتها السابقة فلا تعيد الحساب (تسريع كبير في الدوال المتكررة مثل فيبوناتشي).",
+    "`sorted` مع `key=` و`operator.itemgetter` تغطي أغلب احتياجات الترتيب."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "`lru_cache` تتطلب مدخلات قابلة للتجزئة (hashable) مثل الأرقام والنصوص.",
+   "code": "from functools import reduce, partial, lru_cache\n\nprint(reduce(lambda a, b: a * b, [1, 2, 3, 4]))\nint2 = partial(int, base=2)\nprint(int2(\"101\"))\n\n@lru_cache(maxsize=None)\ndef fib(n):\n    return n if n < 2 else fib(n - 1) + fib(n - 2)\n\nprint(fib(30))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "generator"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "from itertools import chain\nprint(list(chain([1], [2, 3])))\n",
+   "options": [
+    "[1, 2, 3]",
+    "[[1], [2, 3]]",
+    "[1, 2]"
+   ],
+   "answer": 0,
+   "why": "chain تدمج بالتتابع."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): product",
+   "code": "from itertools import product\nprint(len(list(product(\"abc\", \"12\"))))\n",
+   "options": [
+    "6",
+    "5",
+    "9"
+   ],
+   "answer": 0,
+   "why": "3 × 2 = 6 تركيب."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): combinations",
+   "code": "from itertools import combinations\nprint(len(list(combinations(range(5), 2))))\n",
+   "options": [
+    "10",
+    "20",
+    "25"
+   ],
+   "answer": 0,
+   "why": "عدد اختيار 2 من 5 هو 10."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: reduce",
+   "code": "from functools import ____\nprint(reduce(lambda a, b: a + b, [1, 2, 3]))\n",
+   "blanks": [
+    {
+     "answer": "reduce"
+    }
+   ],
+   "expect_stdout": "6",
+   "show_output": true,
+   "bank": [
+    "reduce",
+    "partial",
+    "chain",
+    "cache"
+   ],
+   "intro": "أي دالة تطوي القائمة لقيمة واحدة؟",
+   "explain": "`reduce`."
+  },
+  {
+   "type": "code",
+   "title": "حجم فضاء كلمات السر",
+   "instructions": [
+    "اقرأ `alphabet` (نص) و`n` (طول). اطبع عدد التراكيب الممكنة بالطول n **باستخدام `product`** وعدّها (للأرقام الصغيرة فقط)."
+   ],
+   "starter": "# اكتب كودك هنا\nfrom itertools import product\n",
+   "tests": [
+    {
+     "expect_stdout": "100",
+     "stdin": [
+      "0123456789",
+      "2"
+     ]
+    },
+    {
+     "expect_stdout": "8",
+     "stdin": [
+      "ab",
+      "3"
+     ]
+    },
+    {
+     "expect_stdout": "1",
+     "stdin": [
+      "xyz",
+      "0"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "from itertools import product\nalphabet = input()\nn = int(input())\nprint(len(list(product(alphabet, repeat=n))))\n",
+   "hints": [
+    "`product(alphabet, repeat=n)`",
+    "عدّ النتيجة بـ `len(list(...))`."
+   ],
+   "checks": [
+    {
+     "regex": "product",
+     "msg": "استخدم product"
+    }
+   ],
+   "stdin": [
+    "0123456789",
+    "2"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أزواج بدون تكرار",
+   "instructions": [
+    "`servers = [\"a\", \"b\", \"c\", \"d\"]`. اطبع عدد الأزواج الممكنة بين الخوادم (اختيار 2) باستخدام `combinations`: `6`"
+   ],
+   "starter": "servers = [\"a\", \"b\", \"c\", \"d\"]\nfrom itertools import combinations\n",
+   "tests": [
+    {
+     "expect_stdout": "6"
+    }
+   ],
+   "solution": "from itertools import combinations\nservers = [\"a\", \"b\", \"c\", \"d\"]\nprint(len(list(combinations(servers, 2))))\n",
+   "hints": [
+    "`combinations(servers, 2)`"
+   ],
+   "checks": [
+    {
+     "regex": "combinations",
+     "msg": "استخدم combinations"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "ضرب بالتراكم",
+   "instructions": [
+    "اقرأ أرقاماً في سطر واحد واطبع حاصل ضربها باستخدام `reduce`."
+   ],
+   "starter": "# اكتب كودك هنا\nfrom functools import reduce\n",
+   "tests": [
+    {
+     "expect_stdout": "24",
+     "stdin": [
+      "1 2 3 4"
+     ]
+    },
+    {
+     "expect_stdout": "7",
+     "stdin": [
+      "7"
+     ]
+    },
+    {
+     "expect_stdout": "0",
+     "stdin": [
+      "5 0 9"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "from functools import reduce\nnums = [int(x) for x in input().split()]\nprint(reduce(lambda a, b: a * b, nums))\n",
+   "hints": [
+    "حوّل الإدخال لأرقام أولاً."
+   ],
+   "checks": [
+    {
+     "regex": "reduce",
+     "msg": "استخدم reduce"
+    }
+   ],
+   "stdin": [
+    "1 2 3 4"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "ذاكرة مؤقتة",
+   "instructions": [
+    "عرّف `fib(n)` بـ `lru_cache` ليحسب فيبوناتشي بسرعة. اطبع `fib(50)` ← `12586269025`"
+   ],
+   "starter": "# اكتب كودك هنا\nfrom functools import lru_cache\n",
+   "tests": [
+    {
+     "expect_stdout": "12586269025"
+    }
+   ],
+   "solution": "from functools import lru_cache\n\n@lru_cache(maxsize=None)\ndef fib(n):\n    return n if n < 2 else fib(n - 1) + fib(n - 2)\n\nprint(fib(50))\n",
+   "hints": [
+    "ضع `@lru_cache` فوق الدالة.",
+    "بدونها الحساب بطيء جداً."
+   ],
+   "checks": [
+    {
+     "regex": "lru_cache",
+     "msg": "استخدم lru_cache"
+    }
+   ]
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش تسوي product(a, b)؟",
+     "options": [
+      "كل تراكيب العنصرين من القائمتين",
+      "تجمع القائمتين",
+      "تضرب الأرقام"
+     ],
+     "answer": 0,
+     "why": "حاصل الضرب الديكارتي."
+    },
+    {
+     "q": "وش يسوي lru_cache؟",
+     "options": [
+      "يحفظ نتائج الدالة لتجنب إعادة الحساب",
+      "يحذف الدالة",
+      "يشفّر"
+     ],
+     "answer": 0,
+     "why": "تسريع."
+    },
+    {
+     "q": "وش تسوي partial؟",
+     "options": [
+      "تثبّت بعض وسطاء الدالة",
+      "تحذف وسطاء",
+      "تؤخر التنفيذ"
+     ],
+     "answer": 0,
+     "why": "تعطي دالة جديدة."
+    },
+    {
+     "q": "ليش نحذر من list(product(...)) على مدخل كبير؟",
+     "options": [
+      "ينفجر العدد وتمتلئ الذاكرة",
+      "ممنوع",
+      "يبطئ الإنترنت"
+     ],
+     "answer": 0,
+     "why": "تضخم أسي."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`itertools`: chain وislice وproduct وcombinations.",
+    "`functools`: reduce وpartial وlru_cache.",
+    "التراكيب تتضخم بسرعة؛ احذر."
+   ]
+  }
+ ]
+}

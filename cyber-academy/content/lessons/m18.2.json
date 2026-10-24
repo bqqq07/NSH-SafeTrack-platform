@@ -1,0 +1,233 @@
+{
+ "title_ar": "المزخرفات Decorators",
+ "title_en": "Decorators",
+ "duration_min": 11,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🎀",
+   "goal": "تضيف سلوكاً لدوال كثيرة (تسجيل، تحقق صلاحية) بدون تعديل كودها باستخدام [[decorator]]."
+  },
+  {
+   "type": "text",
+   "title": "الدالة كقيمة",
+   "body": [
+    "في Python الدالة كائن مثل أي شي: نخزنها في متغير ونمررها لدالة ونرجعها من دالة.",
+    "الدالة الداخلية تتذكر متغيرات الخارجية ([[closure]]): `def make_adder(n): return lambda x: x + n`.",
+    "هذا أساس المزخرف: دالة تستقبل دالة وترجع دالة جديدة تلفّها."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "`add5` تتذكر أن n=5.",
+   "code": "def make_adder(n):\n    def add(x):\n        return x + n\n    return add\n\nadd5 = make_adder(5)\nprint(add5(10))"
+  },
+  {
+   "type": "text",
+   "title": "كتابة مزخرف",
+   "body": [
+    "المزخرف يلف الدالة: `def log(f): def wrapper(*args, **kwargs): ...; return f(*args, **kwargs); return wrapper`.",
+    "وبدل `f = log(f)` نكتب `@log` فوق التعريف.",
+    "`functools.wraps(f)` تحافظ على اسم الدالة ووثائقها. وأشهر استخدامات الأمن: التحقق من الصلاحية قبل تنفيذ الدالة."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "فصل التحقق في مزخرف يمنع نسيانه في إحدى الدوال.",
+   "code": "from functools import wraps\n\ndef require_admin(f):\n    @wraps(f)\n    def wrapper(user, *args):\n        if user != \"admin\":\n            raise PermissionError(\"denied\")\n        return f(user, *args)\n    return wrapper\n\n@require_admin\ndef delete_all(user):\n    return \"deleted\"\n\nprint(delete_all(\"admin\"))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "decorator",
+    "closure",
+    "function"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1): closure",
+   "code": "def make(n):\n    return lambda x: x * n\n\ntriple = make(3)\nprint(triple(4))\n",
+   "options": [
+    "12",
+    "7",
+    "3"
+   ],
+   "answer": 0,
+   "why": "triple تتذكر n=3."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): مزخرف",
+   "code": "def shout(f):\n    def w():\n        return f().upper()\n    return w\n\n@shout\ndef hi():\n    return \"hello\"\n\nprint(hi())\n",
+   "options": [
+    "HELLO",
+    "hello",
+    "Hello"
+   ],
+   "answer": 0,
+   "why": "@shout يلف hi فيحول الناتج لحروف كبيرة."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: المزخرف",
+   "code": "def twice(f):\n    def w(x):\n        return f(f(x))\n    return w\n\n____\ndef inc(x):\n    return x + 1\n\nprint(inc(0))\n",
+   "blanks": [
+    {
+     "answer": "@twice"
+    }
+   ],
+   "expect_stdout": "2",
+   "show_output": true,
+   "bank": [
+    "@twice",
+    "twice",
+    "#twice",
+    "@wraps"
+   ],
+   "intro": "كيف نطبق المزخرف على الدالة التالية؟",
+   "explain": "`@twice` فوق التعريف."
+  },
+  {
+   "type": "code",
+   "title": "مزخرف يضاعف",
+   "instructions": [
+    "عرّف مزخرف `double_result` يضرب ناتج الدالة في 2. طبّقه على `add(a, b)` فتصير `add(2, 3)` = `10`."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "10"
+    }
+   ],
+   "solution": "def double_result(f):\n    def wrapper(*args):\n        return f(*args) * 2\n    return wrapper\n\n@double_result\ndef add(a, b):\n    return a + b\n\nprint(add(2, 3))\n",
+   "hints": [
+    "الدالة الداخلية تستدعي `f(*args)`.",
+    "ثم `@double_result` فوق add."
+   ],
+   "checks": [
+    {
+     "regex": "@double_result",
+     "msg": "طبّق المزخرف بـ @"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "سجل الاستدعاءات",
+   "instructions": [
+    "عرّف مزخرف `logged` يضيف اسم الدالة إلى القائمة `calls` كل مرة تُستدعى. استدع `a()` ثم `b()` ثم `a()` واطبع `calls`: `['a', 'b', 'a']`"
+   ],
+   "starter": "calls = []\n\n# عرّف logged هنا\n\n@logged\ndef a():\n    pass\n\n@logged\ndef b():\n    pass\n\na()\nb()\na()\nprint(calls)\n",
+   "tests": [
+    {
+     "expect_stdout": "['a', 'b', 'a']"
+    }
+   ],
+   "solution": "calls = []\n\ndef logged(f):\n    def wrapper(*args, **kwargs):\n        calls.append(f.__name__)\n        return f(*args, **kwargs)\n    return wrapper\n\n@logged\ndef a():\n    pass\n\n@logged\ndef b():\n    pass\n\na()\nb()\na()\nprint(calls)\n",
+   "hints": [
+    "`f.__name__` اسم الدالة.",
+    "لا تنس إرجاع نتيجة f."
+   ],
+   "checks": [
+    {
+     "regex": "def\\s+logged",
+     "msg": "عرّف logged"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "حارس الصلاحيات",
+   "instructions": [
+    "عرّف مزخرف `admin_only` يتحقق أن أول وسيط هو `\"admin\"` وإلا يرفع `PermissionError`. ثم جرّب: `drop_db(\"admin\")` تطبع `done`، و`drop_db(\"bob\")` تطبع `denied`."
+   ],
+   "starter": "# عرّف admin_only هنا\n\n@admin_only\ndef drop_db(user):\n    return \"done\"\n\nfor u in [\"admin\", \"bob\"]:\n    try:\n        print(drop_db(u))\n    except PermissionError:\n        print(\"denied\")\n",
+   "tests": [
+    {
+     "expect_stdout": "done\ndenied"
+    }
+   ],
+   "solution": "def admin_only(f):\n    def wrapper(user, *args):\n        if user != \"admin\":\n            raise PermissionError(\"denied\")\n        return f(user, *args)\n    return wrapper\n\n@admin_only\ndef drop_db(user):\n    return \"done\"\n\nfor u in [\"admin\", \"bob\"]:\n    try:\n        print(drop_db(u))\n    except PermissionError:\n        print(\"denied\")\n",
+   "hints": [
+    "افحص `user` قبل استدعاء الدالة.",
+    "ارفع `PermissionError`."
+   ],
+   "checks": [
+    {
+     "regex": "def\\s+admin_only",
+     "msg": "عرّف admin_only"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: ضياع النتيجة",
+   "instructions": [
+    "المزخرف ينسى إرجاع نتيجة الدالة فيطبع `None`. أصلحه ليطبع `8`."
+   ],
+   "starter": "def deco(f):\n    def w(*a):\n        f(*a)\n    return w\n\n@deco\ndef mul(a, b):\n    return a * b\n\nprint(mul(2, 4))\n",
+   "tests": [
+    {
+     "expect_stdout": "8"
+    }
+   ],
+   "solution": "def deco(f):\n    def w(*a):\n        return f(*a)\n    return w\n\n@deco\ndef mul(a, b):\n    return a * b\n\nprint(mul(2, 4))\n",
+   "hints": [
+    "أضف `return` قبل `f(*a)`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش المزخرف؟",
+     "options": [
+      "دالة تستقبل دالة وترجع دالة تلفّها",
+      "متغير عام",
+      "نوع ملف"
+     ],
+     "answer": 0,
+     "why": "لإضافة سلوك."
+    },
+    {
+     "q": "وش @name فوق الدالة؟",
+     "options": [
+      "اختصار لـ f = name(f)",
+      "تعليق",
+      "استيراد"
+     ],
+     "answer": 0,
+     "why": "تطبيق المزخرف."
+    },
+    {
+     "q": "وش closure؟",
+     "options": [
+      "دالة تتذكر متغيرات الدالة الخارجية",
+      "حلقة",
+      "ملف"
+     ],
+     "answer": 0,
+     "why": "مثل make_adder."
+    },
+    {
+     "q": "فايدة مزخرف الصلاحيات؟",
+     "options": [
+      "مكان واحد للتحقق لا ينسى",
+      "تسريع",
+      "تشفير"
+     ],
+     "answer": 0,
+     "why": "يقلل نسيان الفحص."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "الدالة قيمة تُمرَّر وتُرجَع، والـ closure تتذكر.",
+    "`@deco` تلف الدالة بسلوك إضافي.",
+    "مفيد للسجلات والصلاحيات."
+   ]
+  }
+ ]
+}

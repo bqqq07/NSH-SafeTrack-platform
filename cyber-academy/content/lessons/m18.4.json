@@ -1,0 +1,272 @@
+{
+ "title_ar": "collections",
+ "title_en": "collections",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🗃️",
+   "goal": "تستخدم هياكل بيانات جاهزة أذكى من القائمة والقاموس العاديين: `Counter` و`defaultdict` و`deque` و`namedtuple`."
+  },
+  {
+   "type": "text",
+   "title": "Counter و defaultdict",
+   "body": [
+    "`Counter(items)` تعدّ تكرار العناصر، و`.most_common(n)` أكثرها تكراراً.",
+    "`defaultdict(list)` قاموس يعطي قائمة فاضية تلقائياً لأي مفتاح جديد، فنكتب `groups[k].append(v)` بدون فحص وجود المفتاح.",
+    "`defaultdict(int)` يبدأ كل مفتاح بـ 0 فنكتب `counts[x] += 1` مباشرة."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "بدونه نحتاج `if role not in groups: groups[role] = []`.",
+   "code": "from collections import defaultdict\n\ngroups = defaultdict(list)\nfor name, role in [(\"a\", \"admin\"), (\"b\", \"user\"), (\"c\", \"admin\")]:\n    groups[role].append(name)\nprint(dict(groups))"
+  },
+  {
+   "type": "text",
+   "title": "deque و namedtuple",
+   "body": [
+    "`deque` طابور مزدوج: الإضافة والحذف من الطرفين سريعة، و`deque(maxlen=3)` يحتفظ بآخر 3 فقط (مفيد لآخر محاولات الدخول).",
+    "`namedtuple(\"Point\", [\"x\", \"y\"])` tuple بأسماء حقول: `p.x` بدل `p[0]`.",
+    "اختر الهيكل المناسب يختصر كودك ويسرّعه."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "`deque(maxlen=N)` ينسى الأقدم تلقائياً.",
+   "code": "from collections import deque, namedtuple\n\nlast = deque(maxlen=3)\nfor i in range(5):\n    last.append(i)\nprint(list(last))\n\nPoint = namedtuple(\"Point\", [\"x\", \"y\"])\np = Point(1, 2)\nprint(p.x, p.y)"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "dict",
+    "tuple"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "from collections import Counter\nprint(Counter(\"abca\")[\"a\"])\n",
+   "options": [
+    "2",
+    "1",
+    "3"
+   ],
+   "answer": 0,
+   "why": "a ظهرت مرتين."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): defaultdict",
+   "code": "from collections import defaultdict\nd = defaultdict(int)\nd[\"x\"] += 1\nd[\"x\"] += 1\nprint(d[\"x\"], d[\"y\"])\n",
+   "options": [
+    "2 0",
+    "2 1",
+    "1 0"
+   ],
+   "answer": 0,
+   "why": "المفتاح الجديد y يبدأ بـ 0."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): maxlen",
+   "code": "from collections import deque\nd = deque([1, 2, 3], maxlen=3)\nd.append(4)\nprint(list(d))\n",
+   "options": [
+    "[2, 3, 4]",
+    "[1, 2, 3, 4]",
+    "[1, 2, 3]"
+   ],
+   "answer": 0,
+   "why": "الأقدم (1) يُحذف تلقائياً."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: القاموس التلقائي",
+   "code": "from collections import ____\ng = defaultdict(list)\ng[\"a\"].append(1)\nprint(dict(g))\n",
+   "blanks": [
+    {
+     "answer": "defaultdict"
+    }
+   ],
+   "expect_stdout": "{'a': [1]}",
+   "show_output": true,
+   "bank": [
+    "defaultdict",
+    "Counter",
+    "deque",
+    "OrderedDict"
+   ],
+   "intro": "أي صنف يعطي قيمة افتراضية للمفتاح الجديد؟",
+   "explain": "`defaultdict`."
+  },
+  {
+   "type": "code",
+   "title": "تجميع حسب الدور",
+   "instructions": [
+    "من `users` (قائمة أزواج اسم، دور) اطبع قاموساً بالأدوار والأسماء بترتيب ظهور الأدوار باستخدام `defaultdict(list)`."
+   ],
+   "starter": "users = [(\"a\", \"admin\"), (\"b\", \"user\"), (\"c\", \"admin\")]\nfrom collections import defaultdict\n",
+   "tests": [
+    {
+     "expect_stdout": "{'admin': ['a', 'c'], 'user': ['b']}"
+    }
+   ],
+   "solution": "from collections import defaultdict\nusers = [(\"a\", \"admin\"), (\"b\", \"user\"), (\"c\", \"admin\")]\ngroups = defaultdict(list)\nfor name, role in users:\n    groups[role].append(name)\nprint(dict(groups))\n",
+   "hints": [
+    "`groups[role].append(name)`"
+   ],
+   "checks": [
+    {
+     "regex": "defaultdict\\s*\\(\\s*list",
+     "msg": "استخدم defaultdict(list)"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "آخر 3 محاولات",
+   "instructions": [
+    "اقرأ `n` ثم `n` اسم مستخدم (محاولات دخول). اطبع آخر **3** محاولات كقائمة باستخدام `deque(maxlen=3)`."
+   ],
+   "starter": "from collections import deque\n",
+   "tests": [
+    {
+     "expect_stdout": "['c', 'd', 'e']",
+     "stdin": [
+      "5",
+      "a",
+      "b",
+      "c",
+      "d",
+      "e"
+     ]
+    },
+    {
+     "expect_stdout": "['x']",
+     "stdin": [
+      "1",
+      "x"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "from collections import deque\nn = int(input())\nlast = deque(maxlen=3)\nfor _ in range(n):\n    last.append(input())\nprint(list(last))\n",
+   "hints": [
+    "`deque(maxlen=3)` تحذف الأقدم تلقائياً."
+   ],
+   "checks": [
+    {
+     "regex": "maxlen",
+     "msg": "استخدم maxlen"
+    }
+   ],
+   "stdin": [
+    "5",
+    "a",
+    "b",
+    "c",
+    "d",
+    "e"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أكثر الأوامر استخداماً",
+   "instructions": [
+    "اقرأ كلمة في سطر مفصولة بمسافات، واطبع أكثر كلمتين تكراراً بصيغة `[(كلمة, عدد), ...]` (لا تعادل في الاختبارات)."
+   ],
+   "starter": "from collections import Counter\n",
+   "tests": [
+    {
+     "expect_stdout": "[('a', 3), ('b', 2)]",
+     "stdin": [
+      "a b a c b a"
+     ]
+    },
+    {
+     "expect_stdout": "[('x', 2), ('y', 1)]",
+     "stdin": [
+      "x y x"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "from collections import Counter\nwords = input().split()\nprint(Counter(words).most_common(2))\n",
+   "hints": [
+    "`most_common(2)`"
+   ],
+   "stdin": [
+    "a b a c b a"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: KeyError",
+   "instructions": [
+    "العدّاد ينهار على أول مفتاح جديد. حوّل `counts` لـ `defaultdict(int)` ليطبع `{'a': 2, 'b': 1}`."
+   ],
+   "starter": "from collections import defaultdict\ncounts = {}\nfor ch in \"aba\":\n    counts[ch] += 1\nprint(dict(counts))\n",
+   "tests": [
+    {
+     "expect_stdout": "{'a': 2, 'b': 1}"
+    }
+   ],
+   "solution": "from collections import defaultdict\ncounts = defaultdict(int)\nfor ch in \"aba\":\n    counts[ch] += 1\nprint(dict(counts))\n",
+   "hints": [
+    "استخدم `defaultdict(int)`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يوفره defaultdict؟",
+     "options": [
+      "قيمة افتراضية للمفتاح الجديد",
+      "ترتيب القاموس",
+      "حذف المفاتيح"
+     ],
+     "answer": 0,
+     "why": "بدون فحص الوجود."
+    },
+    {
+     "q": "وش يسوي deque(maxlen=3)؟",
+     "options": [
+      "يحتفظ بآخر 3 عناصر",
+      "يحد القيم بالطول 3",
+      "يرتبها"
+     ],
+     "answer": 0,
+     "why": "ينسى الأقدم."
+    },
+    {
+     "q": "وش يعطي Counter.most_common(1)؟",
+     "options": [
+      "أكثر عنصر تكراراً",
+      "أول عنصر",
+      "عدد العناصر"
+     ],
+     "answer": 0,
+     "why": "قائمة فيها زوج."
+    },
+    {
+     "q": "ميزة namedtuple؟",
+     "options": [
+      "وصول بالاسم p.x",
+      "قابل للتعديل",
+      "أسرع من int"
+     ],
+     "answer": 0,
+     "why": "يوضح الكود."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`Counter` للعد، `defaultdict` لقيم افتراضية، `deque` لطابور محدود.",
+    "`namedtuple` لحقول بأسماء.",
+    "الهيكل المناسب يختصر الكود."
+   ]
+  }
+ ]
+}

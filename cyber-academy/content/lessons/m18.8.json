@@ -1,0 +1,269 @@
+{
+ "title_ar": "قواعد البيانات sqlite3",
+ "title_en": "sqlite3",
+ "duration_min": 12,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🗄️",
+   "goal": "تخزن وتستعلم من قاعدة بيانات [[sqlite]] مدمجة، وتحمي نفسك من حقن SQL بالاستعلامات المجهّزة."
+  },
+  {
+   "type": "text",
+   "title": "قاعدة في الذاكرة",
+   "body": [
+    "`sqlite3` تأتي مع Python. `conn = sqlite3.connect(\":memory:\")` تنشئ قاعدة مؤقتة في الذاكرة (أو اسم ملف للدائمة).",
+    "`conn.execute(\"CREATE TABLE users (name TEXT, role TEXT)\")` تنشئ جدولاً، و`INSERT` تضيف صفاً، و`SELECT` تقرأ، و`fetchall()` ترجع قائمة صفوف (tuples).",
+    "تذكّر درس SQL في المسار الأمني: نفس لغة الاستعلام هنا."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "`commit()` تثبت التغييرات عند التخزين في ملف.",
+   "code": "import sqlite3\n\nconn = sqlite3.connect(\":memory:\")\nconn.execute(\"CREATE TABLE users (name TEXT, role TEXT)\")\nconn.execute(\"INSERT INTO users VALUES ('sara', 'admin')\")\nrows = conn.execute(\"SELECT name, role FROM users\").fetchall()\nprint(rows)"
+  },
+  {
+   "type": "text",
+   "title": "الاستعلام المجهّز ضد الحقن",
+   "body": [
+    "لا تبني الاستعلام بدمج نص المستخدم: `\"... WHERE name = '\" + name + \"'\"` لأن مدخلاً مثل `' OR '1'='1` يغيّر معنى الاستعلام: **حقن SQL** ([[sql-injection]]).",
+    "الحل الصحيح [[parameterized-query]]: `conn.execute(\"SELECT * FROM users WHERE name = ?\", (name,))`. القيمة تُرسل منفصلة فلا تُفسَّر كأمر أبداً.",
+    "لا تحاول «تنظيف» المدخلات بنفسك؛ استخدم الاستعلام المجهّز دائماً. (التجارب هنا على قاعدة تدريبية في الذاكرة فقط.)"
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "الأول يرجع كل الصفوف (2)، والثاني لا شيء (0).",
+   "code": "import sqlite3\n\nconn = sqlite3.connect(\":memory:\")\nconn.execute(\"CREATE TABLE u (name TEXT, secret TEXT)\")\nconn.execute(\"INSERT INTO u VALUES ('sara', 's1'), ('ali', 's2')\")\n\nname = \"x' OR '1'='1\"\nbad = \"SELECT * FROM u WHERE name = '\" + name + \"'\"\nprint(len(conn.execute(bad).fetchall()))\ngood = conn.execute(\"SELECT * FROM u WHERE name = ?\", (name,)).fetchall()\nprint(len(good))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "sqlite",
+    "sql",
+    "sql-injection",
+    "parameterized-query"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "import sqlite3\nc = sqlite3.connect(\":memory:\")\nc.execute(\"CREATE TABLE t (n INTEGER)\")\nc.execute(\"INSERT INTO t VALUES (1), (2), (3)\")\nprint(c.execute(\"SELECT SUM(n) FROM t\").fetchone()[0])\n",
+   "options": [
+    "6",
+    "3",
+    "[6]"
+   ],
+   "answer": 0,
+   "why": "مجموع 1+2+3."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): ?",
+   "code": "import sqlite3\nc = sqlite3.connect(\":memory:\")\nc.execute(\"CREATE TABLE t (n TEXT)\")\nc.execute(\"INSERT INTO t VALUES (?)\", (\"a\",))\nprint(c.execute(\"SELECT n FROM t WHERE n = ?\", (\"a\",)).fetchall())\n",
+   "options": [
+    "[('a',)]",
+    "['a']",
+    "[]"
+   ],
+   "answer": 0,
+   "why": "الصفوف tuples حتى لو عمود واحد."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: العنصر المجهّز",
+   "code": "import sqlite3\nc = sqlite3.connect(\":memory:\")\nc.execute(\"CREATE TABLE t (n TEXT)\")\nc.execute(\"INSERT INTO t VALUES (____)\", (\"x\",))\nprint(c.execute(\"SELECT COUNT(*) FROM t\").fetchone()[0])\n",
+   "blanks": [
+    {
+     "answer": "?"
+    }
+   ],
+   "expect_stdout": "1",
+   "show_output": true,
+   "bank": [
+    "?",
+    "%s",
+    "{}",
+    "$1"
+   ],
+   "intro": "وش رمز المكان المحجوز للقيمة في sqlite3؟",
+   "explain": "علامة الاستفهام `?`."
+  },
+  {
+   "type": "code",
+   "title": "أضف واقرأ",
+   "instructions": [
+    "أنشئ جدول `users(name TEXT, role TEXT)` في الذاكرة، أضف صفين `(\"sara\", \"admin\")` و`(\"ali\", \"user\")` باستخدام `?`، ثم اطبع الأسماء مرتبة، كل اسم في سطر."
+   ],
+   "starter": "# اكتب كودك هنا\nimport sqlite3\n",
+   "tests": [
+    {
+     "expect_stdout": "ali\nsara"
+    }
+   ],
+   "solution": "import sqlite3\nconn = sqlite3.connect(\":memory:\")\nconn.execute(\"CREATE TABLE users (name TEXT, role TEXT)\")\nconn.execute(\"INSERT INTO users VALUES (?, ?)\", (\"sara\", \"admin\"))\nconn.execute(\"INSERT INTO users VALUES (?, ?)\", (\"ali\", \"user\"))\nfor (name,) in conn.execute(\"SELECT name FROM users ORDER BY name\"):\n    print(name)\n",
+   "hints": [
+    "`ORDER BY name`.",
+    "كل صف tuple."
+   ],
+   "checks": [
+    {
+     "regex": "\\?",
+     "msg": "استخدم ? في INSERT"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تسجيل دخول آمن",
+   "instructions": [
+    "الجدول `users` جاهز. اقرأ اسماً وكلمة مرور واطبع `ok` لو يوجد مستخدم بهما، وإلا `denied` — **باستعلام مجهّز بـ ?**. جرّب مدخل حقن: `x' OR '1'='1`."
+   ],
+   "starter": "import sqlite3\n\nconn = sqlite3.connect(\":memory:\")\nconn.execute(\"CREATE TABLE users (name TEXT, pw TEXT)\")\nconn.execute(\"INSERT INTO users VALUES ('sara', 'pw1')\")\n\nname = input()\npw = input()\n# اكتب الاستعلام المجهّز هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "ok",
+     "stdin": [
+      "sara",
+      "pw1"
+     ]
+    },
+    {
+     "expect_stdout": "denied",
+     "stdin": [
+      "sara",
+      "bad"
+     ]
+    },
+    {
+     "expect_stdout": "denied",
+     "stdin": [
+      "x' OR '1'='1",
+      "x' OR '1'='1"
+     ]
+    },
+    {
+     "expect_stdout": "denied",
+     "stdin": [
+      "sara' --",
+      "zzz"
+     ],
+     "hidden": true
+    }
+   ],
+   "solution": "import sqlite3\n\nconn = sqlite3.connect(\":memory:\")\nconn.execute(\"CREATE TABLE users (name TEXT, pw TEXT)\")\nconn.execute(\"INSERT INTO users VALUES ('sara', 'pw1')\")\n\nname = input()\npw = input()\nrow = conn.execute(\"SELECT 1 FROM users WHERE name = ? AND pw = ?\", (name, pw)).fetchone()\nprint(\"ok\" if row else \"denied\")\n",
+   "hints": [
+    "ضع `?` مكان كل قيمة.",
+    "مرر القيم كـ tuple."
+   ],
+   "checks": [
+    {
+     "regex": "\\?",
+     "msg": "استخدم الاستعلام المجهّز ?"
+    },
+    {
+     "regex": "execute\\s*\\(\\s*f?[\"\\'][^\"\\']*[\"\\']\\s*[%+]",
+     "must": false,
+     "msg": "لا تدمج النص في الاستعلام"
+    }
+   ],
+   "stdin": [
+    "sara",
+    "pw1"
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تجميع",
+   "instructions": [
+    "جدول `logs(ip, status)` جاهز. اطبع لكل IP عدد الأسطر `FAIL` بصيغة `ip: n` مرتبة بالـ IP، باستخدام `GROUP BY`."
+   ],
+   "starter": "import sqlite3\n\nconn = sqlite3.connect(\":memory:\")\nconn.execute(\"CREATE TABLE logs (ip TEXT, status TEXT)\")\nrows = [(\"1.1.1.1\", \"FAIL\"), (\"2.2.2.2\", \"OK\"), (\"1.1.1.1\", \"FAIL\"), (\"3.3.3.3\", \"FAIL\")]\nconn.executemany(\"INSERT INTO logs VALUES (?, ?)\", rows)\n",
+   "tests": [
+    {
+     "expect_stdout": "1.1.1.1: 2\n3.3.3.3: 1"
+    }
+   ],
+   "solution": "import sqlite3\n\nconn = sqlite3.connect(\":memory:\")\nconn.execute(\"CREATE TABLE logs (ip TEXT, status TEXT)\")\nrows = [(\"1.1.1.1\", \"FAIL\"), (\"2.2.2.2\", \"OK\"), (\"1.1.1.1\", \"FAIL\"), (\"3.3.3.3\", \"FAIL\")]\nconn.executemany(\"INSERT INTO logs VALUES (?, ?)\", rows)\nfor ip, n in conn.execute(\"SELECT ip, COUNT(*) FROM logs WHERE status = ? GROUP BY ip ORDER BY ip\", (\"FAIL\",)):\n    print(ip + \": \" + str(n))\n",
+   "hints": [
+    "`GROUP BY ip` مع `COUNT(*)`.",
+    "فلتر `WHERE status = ?`."
+   ],
+   "checks": [
+    {
+     "regex": "GROUP\\s+BY",
+     "msg": "استخدم GROUP BY"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: ثغرة الحقن",
+   "instructions": [
+    "الاستعلام يدمج المدخل مباشرة فيسمح بالحقن. أصلحه بـ `?` ليطبع `0` عند المدخل الخبيث (لا نتائج)."
+   ],
+   "starter": "import sqlite3\n\nconn = sqlite3.connect(\":memory:\")\nconn.execute(\"CREATE TABLE u (name TEXT)\")\nconn.execute(\"INSERT INTO u VALUES ('sara'), ('ali')\")\nname = \"x' OR '1'='1\"\nrows = conn.execute(\"SELECT * FROM u WHERE name = '\" + name + \"'\").fetchall()\nprint(len(rows))\n",
+   "tests": [
+    {
+     "expect_stdout": "0"
+    }
+   ],
+   "solution": "import sqlite3\n\nconn = sqlite3.connect(\":memory:\")\nconn.execute(\"CREATE TABLE u (name TEXT)\")\nconn.execute(\"INSERT INTO u VALUES ('sara'), ('ali')\")\nname = \"x' OR '1'='1\"\nrows = conn.execute(\"SELECT * FROM u WHERE name = ?\", (name,)).fetchall()\nprint(len(rows))\n",
+   "hints": [
+    "`WHERE name = ?` ثم `(name,)`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش الاستعلام المجهّز؟",
+     "options": [
+      "قيم منفصلة عن نص SQL بعلامات ?",
+      "استعلام بسرعة أكبر",
+      "ملف"
+     ],
+     "answer": 0,
+     "why": "يمنع تفسير المدخل كأمر."
+    },
+    {
+     "q": "ليش لا ندمج المدخل بالنص؟",
+     "options": [
+      "يسمح بحقن SQL",
+      "يبطئ",
+      "يغير الترميز"
+     ],
+     "answer": 0,
+     "why": "مثل OR 1=1."
+    },
+    {
+     "q": "وش يرجع fetchall()؟",
+     "options": [
+      "قائمة صفوف (tuples)",
+      "نص واحد",
+      "قاموس"
+     ],
+     "answer": 0,
+     "why": "كل صف tuple."
+    },
+    {
+     "q": "وش \":memory:\"؟",
+     "options": [
+      "قاعدة مؤقتة في الذاكرة",
+      "ملف دائم",
+      "أمر"
+     ],
+     "answer": 0,
+     "why": "تضيع بانتهاء البرنامج."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`sqlite3` قاعدة بيانات مدمجة: connect وexecute وfetchall.",
+    "استخدم `?` دائماً ولا تدمج مدخل المستخدم في SQL.",
+    "GROUP BY مع COUNT للتجميع."
+   ]
+  }
+ ]
+}

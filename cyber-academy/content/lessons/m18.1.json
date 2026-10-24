@@ -1,0 +1,259 @@
+{
+ "title_ar": "المولّدات Generators",
+ "title_en": "Generators",
+ "duration_min": 10,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🚰",
+   "goal": "تعالج بيانات ضخمة بدون تحميلها كلها في الذاكرة باستخدام [[generator]] و`yield`."
+  },
+  {
+   "type": "text",
+   "title": "قيمة وقيمة",
+   "body": [
+    "الدالة العادية تنتهي بـ `return` وتعطي نتيجة واحدة. الدالة التي فيها `yield` تصير [[generator]]: تنتج قيمة، **تتوقف**، وتكمل من مكانها عند الطلب التالي.",
+    "نطلب القيمة التالية بـ `next(gen)` أو نمر بـ `for x in gen`. عند الانتهاء يُرفع `StopIteration` (والـ `for` تعالجه لوحدها).",
+    "الفايدة: ملف سجل حجمه 10 جيجا؟ المولّد يعطيك سطراً سطراً بدون ما يملأ الذاكرة."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "المولّد \"كسول\" (lazy): لا يحسب القيمة إلا لما تطلبها.",
+   "code": "def count_to(n):\n    i = 1\n    while i <= n:\n        yield i\n        i = i + 1\n\nfor x in count_to(3):\n    print(x)"
+  },
+  {
+   "type": "text",
+   "title": "المكرِّرات والتعبيرات",
+   "body": [
+    "[[iterator]] هو كائن يعطي التالي عند `next`. القائمة و`range` و الملف كلها قابلة للتكرار (iterable)، و`iter(x)` تعطيك مكرِّراً لها.",
+    "تعبير مولّد بأقواس: `(x * x for x in range(5))` مثل القائمة الشاملة لكن كسول.",
+    "المولّد يُستهلك مرة واحدة: بعد المرور عليه ينتهي ولا يعود."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "warn",
+   "note": "آخر طباعة قائمة فاضية لأن المولّد انتهى.",
+   "code": "squares = (n * n for n in range(4))\nprint(next(squares))\nprint(next(squares))\nprint(sum(squares))\nprint(list(squares))"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "generator",
+    "iterator",
+    "comprehension"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "def g():\n    yield 1\n    yield 2\n    yield 3\n\nprint(list(g()))\n",
+   "options": [
+    "[1, 2, 3]",
+    "[1]",
+    "3"
+   ],
+   "answer": 0,
+   "why": "list تستهلك المولّد وتجمع كل القيم."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): next",
+   "code": "def g():\n    yield \"a\"\n    yield \"b\"\n\nit = g()\nprint(next(it), next(it))\n",
+   "options": [
+    "a b",
+    "a a",
+    "b a"
+   ],
+   "answer": 0,
+   "why": "كل next تعطي القيمة التالية."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (3): الاستهلاك",
+   "code": "g = (x for x in [1, 2, 3])\nprint(sum(g), sum(g))\n",
+   "options": [
+    "6 0",
+    "6 6",
+    "0 6"
+   ],
+   "answer": 0,
+   "why": "المولّد ينتهي بعد المرور الأول."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: yield",
+   "code": "def evens(n):\n    for i in range(n):\n        if i % 2 == 0:\n            ____ i\n\nprint(list(evens(6)))\n",
+   "blanks": [
+    {
+     "answer": "yield"
+    }
+   ],
+   "expect_stdout": "[0, 2, 4]",
+   "show_output": true,
+   "bank": [
+    "yield",
+    "return",
+    "print",
+    "next"
+   ],
+   "intro": "وش الكلمة اللي تنتج القيمة وتوقف مؤقتاً؟",
+   "explain": "`yield`."
+  },
+  {
+   "type": "code",
+   "title": "مولّد المربعات",
+   "instructions": [
+    "عرّف مولّد `squares(n)` ينتج مربعات الأرقام من 1 إلى n (باستخدام `yield`)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "call": "list(squares(4))",
+     "expect": [
+      1,
+      4,
+      9,
+      16
+     ]
+    },
+    {
+     "call": "list(squares(1))",
+     "expect": [
+      1
+     ]
+    },
+    {
+     "call": "list(squares(0))",
+     "expect": [],
+     "hidden": true
+    }
+   ],
+   "solution": "def squares(n):\n    for i in range(1, n + 1):\n        yield i * i\n",
+   "hints": [
+    "استخدم `yield` داخل حلقة."
+   ],
+   "checks": [
+    {
+     "regex": "yield",
+     "msg": "استخدم yield"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أسطر الأخطاء بالتدفق",
+   "instructions": [
+    "عرّف مولّد `errors(lines)` ينتج الأسطر اللي تحتوي `ERROR` فقط. ثم اطبع `list(errors(...))` للقائمة الجاهزة."
+   ],
+   "starter": "logs = [\"ok\", \"ERROR a\", \"ok\", \"ERROR b\"]\n\n# عرّف errors هنا\n\nprint(list(errors(logs)))\n",
+   "tests": [
+    {
+     "expect_stdout": "['ERROR a', 'ERROR b']"
+    }
+   ],
+   "solution": "logs = [\"ok\", \"ERROR a\", \"ok\", \"ERROR b\"]\n\ndef errors(lines):\n    for line in lines:\n        if \"ERROR\" in line:\n            yield line\n\nprint(list(errors(logs)))\n",
+   "hints": [
+    "`for` على المدخل ثم `yield` للمطابق."
+   ],
+   "checks": [
+    {
+     "regex": "yield",
+     "msg": "استخدم yield"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "تعبير مولّد",
+   "instructions": [
+    "اطبع مجموع مربعات الأعداد الزوجية من 1 إلى 10 باستخدام **تعبير مولّد** داخل `sum` (بدون قائمة): `220`"
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "220"
+    }
+   ],
+   "solution": "print(sum(n * n for n in range(1, 11) if n % 2 == 0))\n",
+   "hints": [
+    "`sum(... for ... if ...)`"
+   ],
+   "checks": [
+    {
+     "regex": "sum\\s*\\(\\s*[^\\[\\]]*\\bfor\\b",
+     "msg": "تعبير مولّد داخل sum بدون []"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: المولّد المستهلك",
+   "instructions": [
+    "الكود يطبع المجموع ثم العدد لكن المولّد انتهى بعد `sum`. أصلحه ليطبع `6 3` (حوّله لقائمة أولاً)."
+   ],
+   "starter": "g = (x for x in [1, 2, 3])\nprint(sum(g), len(list(g)))\n",
+   "tests": [
+    {
+     "expect_stdout": "6 3"
+    }
+   ],
+   "solution": "items = list(x for x in [1, 2, 3])\nprint(sum(items), len(items))\n",
+   "hints": [
+    "خزّن القيم في قائمة لتعيد استخدامها."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "وش يميّز المولّد؟",
+     "options": [
+      "ينتج القيم عند الطلب بدون تخزينها كلها",
+      "أسرع دائماً",
+      "يخزن كل شيء"
+     ],
+     "answer": 0,
+     "why": "يوفر الذاكرة."
+    },
+    {
+     "q": "وش تفعل yield؟",
+     "options": [
+      "تنتج قيمة وتوقف الدالة مؤقتاً",
+      "تنهي البرنامج",
+      "تطبع"
+     ],
+     "answer": 0,
+     "why": "وتكمل من نفس المكان."
+    },
+    {
+     "q": "هل نقدر نكرر المولّد مرتين؟",
+     "options": [
+      "لا، ينتهي بعد المرور الأول",
+      "نعم دائماً",
+      "فقط مع list"
+     ],
+     "answer": 0,
+     "why": "خزّنه في قائمة لو احتجت."
+    },
+    {
+     "q": "متى المولّد مفيد؟",
+     "options": [
+      "ملفات وبيانات ضخمة",
+      "قوائم من عنصرين",
+      "لا فائدة"
+     ],
+     "answer": 0,
+     "why": "معالجة تدفقية."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`yield` تجعل الدالة مولّداً ينتج القيم عند الطلب.",
+    "يوفر الذاكرة ويُستهلك مرة واحدة.",
+    "تعبير مولّد: `(x for x in ...)`."
+   ]
+  }
+ ]
+}

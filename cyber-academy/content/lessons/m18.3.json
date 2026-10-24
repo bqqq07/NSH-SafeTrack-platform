@@ -1,0 +1,234 @@
+{
+ "title_ar": "مديرو السياق",
+ "title_en": "Context Managers",
+ "duration_min": 9,
+ "slides": [
+  {
+   "type": "intro",
+   "emoji": "🚪",
+   "goal": "تصنع مدير [[context-manager]] خاصاً بك ينظف الموارد تلقائياً مع `with`."
+  },
+  {
+   "type": "text",
+   "title": "الدخول والخروج",
+   "body": [
+    "`with open(...)` تعلمناها: تفتح وتغلق تلقائياً. السر أن الكائن يعرّف `__enter__` (عند الدخول) و`__exit__` (عند الخروج حتى لو صار خطأ).",
+    "نفس الفكرة تنفع في أي مورد: اتصال قاعدة بيانات، قفل، مجلد مؤقت، توقيت.",
+    "`__exit__` تُنفذ دائماً، فتضمن التنظيف."
+   ],
+   "layer": "🟢 ببساطة",
+   "callout": "info",
+   "note": "`as x` يعطيك ما رجعه `__enter__`.",
+   "code": "class Section:\n    def __init__(self, name):\n        self.name = name\n    def __enter__(self):\n        print(\"start\", self.name)\n        return self\n    def __exit__(self, exc_type, exc, tb):\n        print(\"end\", self.name)\n\nwith Section(\"A\"):\n    print(\"inside\")"
+  },
+  {
+   "type": "text",
+   "title": "الطريقة المختصرة",
+   "body": [
+    "`contextlib.contextmanager` تحول مولّداً لمدير سياق: ما قبل `yield` هو الدخول، وما بعده الخروج.",
+    "نضع `try/finally` حول `yield` لنضمن التنظيف حتى عند الخطأ.",
+    "في الأمن: تفعيل قفل أو وضع آمن مؤقتاً ثم إعادته مهما حصل."
+   ],
+   "layer": "🟡 أكثر تفصيل",
+   "callout": "tip",
+   "note": "يطبع: <b> ثم text ثم </b>.",
+   "code": "from contextlib import contextmanager\n\n@contextmanager\ndef tag(name):\n    print(\"<\" + name + \">\")\n    try:\n        yield\n    finally:\n        print(\"</\" + name + \">\")\n\nwith tag(\"b\"):\n    print(\"text\")"
+  },
+  {
+   "type": "terms",
+   "ids": [
+    "context-manager",
+    "generator"
+   ]
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (1)",
+   "code": "class C:\n    def __enter__(self):\n        print(\"in\")\n    def __exit__(self, a, b, c):\n        print(\"out\")\n\nwith C():\n    print(\"body\")\n",
+   "options": [
+    "in\nbody\nout",
+    "body\nin\nout",
+    "in\nout\nbody"
+   ],
+   "answer": 0,
+   "why": "الدخول ثم الجسم ثم الخروج."
+  },
+  {
+   "type": "predict",
+   "title": "توقّع (2): خطأ داخل with",
+   "code": "class C:\n    def __enter__(self):\n        pass\n    def __exit__(self, a, b, c):\n        print(\"cleanup\")\n\ntry:\n    with C():\n        raise ValueError(\"x\")\nexcept ValueError:\n    print(\"caught\")\n",
+   "options": [
+    "cleanup\ncaught",
+    "caught",
+    "caught\ncleanup"
+   ],
+   "answer": 0,
+   "why": "__exit__ تنفذ قبل ما ينتقل الخطأ للخارج."
+  },
+  {
+   "type": "fillcode",
+   "title": "أكمل: الخروج",
+   "code": "class C:\n    def __enter__(self):\n        return self\n    def ____(self, a, b, c):\n        print(\"bye\")\n\nwith C():\n    pass\n",
+   "blanks": [
+    {
+     "answer": "__exit__"
+    }
+   ],
+   "expect_stdout": "bye",
+   "show_output": true,
+   "bank": [
+    "__exit__",
+    "__close__",
+    "__end__",
+    "__leave__"
+   ],
+   "intro": "وش اسم أسلوب الخروج؟",
+   "explain": "`__exit__`."
+  },
+  {
+   "type": "code",
+   "title": "مدير بسيط",
+   "instructions": [
+    "عرّف صنف `Log` له `__enter__` تطبع `open` و`__exit__` تطبع `close`. استخدمه مع `with` وداخله اطبع `work`: `open work close`  (كل في سطر)."
+   ],
+   "starter": "# اكتب كودك هنا\n",
+   "tests": [
+    {
+     "expect_stdout": "open\nwork\nclose"
+    }
+   ],
+   "solution": "class Log:\n    def __enter__(self):\n        print(\"open\")\n        return self\n\n    def __exit__(self, exc_type, exc, tb):\n        print(\"close\")\n\nwith Log():\n    print(\"work\")\n",
+   "hints": [
+    "عرّف `__enter__` و`__exit__`."
+   ],
+   "checks": [
+    {
+     "regex": "__enter__",
+     "msg": "عرّف __enter__"
+    },
+    {
+     "regex": "__exit__",
+     "msg": "عرّف __exit__"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "contextmanager",
+   "instructions": [
+    "باستخدام `@contextmanager` عرّف `banner(title)` تطبع `== title ==` عند الدخول و`== end ==` عند الخروج. استخدمه حول `print(\"body\")`."
+   ],
+   "starter": "# اكتب كودك هنا\nfrom contextlib import contextmanager\n",
+   "tests": [
+    {
+     "expect_stdout": "== Report ==\nbody\n== end =="
+    }
+   ],
+   "solution": "from contextlib import contextmanager\n\n@contextmanager\ndef banner(title):\n    print(\"== \" + title + \" ==\")\n    try:\n        yield\n    finally:\n        print(\"== end ==\")\n\nwith banner(\"Report\"):\n    print(\"body\")\n",
+   "hints": [
+    "ما قبل `yield` دخول وما بعده خروج.",
+    "الاستخدام: `with banner(\"Report\"):`"
+   ],
+   "checks": [
+    {
+     "regex": "@contextmanager",
+     "msg": "استخدم @contextmanager"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "قفل مؤقت",
+   "instructions": [
+    "عرّف `locked_mode()` بـ contextmanager: يضع `state[\"locked\"] = True` عند الدخول ويعيده `False` عند الخروج حتى لو حصل خطأ. اختبر: داخل with اطبع الحالة، ثم بعده، ثم بعد خطأ."
+   ],
+   "starter": "from contextlib import contextmanager\nstate = {\"locked\": False}\n\n# عرّف locked_mode هنا\n\nwith locked_mode():\n    print(state[\"locked\"])\nprint(state[\"locked\"])\ntry:\n    with locked_mode():\n        raise ValueError(\"x\")\nexcept ValueError:\n    pass\nprint(state[\"locked\"])\n",
+   "tests": [
+    {
+     "expect_stdout": "True\nFalse\nFalse"
+    }
+   ],
+   "solution": "from contextlib import contextmanager\nstate = {\"locked\": False}\n\n@contextmanager\ndef locked_mode():\n    state[\"locked\"] = True\n    try:\n        yield\n    finally:\n        state[\"locked\"] = False\n\nwith locked_mode():\n    print(state[\"locked\"])\nprint(state[\"locked\"])\ntry:\n    with locked_mode():\n        raise ValueError(\"x\")\nexcept ValueError:\n    pass\nprint(state[\"locked\"])\n",
+   "hints": [
+    "استخدم `try/finally` حول `yield`."
+   ],
+   "checks": [
+    {
+     "regex": "finally",
+     "msg": "استخدم finally للتنظيف"
+    }
+   ]
+  },
+  {
+   "type": "code",
+   "title": "أصلح: التنظيف الناقص",
+   "instructions": [
+    "إذا حصل خطأ داخل `with` لا يُطبع `cleanup` لأن الكود ما يستخدم `finally`. أصلحه ليطبع `cleanup` ثم `caught`."
+   ],
+   "starter": "from contextlib import contextmanager\n\n@contextmanager\ndef res():\n    yield\n    print(\"cleanup\")\n\ntry:\n    with res():\n        raise ValueError(\"x\")\nexcept ValueError:\n    print(\"caught\")\n",
+   "tests": [
+    {
+     "expect_stdout": "cleanup\ncaught"
+    }
+   ],
+   "solution": "from contextlib import contextmanager\n\n@contextmanager\ndef res():\n    try:\n        yield\n    finally:\n        print(\"cleanup\")\n\ntry:\n    with res():\n        raise ValueError(\"x\")\nexcept ValueError:\n    print(\"caught\")\n",
+   "hints": [
+    "ضع `yield` داخل `try` والتنظيف في `finally`."
+   ],
+   "variant": "bugfix"
+  },
+  {
+   "type": "quiz",
+   "questions": [
+    {
+     "q": "متى تنفذ __exit__؟",
+     "options": [
+      "دائماً عند الخروج من with حتى عند الخطأ",
+      "فقط عند الخطأ",
+      "مرة بالبداية"
+     ],
+     "answer": 0,
+     "why": "لذلك تضمن التنظيف."
+    },
+    {
+     "q": "وش يسوي @contextmanager؟",
+     "options": [
+      "يحول مولّداً لمدير سياق",
+      "يحذف الملف",
+      "يشفّر"
+     ],
+     "answer": 0,
+     "why": "ما قبل yield دخول."
+    },
+    {
+     "q": "ليش try/finally حول yield؟",
+     "options": [
+      "لضمان التنظيف عند الخطأ",
+      "لتسريع الكود",
+      "لا حاجة"
+     ],
+     "answer": 0,
+     "why": "وإلا لن ينفذ الخروج."
+    },
+    {
+     "q": "مثال استخدام مدير سياق؟",
+     "options": [
+      "ملف أو قفل أو اتصال",
+      "عملية جمع",
+      "تعليق"
+     ],
+     "answer": 0,
+     "why": "أي مورد يحتاج تنظيف."
+    }
+   ]
+  },
+  {
+   "type": "summary",
+   "points": [
+    "`with` تضمن الدخول والخروج بـ `__enter__` و`__exit__`.",
+    "`@contextmanager` تختصر الكتابة بمولّد.",
+    "ضع التنظيف في `finally`."
+   ]
+  }
+ ]
+}

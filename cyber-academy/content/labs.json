@@ -203,6 +203,12 @@
    "slide": 4,
    "title": "رتّب خطوات مشروع جديد",
    "lesson": "venv و pip"
+  },
+  {
+   "id": "m18.6",
+   "slide": 6,
+   "title": "رتّب الحل الصحيح لسحب آمن",
+   "lesson": "التزامن"
   }
  ],
  "match": [
@@ -349,6 +355,18 @@
    "slide": 5,
    "title": "طابق الأمر بوظيفته",
    "lesson": "venv و pip"
+  },
+  {
+   "id": "m18.6",
+   "slide": 7,
+   "title": "طابق المهمة بالأداة الأنسب",
+   "lesson": "التزامن"
+  },
+  {
+   "id": "m18.7",
+   "slide": 6,
+   "title": "طابق التعقيد بالمثال",
+   "lesson": "الأداء وBig-O"
   }
  ],
  "firewall": [
@@ -1261,6 +1279,120 @@
    "slide": 6,
    "title": "توقّع (3): frozen",
    "lesson": "dataclass"
+  },
+  {
+   "id": "m18.1",
+   "slide": 4,
+   "title": "توقّع (1)",
+   "lesson": "المولّدات Generators"
+  },
+  {
+   "id": "m18.1",
+   "slide": 5,
+   "title": "توقّع (2): next",
+   "lesson": "المولّدات Generators"
+  },
+  {
+   "id": "m18.1",
+   "slide": 6,
+   "title": "توقّع (3): الاستهلاك",
+   "lesson": "المولّدات Generators"
+  },
+  {
+   "id": "m18.2",
+   "slide": 4,
+   "title": "توقّع (1): closure",
+   "lesson": "المزخرفات Decorators"
+  },
+  {
+   "id": "m18.2",
+   "slide": 5,
+   "title": "توقّع (2): مزخرف",
+   "lesson": "المزخرفات Decorators"
+  },
+  {
+   "id": "m18.3",
+   "slide": 4,
+   "title": "توقّع (1)",
+   "lesson": "مديرو السياق"
+  },
+  {
+   "id": "m18.3",
+   "slide": 5,
+   "title": "توقّع (2): خطأ داخل with",
+   "lesson": "مديرو السياق"
+  },
+  {
+   "id": "m18.4",
+   "slide": 4,
+   "title": "توقّع (1)",
+   "lesson": "collections"
+  },
+  {
+   "id": "m18.4",
+   "slide": 5,
+   "title": "توقّع (2): defaultdict",
+   "lesson": "collections"
+  },
+  {
+   "id": "m18.4",
+   "slide": 6,
+   "title": "توقّع (3): maxlen",
+   "lesson": "collections"
+  },
+  {
+   "id": "m18.5",
+   "slide": 4,
+   "title": "توقّع (1)",
+   "lesson": "itertools و functools"
+  },
+  {
+   "id": "m18.5",
+   "slide": 5,
+   "title": "توقّع (2): product",
+   "lesson": "itertools و functools"
+  },
+  {
+   "id": "m18.5",
+   "slide": 6,
+   "title": "توقّع (3): combinations",
+   "lesson": "itertools و functools"
+  },
+  {
+   "id": "m18.6",
+   "slide": 4,
+   "title": "توقّع (1): التناوب",
+   "lesson": "التزامن"
+  },
+  {
+   "id": "m18.6",
+   "slide": 5,
+   "title": "توقّع (2): التسابق",
+   "lesson": "التزامن"
+  },
+  {
+   "id": "m18.7",
+   "slide": 4,
+   "title": "توقّع (1): حلقتان",
+   "lesson": "الأداء وBig-O"
+  },
+  {
+   "id": "m18.7",
+   "slide": 5,
+   "title": "توقّع (2): عدّ الخطوات",
+   "lesson": "الأداء وBig-O"
+  },
+  {
+   "id": "m18.8",
+   "slide": 4,
+   "title": "توقّع (1)",
+   "lesson": "قواعد البيانات sqlite3"
+  },
+  {
+   "id": "m18.8",
+   "slide": 5,
+   "title": "توقّع (2): ?",
+   "lesson": "قواعد البيانات sqlite3"
   }
  ],
  "fillcode": [
@@ -1557,6 +1689,48 @@
    "slide": 7,
    "title": "أكمل: المزخرف",
    "lesson": "dataclass"
+  },
+  {
+   "id": "m18.1",
+   "slide": 7,
+   "title": "أكمل: yield",
+   "lesson": "المولّدات Generators"
+  },
+  {
+   "id": "m18.2",
+   "slide": 6,
+   "title": "أكمل: المزخرف",
+   "lesson": "المزخرفات Decorators"
+  },
+  {
+   "id": "m18.3",
+   "slide": 6,
+   "title": "أكمل: الخروج",
+   "lesson": "مديرو السياق"
+  },
+  {
+   "id": "m18.4",
+   "slide": 7,
+   "title": "أكمل: القاموس التلقائي",
+   "lesson": "collections"
+  },
+  {
+   "id": "m18.5",
+   "slide": 7,
+   "title": "أكمل: reduce",
+   "lesson": "itertools و functools"
+  },
+  {
+   "id": "m18.7",
+   "slide": 7,
+   "title": "أكمل: الأسرع للفحص",
+   "lesson": "الأداء وBig-O"
+  },
+  {
+   "id": "m18.8",
+   "slide": 6,
+   "title": "أكمل: العنصر المجهّز",
+   "lesson": "قواعد البيانات sqlite3"
   }
  ],
  "code": [
@@ -3035,6 +3209,186 @@
    "slide": 6,
    "title": "3) المشرف",
    "lesson": "مشروع: إدارة الحسابات"
+  },
+  {
+   "id": "m18.1",
+   "slide": 8,
+   "title": "مولّد المربعات",
+   "lesson": "المولّدات Generators"
+  },
+  {
+   "id": "m18.1",
+   "slide": 9,
+   "title": "أسطر الأخطاء بالتدفق",
+   "lesson": "المولّدات Generators"
+  },
+  {
+   "id": "m18.1",
+   "slide": 10,
+   "title": "تعبير مولّد",
+   "lesson": "المولّدات Generators"
+  },
+  {
+   "id": "m18.1",
+   "slide": 11,
+   "title": "أصلح: المولّد المستهلك",
+   "lesson": "المولّدات Generators"
+  },
+  {
+   "id": "m18.2",
+   "slide": 7,
+   "title": "مزخرف يضاعف",
+   "lesson": "المزخرفات Decorators"
+  },
+  {
+   "id": "m18.2",
+   "slide": 8,
+   "title": "سجل الاستدعاءات",
+   "lesson": "المزخرفات Decorators"
+  },
+  {
+   "id": "m18.2",
+   "slide": 9,
+   "title": "حارس الصلاحيات",
+   "lesson": "المزخرفات Decorators"
+  },
+  {
+   "id": "m18.2",
+   "slide": 10,
+   "title": "أصلح: ضياع النتيجة",
+   "lesson": "المزخرفات Decorators"
+  },
+  {
+   "id": "m18.3",
+   "slide": 7,
+   "title": "مدير بسيط",
+   "lesson": "مديرو السياق"
+  },
+  {
+   "id": "m18.3",
+   "slide": 8,
+   "title": "contextmanager",
+   "lesson": "مديرو السياق"
+  },
+  {
+   "id": "m18.3",
+   "slide": 9,
+   "title": "قفل مؤقت",
+   "lesson": "مديرو السياق"
+  },
+  {
+   "id": "m18.3",
+   "slide": 10,
+   "title": "أصلح: التنظيف الناقص",
+   "lesson": "مديرو السياق"
+  },
+  {
+   "id": "m18.4",
+   "slide": 8,
+   "title": "تجميع حسب الدور",
+   "lesson": "collections"
+  },
+  {
+   "id": "m18.4",
+   "slide": 9,
+   "title": "آخر 3 محاولات",
+   "lesson": "collections"
+  },
+  {
+   "id": "m18.4",
+   "slide": 10,
+   "title": "أكثر الأوامر استخداماً",
+   "lesson": "collections"
+  },
+  {
+   "id": "m18.4",
+   "slide": 11,
+   "title": "أصلح: KeyError",
+   "lesson": "collections"
+  },
+  {
+   "id": "m18.5",
+   "slide": 8,
+   "title": "حجم فضاء كلمات السر",
+   "lesson": "itertools و functools"
+  },
+  {
+   "id": "m18.5",
+   "slide": 9,
+   "title": "أزواج بدون تكرار",
+   "lesson": "itertools و functools"
+  },
+  {
+   "id": "m18.5",
+   "slide": 10,
+   "title": "ضرب بالتراكم",
+   "lesson": "itertools و functools"
+  },
+  {
+   "id": "m18.5",
+   "slide": 11,
+   "title": "ذاكرة مؤقتة",
+   "lesson": "itertools و functools"
+  },
+  {
+   "id": "m18.6",
+   "slide": 8,
+   "title": "جدولة بالتناوب",
+   "lesson": "التزامن"
+  },
+  {
+   "id": "m18.6",
+   "slide": 9,
+   "title": "أصلح: التسابق",
+   "lesson": "التزامن"
+  },
+  {
+   "id": "m18.7",
+   "slide": 8,
+   "title": "عدّ الخطوات",
+   "lesson": "الأداء وBig-O"
+  },
+  {
+   "id": "m18.7",
+   "slide": 9,
+   "title": "بحث ثنائي",
+   "lesson": "الأداء وBig-O"
+  },
+  {
+   "id": "m18.7",
+   "slide": 10,
+   "title": "قارن الأسلوبين",
+   "lesson": "الأداء وBig-O"
+  },
+  {
+   "id": "m18.7",
+   "slide": 11,
+   "title": "أصلح: تكرار الحساب",
+   "lesson": "الأداء وBig-O"
+  },
+  {
+   "id": "m18.8",
+   "slide": 7,
+   "title": "أضف واقرأ",
+   "lesson": "قواعد البيانات sqlite3"
+  },
+  {
+   "id": "m18.8",
+   "slide": 8,
+   "title": "تسجيل دخول آمن",
+   "lesson": "قواعد البيانات sqlite3"
+  },
+  {
+   "id": "m18.8",
+   "slide": 9,
+   "title": "تجميع",
+   "lesson": "قواعد البيانات sqlite3"
+  },
+  {
+   "id": "m18.8",
+   "slide": 10,
+   "title": "أصلح: ثغرة الحقن",
+   "lesson": "قواعد البيانات sqlite3"
   }
  ],
  "parsons": [
